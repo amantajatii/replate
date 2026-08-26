@@ -4,7 +4,7 @@ Replate adalah aplikasi marketplace yang membantu restoran menjual makanan surpl
 
 # REPLATE TEAM
 
-Ketua Kelompok:
+Ketua Kelompok: Diaz Amantajati Susilo - 24/545483/TK/60678
 
 Anggota 1: Violin Mulya Putra - 24/534192/TK/59201
 
