@@ -6,7 +6,7 @@ Replate adalah aplikasi marketplace yang membantu restoran menjual makanan surpl
 
 Ketua Kelompok: Diaz Amantajati Susilo - 24/545483/TK/60678
 
-Anggota 1: 
+Anggota 1: Violin Mulya Putra - 24/534192/TK/592O1
 
 Anggota 2: Putri Tajudin - 24/535824/TK/59469
 
