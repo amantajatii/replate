@@ -10,3 +10,5 @@ Anggota 1: Violin Mulya Putra - 24/534192/TK/592O1
 
 Anggota 2: Putri Tajudin - 24/535824/TK/59469
 
+# REPLATE CLASS DIAGRAM
+![REPLATE CLASS DIAGRAM](class-diagram-replate.png)
