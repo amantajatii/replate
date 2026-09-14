@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="src/Replate.Domain/Replate.Domain.csproj" />
+  <Project Path="tests/Replate.Domain.Checks/Replate.Domain.Checks.csproj" />
+</Solution>
