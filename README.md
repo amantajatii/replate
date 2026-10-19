@@ -24,6 +24,26 @@ dotnet build Replate.slnx
 dotnet run --project tests/Replate.Domain.Checks/Replate.Domain.Checks.csproj
 ```
 
+## User Interface Avalonia
+
+Aplikasi desktop tersedia di [`src/Replate.Desktop`](./src/Replate.Desktop), dengan
+area pelanggan dan restoran terpisah. Marketplace memakai navigasi pelanggan;
+dashboard dan pengelolaan restoran memakai sidebar operasional. Keranjang,
+detail makanan/pesanan, serta formulir menggunakan halaman penuh.
+
+```bash
+dotnet run --project src/Replate.Desktop
+```
+
+Pelanggan dapat mencari makanan, mengatur keranjang, melakukan simulasi reservasi,
+dan memantau pesanan. Restoran dapat mengelola menu dan penawaran, mencatat produksi,
+mengonfirmasi pesanan, serta memverifikasi kode pengambilan. Dashboard menampilkan
+analisis surplus dan rekomendasi produksi berdasarkan model domain yang ada.
+
+Data awal merupakan **contoh lokal**, dengan perubahan tersimpan otomatis di JSON.
+Belum terhubung ke PostgreSQL, autentikasi nyata, atau pembayaran. Lihat
+[panduan, alur demonstrasi, dan screenshot](./src/Replate.Desktop/README.md).
+
 # REPLATE TEAM
 
 Ketua Kelompok: Diaz Amantajati Susilo - 24/545483/TK/60678
