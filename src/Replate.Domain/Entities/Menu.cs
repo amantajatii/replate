@@ -11,6 +11,7 @@ public sealed class Menu
     public decimal NormalPrice { get; set; }
     public decimal WeightPerPortion { get; set; }
     public string ImageUrl { get; set; } = string.Empty;
+    [System.Text.Json.Serialization.JsonInclude]
     public bool IsActive { get; private set; } = true;
     public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
     public List<ProductionRecord> ProductionRecords { get; } = [];

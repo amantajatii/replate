@@ -9,10 +9,14 @@ public sealed class Order
     public Guid RestaurantId { get; set; }
     public string PickupCode { get; set; } = string.Empty;
     public decimal TotalPrice { get; set; }
+    [System.Text.Json.Serialization.JsonInclude]
     public OrderStatus Status { get; private set; } = OrderStatus.Reserved;
+    [System.Text.Json.Serialization.JsonInclude]
     public TimeSpan PreparationDuration { get; private set; }
+    [System.Text.Json.Serialization.JsonInclude]
     public DateTime EstimatedReadyTime { get; private set; }
     public DateTime OrderedAt { get; init; } = DateTime.UtcNow;
+    [System.Text.Json.Serialization.JsonInclude]
     public DateTime? CompletedAt { get; private set; }
     public List<OrderItem> Items { get; } = [];
 

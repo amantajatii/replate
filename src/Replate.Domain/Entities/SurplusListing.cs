@@ -11,6 +11,7 @@ public sealed class SurplusListing
     public int Quantity { get; set; }
     public DateTime PickupStart { get; set; }
     public DateTime PickupEnd { get; set; }
+    [System.Text.Json.Serialization.JsonInclude]
     public ListingStatus Status { get; private set; } = ListingStatus.Active;
     public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
 

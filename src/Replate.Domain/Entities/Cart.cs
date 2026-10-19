@@ -4,8 +4,10 @@ public sealed class Cart
 {
     public Guid Id { get; init; } = Guid.NewGuid();
     public Guid CustomerId { get; set; }
+    [System.Text.Json.Serialization.JsonInclude]
     public Guid RestaurantId { get; private set; }
     public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
+    [System.Text.Json.Serialization.JsonInclude]
     public DateTime UpdatedAt { get; private set; } = DateTime.UtcNow;
     public List<CartItem> Items { get; } = [];
 
