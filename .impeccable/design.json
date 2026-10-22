@@ -1,0 +1,192 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-19T07:47:02.112043+00:00",
+  "title": "Design System: Replate Desktop",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "Forest Green",
+        "tonalRamp": [
+          "oklch(15% 0.07119 162.26)",
+          "oklch(26% 0.07119 162.26)",
+          "oklch(38% 0.07119 162.26)",
+          "oklch(49% 0.07119 162.26)",
+          "oklch(61% 0.07119 162.26)",
+          "oklch(72% 0.07119 162.26)",
+          "oklch(84% 0.07119 162.26)",
+          "oklch(95% 0.07119 162.26)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Deep Leaf Ink",
+        "tonalRamp": [
+          "oklch(15% 0.03446 158.64)",
+          "oklch(26% 0.03446 158.64)",
+          "oklch(38% 0.03446 158.64)",
+          "oklch(49% 0.03446 158.64)",
+          "oklch(61% 0.03446 158.64)",
+          "oklch(72% 0.03446 158.64)",
+          "oklch(84% 0.03446 158.64)",
+          "oklch(95% 0.03446 158.64)"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted Leaf",
+        "tonalRamp": [
+          "oklch(15% 0.02321 154.40)",
+          "oklch(26% 0.02321 154.40)",
+          "oklch(38% 0.02321 154.40)",
+          "oklch(49% 0.02321 154.40)",
+          "oklch(61% 0.02321 154.40)",
+          "oklch(72% 0.02321 154.40)",
+          "oklch(84% 0.02321 154.40)",
+          "oklch(95% 0.02321 154.40)"
+        ]
+      },
+      "canvas": {
+        "role": "neutral",
+        "displayName": "Warm Canvas",
+        "tonalRamp": [
+          "oklch(15% 0.00264 106.45)",
+          "oklch(26% 0.00264 106.45)",
+          "oklch(38% 0.00264 106.45)",
+          "oklch(49% 0.00264 106.45)",
+          "oklch(61% 0.00264 106.45)",
+          "oklch(72% 0.00264 106.45)",
+          "oklch(84% 0.00264 106.45)",
+          "oklch(95% 0.00264 106.45)"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "White Surface",
+        "tonalRamp": [
+          "oklch(15% 0.00000 89.88)",
+          "oklch(26% 0.00000 89.88)",
+          "oklch(38% 0.00000 89.88)",
+          "oklch(49% 0.00000 89.88)",
+          "oklch(61% 0.00000 89.88)",
+          "oklch(72% 0.00000 89.88)",
+          "oklch(84% 0.00000 89.88)",
+          "oklch(95% 0.00000 89.88)"
+        ]
+      },
+      "sidebar": {
+        "role": "neutral",
+        "displayName": "Pale Sage Sidebar",
+        "tonalRamp": [
+          "oklch(15% 0.00694 124.45)",
+          "oklch(26% 0.00694 124.45)",
+          "oklch(38% 0.00694 124.45)",
+          "oklch(49% 0.00694 124.45)",
+          "oklch(61% 0.00694 124.45)",
+          "oklch(72% 0.00694 124.45)",
+          "oklch(84% 0.00694 124.45)",
+          "oklch(95% 0.00694 124.45)"
+        ]
+      },
+      "selection": {
+        "role": "neutral",
+        "displayName": "Soft Sage Selection",
+        "tonalRamp": [
+          "oklch(15% 0.01644 142.55)",
+          "oklch(26% 0.01644 142.55)",
+          "oklch(38% 0.01644 142.55)",
+          "oklch(49% 0.01644 142.55)",
+          "oklch(61% 0.01644 142.55)",
+          "oklch(72% 0.01644 142.55)",
+          "oklch(84% 0.01644 142.55)",
+          "oklch(95% 0.01644 142.55)"
+        ]
+      },
+      "divider": {
+        "role": "neutral",
+        "displayName": "Sage Divider",
+        "tonalRamp": [
+          "oklch(15% 0.01367 134.90)",
+          "oklch(26% 0.01367 134.90)",
+          "oklch(38% 0.01367 134.90)",
+          "oklch(49% 0.01367 134.90)",
+          "oklch(61% 0.01367 134.90)",
+          "oklch(72% 0.01367 134.90)",
+          "oklch(84% 0.01367 134.90)",
+          "oklch(95% 0.01367 134.90)"
+        ]
+      }
+    },
+    "shadows": [],
+    "motion": [],
+    "breakpoints": []
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Browser-panel translation of the native Avalonia pattern; native FluentTheme remains authoritative for interaction states.",
+      "html": "<button class=\"ds-button-primary\">Simpan menu</button>",
+      "css": ".ds-button-primary { background:#245B43; color:#FFFFFF; border:1px solid #DDE3DA; border-radius:6px; padding:11px 16px; font:600 13px \"Helvetica Neue\", \"Segoe UI\", sans-serif; } .ds-button-primary:hover { cursor:pointer; } .ds-button-primary:focus-visible { outline:2px solid currentColor; outline-offset:2px; } .ds-button-primary:disabled { cursor:default; opacity:.5; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Browser-panel translation of the native Avalonia pattern; native FluentTheme remains authoritative for interaction states.",
+      "html": "<button class=\"ds-button-secondary\">Simpan menu</button>",
+      "css": ".ds-button-secondary { background:#FFFFFF; color:#23382C; border:1px solid #DDE3DA; border-radius:6px; padding:11px 16px; font:600 13px \"Helvetica Neue\", \"Segoe UI\", sans-serif; } .ds-button-secondary:hover { cursor:pointer; } .ds-button-secondary:focus-visible { outline:2px solid currentColor; outline-offset:2px; } .ds-button-secondary:disabled { cursor:default; opacity:.5; }"
+    },
+    {
+      "name": "Search Input",
+      "kind": "input",
+      "refersTo": "search-input",
+      "description": "Browser-panel translation of the native Avalonia pattern; native FluentTheme remains authoritative for interaction states.",
+      "html": "<label class=\"ds-search-label\">Cari makanan atau restoran<input class=\"ds-search\" placeholder=\"Cari makanan atau restoran…\"></label>",
+      "css": ".ds-search-label { display:grid; gap:8px; color:#23382C; font:600 13px \"Helvetica Neue\", \"Segoe UI\", sans-serif; } .ds-search { height:44px; border:1px solid #DDE3DA; border-radius:6px; background:white; color:#23382C; font:400 14px \"Helvetica Neue\", \"Segoe UI\", sans-serif; padding:0 12px; } .ds-search::placeholder { color:#59675D; } .ds-search:focus-visible { outline:2px solid #245B43; outline-offset:2px; }"
+    },
+    {
+      "name": "Selected Navigation",
+      "kind": "nav",
+      "refersTo": "navigation-selected",
+      "description": "Browser-panel translation of the native Avalonia pattern; native FluentTheme remains authoritative for interaction states.",
+      "html": "<nav class=\"ds-nav\"><button aria-current=\"page\">Dashboard</button><button>Menu</button></nav>",
+      "css": ".ds-nav { display:grid; gap:8px; padding:20px; background:#F1F3EE; width:168px; } .ds-nav button { text-align:left; border:0; border-radius:6px; padding:11px 16px; color:#59675D; background:transparent; font:600 13px \"Helvetica Neue\", \"Segoe UI\", sans-serif; } .ds-nav [aria-current] { background:#E0E9DF; color:#245B43; } .ds-nav button:hover { cursor:pointer; } .ds-nav button:focus-visible { outline:2px solid currentColor; outline-offset:2px; }"
+    },
+    {
+      "name": "Category Filter",
+      "kind": "chip",
+      "refersTo": "filter-selected",
+      "description": "Browser-panel translation of the native Avalonia pattern; native FluentTheme remains authoritative for interaction states.",
+      "html": "<div class=\"ds-filters\"><button aria-pressed=\"true\">Semua</button><button aria-pressed=\"false\">Vegetarian</button></div>",
+      "css": ".ds-filters { display:flex; gap:4px; } .ds-filters button { border:0; border-radius:6px; padding:11px 16px; color:#59675D; background:transparent; font:600 13px \"Helvetica Neue\", \"Segoe UI\", sans-serif; } .ds-filters [aria-pressed=\"true\"] { background:#E0E9DF; color:#245B43; } .ds-filters button:hover { cursor:pointer; } .ds-filters button:focus-visible { outline:2px solid currentColor; outline-offset:2px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Established Replate workspace",
+    "overview": "Replate uses a restrained green and neutral workspace for reserving surplus food and managing restaurant operations. Native sans typography, direct Indonesian labels, and aligned lists keep information and actions easy to scan.\n\nThis records the implemented Avalonia desktop system, currently verified on macOS. It extends the established identity; role-specific navigation and full-page forms belong to the desktop surface contract rather than a new brand.",
+    "keyCharacteristics": [
+      "Quiet green actions and selection",
+      "Native controls with visible field labels",
+      "Flat surfaces, dividers, and structured rows"
+    ],
+    "rules": [
+      {
+        "name": "The Functional Green Rule",
+        "body": "Use the accent to communicate action, selection, or useful emphasis.",
+        "section": "colors"
+      }
+    ],
+    "dos": [
+      "Do use green for primary actions, selected navigation, and meaningful emphasis.",
+      "Do preserve native focus and disabled affordances and pair fields with visible labels and automation names.",
+      "Do use direct Indonesian task labels and recovery actions for empty or error states."
+    ],
+    "donts": [
+      "Don't add promotional banners, generic slogans, decorative food drawings, or repeated statistic-card scaffolding.",
+      "Don't restore the requested Praktikum UI / Data contoh sidebar footer.",
+      "Don't replace native control states with undocumented custom behavior."
+    ]
+  }
+}
