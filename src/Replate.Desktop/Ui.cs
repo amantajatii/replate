@@ -39,6 +39,10 @@ internal static class Ui
         for (var i = 0; i < children.Length; i++) { Grid.SetColumn(children[i], i); grid.Children.Add(children[i]); }
         return grid;
     }
+    public static Control Form(Control content, double maximumWidth = 860) => new FormArea(content, maximumWidth);
+    public static Control FormPair(Control first, Control second) => new FormColumns(first, second);
+    public static TextBlock SupportingText(string text, IBrush? color = null) => Text(text, 14, color ?? Muted);
+    public static TextBlock FieldError() => Text("", 14, Brush.Parse("#B3261E"));
     public static Border Divider() => new() { Height = 1, Background = Brush.Parse("#DDE3DA") };
 
     public static ScrollViewer Scroll(Control body) => new() { Content = body,
@@ -53,7 +57,7 @@ internal static class Ui
     public static StackPanel Field(string label, Control input)
     {
         Avalonia.Automation.AutomationProperties.SetName(input, label);
-        input.HorizontalAlignment = HorizontalAlignment.Stretch;
+        input.HorizontalAlignment = input is DatePicker or TimePicker ? HorizontalAlignment.Left : HorizontalAlignment.Stretch;
         return Stack(8, Text(label, 14, bold: true), input);
     }
     public static TextBox Input(string value = "", bool multiline = false) => new()

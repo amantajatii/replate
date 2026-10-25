@@ -10,6 +10,11 @@ public sealed class MainWindow : Window
     internal DemoSession Session { get; }
     internal MarketplaceView Marketplace { get; private set; } = null!;
     internal Control? CurrentPage { get; private set; }
+    private readonly ContentControl pageHost = new();
+    private readonly TextBlock successText = Ui.Text("", 14, Ui.Green);
+    private readonly Border successBanner;
+    private readonly Avalonia.Threading.DispatcherTimer successTimer = new() { Interval = TimeSpan.FromSeconds(4) };
+    internal string? SuccessMessage => successBanner.IsVisible ? successText.Text : null;
     private TextBlock? alert;
     private Button? cartLink;
 
@@ -20,6 +25,20 @@ public sealed class MainWindow : Window
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         Background = Brush.Parse("#FAFAF8");
         FontFamily = new FontFamily("Helvetica Neue, Segoe UI, sans-serif");
+        successBanner = new Border
+        {
+            Child = successText, IsVisible = false,
+            Background = Brush.Parse("#E0E9DF"), BorderBrush = Ui.Green,
+            BorderThickness = new Thickness(4, 0, 0, 0), CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(16, 12), Margin = new Thickness(32, 16, 32, 0)
+        };
+        var shell = new DockPanel();
+        DockPanel.SetDock(successBanner, Dock.Top);
+        shell.Children.Add(successBanner);
+        shell.Children.Add(pageHost);
+        Content = shell;
+        successTimer.Tick += (_, _) => { successTimer.Stop(); successBanner.IsVisible = false; };
+        Closed += (_, _) => successTimer.Stop();
         ShowEntry();
     }
 
@@ -40,7 +59,7 @@ public sealed class MainWindow : Window
             Ui.Text("Pilihan area untuk demonstrasi lokal. Tidak menggunakan autentikasi akun.", 12, Ui.Muted));
         body.MaxWidth = 600; body.HorizontalAlignment = HorizontalAlignment.Center;
         body.VerticalAlignment = VerticalAlignment.Center; body.Margin = new Thickness(40);
-        Content = Ui.Scroll(body);
+        pageHost.Content = Ui.Scroll(body);
     }
 
     internal void ShowMarketplace()
@@ -70,20 +89,52 @@ public sealed class MainWindow : Window
         if (cartLink is not null) cartLink.Content = $"Keranjang ({Session.Cart.Items.Sum(i => i.Quantity)})";
     }
 
-    internal void Run(Action action, Action? next = null)
+    internal void Run(Action action, Action? next = null, string? successMessage = null, Action<string>? onError = null)
     {
-        try { action(); if (alert is not null) alert.IsVisible = false; UpdateCartCount(); next?.Invoke(); }
+        try
+        {
+            action();
+            if (alert is not null) alert.IsVisible = false;
+            UpdateCartCount();
+            next?.Invoke();
+            if (successMessage is not null) ShowSuccess(successMessage);
+        }
         catch (Exception e) when (e is InvalidOperationException or ArgumentException or IOException or UnauthorizedAccessException)
         {
-            if (alert is not null)
+            var message = e is IOException or UnauthorizedAccessException
+                ? "Perubahan pada sesi ini belum tersimpan ke berkas lokal. " + e.Message : e.Message;
+            if (onError is not null) onError(message);
+            else if (alert is not null)
             {
-                alert.Text = e is IOException or UnauthorizedAccessException
-                    ? "Perubahan pada sesi ini belum tersimpan ke berkas lokal. " + e.Message : e.Message;
+                alert.Text = message;
                 alert.IsVisible = true;
             }
         }
     }
 
+    private void ShowSuccess(string message)
+    {
+        successTimer.Stop();
+        successText.Text = message;
+        successBanner.IsVisible = true;
+        successTimer.Start();
+    }
+
+    internal async Task RunAsync(Func<Task> action, string successMessage, string failureMessage)
+    {
+        try
+        {
+            await action();
+            if (alert is not null) alert.IsVisible = false;
+            ShowSuccess(successMessage);
+        }
+        catch (Exception)
+        {
+            successTimer.Stop();
+            successBanner.IsVisible = false;
+            if (alert is not null) { alert.Text = failureMessage; alert.IsVisible = true; }
+        }
+    }
     private void Render(bool restaurant, Control page, string active)
     {
         CurrentPage = page;
@@ -108,7 +159,7 @@ public sealed class MainWindow : Window
                 Padding = new Thickness(32, 16), Background = Brushes.White,
                 BorderBrush = Brush.Parse("#DDE3DA"), BorderThickness = new Thickness(0, 0, 0, 1) };
             var root = new DockPanel(); DockPanel.SetDock(top, Dock.Top); root.Children.Add(top); root.Children.Add(area);
-            Content = root;
+            pageHost.Content = root;
         }
         else
         {
@@ -119,7 +170,7 @@ public sealed class MainWindow : Window
             var footer = Ui.Stack(12, Ui.Text(Session.Restaurant.Name, 14, bold: true), Ui.Button("Ganti area", ShowEntry));
             var dock = new DockPanel { Margin = new Thickness(20, 28, 20, 24) };
             DockPanel.SetDock(footer, Dock.Bottom); dock.Children.Add(footer); dock.Children.Add(nav);
-            Content = Ui.Columns("208,*", new Border { Child = dock, Background = Brush.Parse("#F1F3EE"),
+            pageHost.Content = Ui.Columns("208,*", new Border { Child = dock, Background = Brush.Parse("#F1F3EE"),
                 BorderBrush = Brush.Parse("#DDE3DA"), BorderThickness = new Thickness(0, 0, 1, 0) }, area);
         }
     }

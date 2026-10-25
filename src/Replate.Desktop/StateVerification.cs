@@ -66,6 +66,64 @@ internal static class StateVerification
         var broken = new DemoSession(corrupt);
         ExpectFailure(broken.Persist);
         Ensure(broken.StorageError is not null && File.ReadAllText(corrupt) == "invalid json", "Corrupt storage is preserved read-only");
+        var removable = session.SaveMenu(null, "Menu tanpa relasi", "", "Makanan utama", 20000, .3m);
+        session.DeleteMenu(removable);
+        session = new DemoSession(path);
+        Ensure(session.StorageError is null && session.Restaurant.Menus.All(m => m.Id != removable.Id), "Deleted menu stays deleted after restart");
+        var usedMenu = session.Restaurant.Menus[0];
+        ExpectFailure(() => session.DeleteMenu(usedMenu));
+        Ensure(session.Restaurant.Menus.Contains(usedMenu), "Used menu retained");
+        var probe = session.SaveMenu(null, "Menu uji relasi", "", "Makanan utama", 20000, .3m);
+        var linked = new Replate.Domain.Entities.SurplusListing { MenuId = probe.Id, Menu = probe };
+        session.Listings.Add(linked);
+        ExpectFailure(() => session.DeleteMenu(probe));
+        session.Listings.Remove(linked);
+        probe.SurplusListings.Add(linked);
+        ExpectFailure(() => session.DeleteMenu(probe));
+        probe.SurplusListings.Clear();
+        var cartItem = new Replate.Domain.Entities.CartItem { Listing = linked, ListingId = linked.Id };
+        session.Cart.Items.Add(cartItem);
+        ExpectFailure(() => session.DeleteMenu(probe));
+        session.Cart.Items.Remove(cartItem);
+        var historical = new Replate.Domain.Entities.Order();
+        historical.Items.Add(new Replate.Domain.Entities.OrderItem { Listing = linked, ListingId = linked.Id });
+        session.Restaurant.Orders.Add(historical);
+        ExpectFailure(() => session.DeleteMenu(probe));
+        session.Restaurant.Orders.Remove(historical);
+        probe.ProductionRecords.Add(new Replate.Domain.Entities.ProductionRecord { MenuId = probe.Id, Menu = probe });
+        ExpectFailure(() => session.DeleteMenu(probe));
+        probe.ProductionRecords.Clear();
+        session.Persist();
+        // A directory at the temporary file path forces a real storage write failure.
+        Directory.CreateDirectory(path + ".tmp");
+        try
+        {
+            try { session.DeleteMenu(probe); throw new InvalidOperationException("Expected storage failure"); }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+            Ensure(session.Restaurant.Menus.Contains(probe), "Failed deletion restores menu in memory");
+            Ensure(new DemoSession(path).Restaurant.Menus.Any(m => m.Id == probe.Id), "Failed deletion preserves stored menu");
+        }
+        finally { Directory.Delete(path + ".tmp"); }
+        var allocationSession = new DemoSession();
+        var allocationListing = allocationSession.Listings[0];
+        var allocationMenu = allocationListing.Menu;
+        var allocationDate = DateOnly.FromDateTime(allocationListing.PickupStart.ToLocalTime());
+        void CheckMinimum()
+        {
+            var errors = allocationSession.ValidateProduction(allocationMenu, allocationDate, 41, 36);
+            Ensure(errors["produced"] == "Jumlah produksi minimal 42 porsi.", "Minimum does not double count stock, orders, or completed pickup");
+            Ensure(allocationSession.ValidateProduction(allocationMenu, allocationDate, 42, 36).Count == 0, "Exact production minimum is valid");
+        }
+        CheckMinimum();
+        allocationSession.AddToCart(allocationListing, 2);
+        var allocationOrder = allocationSession.Checkout(); CheckMinimum();
+        allocationSession.ConfirmOrder(allocationOrder, 15); allocationSession.ReadyOrder(allocationOrder);
+        allocationSession.CompletePickup(allocationOrder, allocationOrder.PickupCode); CheckMinimum();
+        allocationSession.AddToCart(allocationListing, 1);
+        allocationOrder = allocationSession.Checkout(); CheckMinimum();
+        allocationSession.CancelOrder(allocationOrder); CheckMinimum();
+        var allErrors = allocationSession.ValidateProduction(null, DateOnly.FromDateTime(DateTime.Today.AddDays(1)), -1, -2);
+        Ensure(allErrors.Count == 4, "Production validation reports all fields together");
         Console.WriteLine("All Replate desktop state checks passed.");
     }
     private static void Ensure(bool condition, string message)
