@@ -15,7 +15,7 @@ internal static class SessionStore
         List<ListingState> Listings, List<RecordState> Records, List<OrderState> Orders, CartState Cart);
     internal sealed record RestaurantState(Guid Id, string Name, string Address);
     internal sealed record MenuState(Guid Id, string Name, string Description, string Category,
-        decimal NormalPrice, decimal WeightPerPortion, bool IsActive);
+        decimal NormalPrice, decimal WeightPerPortion, bool IsActive, string ImageUrl = "");
     internal sealed record ListingState(Guid Id, Guid MenuId, decimal RescuePrice, int Quantity,
         DateTime PickupStart, DateTime PickupEnd, Replate.Domain.Enums.ListingStatus Status);
     internal sealed record RecordState(Guid Id, Guid MenuId, DateOnly RecordDate, int ProducedQuantity,
@@ -32,7 +32,7 @@ internal static class SessionStore
         var state = new Snapshot(1,
             new(session.Restaurant.Id, session.Restaurant.Name, session.Restaurant.Address),
             session.Restaurant.Menus.Select(m => new MenuState(m.Id, m.Name, m.Description, m.Category,
-                m.NormalPrice, m.WeightPerPortion, m.IsActive)).ToList(),
+                m.NormalPrice, m.WeightPerPortion, m.IsActive, m.ImageUrl)).ToList(),
             session.Listings.Select(l => new ListingState(l.Id, l.MenuId, l.RescuePrice, l.Quantity,
                 l.PickupStart, l.PickupEnd, l.Status)).ToList(),
             session.Restaurant.Menus.SelectMany(m => m.ProductionRecords).Select(r =>

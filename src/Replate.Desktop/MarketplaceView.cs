@@ -84,7 +84,8 @@ public sealed class MarketplaceView : UserControl
             Ui.Text($"{listing.PickupStart.ToLocalTime():HH:mm}–{listing.PickupEnd.ToLocalTime():HH:mm}", 14),
             Ui.Text($"{listing.Quantity} porsi tersisa", 12, Ui.Muted));
         pickup.VerticalAlignment = price.VerticalAlignment = add.VerticalAlignment = VerticalAlignment.Center;
-        return new Border { Child = Ui.Columns("*,136,120,90", description, pickup, price, add),
+        var photo = new MenuPhotoView(session.PhotoPath(listing.Menu.ImageUrl), 96, 96) { Margin = new Thickness(0, 0, 16, 0) };
+        return new Border { Child = Ui.Columns("112,*,136,120,90", photo, description, pickup, price, add),
             Padding = new Thickness(0, 22), BorderBrush = Brush.Parse("#DDE3DA"), BorderThickness = new Thickness(0, 0, 0, 1) };
     }
 

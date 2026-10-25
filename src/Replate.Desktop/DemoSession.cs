@@ -107,18 +107,83 @@ public sealed class DemoSession
         Persist();
     }
 
-    public Menu SaveMenu(Menu? existing, string name, string description, string category, decimal normalPrice, decimal weight)
+    internal Dictionary<string, string> ValidateMenu(Menu? existing, string name, string description, decimal? normalPrice, decimal? weight)
+    {
+        var errors = new Dictionary<string, string>();
+        if (string.IsNullOrWhiteSpace(name)) errors["name"] = "Nama menu wajib diisi.";
+        else if (name.Trim().Length > 80) errors["name"] = "Nama menu maksimal 80 karakter.";
+        if (description.Length > 500) errors["description"] = "Deskripsi maksimal 500 karakter.";
+        if (normalPrice is null) errors["price"] = "Harga wajib diisi.";
+        else if (normalPrice <= 0) errors["price"] = "Harga harus lebih dari nol.";
+        else if (existing is not null && Listings.Any(l => l.MenuId == existing.Id && l.Status == ListingStatus.Active && l.RescuePrice > normalPrice))
+            errors["price"] = "Harga normal tidak boleh lebih rendah dari harga penawaran aktif. Ubah penawaran terlebih dahulu.";
+        if (weight is null) errors["weight"] = "Berat per porsi wajib diisi.";
+        else if (weight <= 0) errors["weight"] = "Berat per porsi harus lebih dari nol.";
+        return errors;
+    }
+
+    internal string PhotoDirectory => Path.Combine(Path.GetDirectoryName(Path.GetFullPath(StorePath ?? DefaultStorePath))!, "menu-photos");
+    internal string? PhotoPath(string? reference)
+    {
+        if (string.IsNullOrWhiteSpace(reference) || !reference.StartsWith("menu-photos/", StringComparison.Ordinal)) return null;
+        var name = reference["menu-photos/".Length..];
+        return name == Path.GetFileName(name) && !name.Contains((char)92) && !name.Contains('/')
+            ? Path.Combine(PhotoDirectory, name) : null;
+    }
+
+    public Menu SaveMenu(Menu? existing, string name, string description, string category, decimal normalPrice, decimal weight, MenuPhotoChange? photoChange = null)
     {
         EnsureWritable();
-        if (string.IsNullOrWhiteSpace(name) || name.Trim().Length > 80) throw new InvalidOperationException("Nama menu wajib diisi, maksimal 80 karakter.");
-        if (description.Length > 500) throw new InvalidOperationException("Deskripsi maksimal 500 karakter.");
-        if (normalPrice <= 0 || weight <= 0) throw new InvalidOperationException("Harga dan berat per porsi harus lebih dari nol.");
-        if (existing is not null && Listings.Any(l => l.MenuId == existing.Id && l.Status == ListingStatus.Active && l.RescuePrice > normalPrice))
-            throw new InvalidOperationException("Harga normal tidak boleh lebih rendah dari harga penawaran aktif. Ubah penawaran terlebih dahulu.");
+        var errors = ValidateMenu(existing, name, description, normalPrice, weight);
+        if (errors.Count > 0) throw new InvalidOperationException(errors.First().Value);
         var menu = existing ?? new Menu { RestaurantId = Restaurant.Id, Restaurant = Restaurant };
-        menu.UpdateMenu(name.Trim(), description.Trim(), category, normalPrice, weight);
-        if (existing is null) Restaurant.Menus.Add(menu);
-        Persist(); return menu;
+        var old = (menu.Name, menu.Description, menu.Category, menu.NormalPrice, menu.WeightPerPortion, menu.ImageUrl);
+        string? copiedPath = null;
+        try
+        {
+            if (photoChange is not null)
+            {
+                if (photoChange.Data is null) menu.ImageUrl = "";
+                else
+                {
+                    Directory.CreateDirectory(PhotoDirectory);
+                    var fileName = Guid.NewGuid().ToString("N") + photoChange.Extension;
+                    copiedPath = Path.Combine(PhotoDirectory, fileName);
+                    using (var file = new FileStream(copiedPath, FileMode.CreateNew, FileAccess.Write))
+                        file.Write(photoChange.Data);
+                    menu.ImageUrl = "menu-photos/" + fileName;
+                }
+            }
+            menu.UpdateMenu(name.Trim(), description.Trim(), category, normalPrice, weight);
+            if (existing is null) Restaurant.Menus.Add(menu);
+            Persist(); return menu;
+        }
+        catch
+        {
+            if (existing is null) Restaurant.Menus.Remove(menu);
+            menu.UpdateMenu(old.Name, old.Description, old.Category, old.NormalPrice, old.WeightPerPortion);
+            menu.ImageUrl = old.ImageUrl;
+            if (copiedPath is not null)
+                try { File.Delete(copiedPath); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+            throw;
+        }
+    }
+
+    public void DeleteMenu(Menu menu)
+    {
+        EnsureWritable();
+        var index = Restaurant.Menus.FindIndex(m => m.Id == menu.Id);
+        if (index < 0) throw new InvalidOperationException("Menu tidak ditemukan.");
+        var stored = Restaurant.Menus[index];
+        if (stored.SurplusListings.Count > 0 || Listings.Any(l => l.MenuId == stored.Id || l.Menu.Id == stored.Id) ||
+            Cart.Items.Any(i => i.Listing.MenuId == stored.Id || i.Listing.Menu.Id == stored.Id) ||
+            Restaurant.Orders.Any(o => o.Items.Any(i => i.Listing.MenuId == stored.Id || i.Listing.Menu.Id == stored.Id)) ||
+            Restaurant.Menus.SelectMany(m => m.ProductionRecords).Any(r => r.MenuId == stored.Id || r.Menu?.Id == stored.Id) ||
+            stored.ProductionRecords.Count > 0)
+            throw new InvalidOperationException("Menu tidak dapat dihapus karena masih digunakan oleh penawaran surplus, keranjang, pesanan, atau catatan produksi. Gunakan Nonaktifkan agar riwayat tetap tersimpan.");
+        Restaurant.Menus.RemoveAt(index);
+        try { Persist(); }
+        catch { Restaurant.Menus.Insert(index, stored); throw; }
     }
 
     public void ToggleMenu(Menu menu)
@@ -163,21 +228,40 @@ public sealed class DemoSession
     public void CancelListing(SurplusListing listing)
     { EnsureWritable(); listing.Cancel(); Persist(); }
 
+    internal Dictionary<string, string> ValidateProduction(Menu? menu, DateOnly? date, int? produced, int? regularSold)
+    {
+        var errors = new Dictionary<string, string>();
+        if (menu is null) errors["menu"] = "Pilih menu.";
+        if (date is null) errors["date"] = "Tanggal produksi wajib diisi.";
+        else if (date > DateOnly.FromDateTime(DateTime.Today)) errors["date"] = "Tanggal produksi tidak boleh di masa depan.";
+        if (produced is null) errors["produced"] = "Jumlah produksi wajib diisi.";
+        else if (produced < 0) errors["produced"] = "Produksi tidak boleh negatif.";
+        if (regularSold is null) errors["sold"] = "Jumlah penjualan reguler wajib diisi.";
+        else if (regularSold < 0) errors["sold"] = "Penjualan reguler tidak boleh negatif.";
+        else if (produced is not null && produced >= 0 && regularSold > produced)
+            errors["sold"] = "Penjualan reguler tidak boleh melebihi produksi.";
+        if (menu is not null && date is not null && produced >= 0 && regularSold >= 0)
+        {
+            var rescued = menu.ProductionRecords.SingleOrDefault(r => r.RecordDate == date)?.RescuedQuantity ?? 0;
+            var allocated = Allocated(menu, date.Value);
+            var minimum = (long)regularSold.Value + rescued + allocated;
+            if (minimum > produced)
+                errors["produced"] = $"Jumlah produksi minimal {minimum} porsi.";
+        }
+        return errors;
+    }
+
     public void SaveProduction(Menu menu, DateOnly date, int produced, int regularSold)
     {
         EnsureWritable();
-        if (date > DateOnly.FromDateTime(DateTime.Today)) throw new InvalidOperationException("Tanggal produksi tidak boleh di masa depan.");
-        if (produced < 0 || regularSold < 0 || regularSold > produced) throw new InvalidOperationException("Produksi dan penjualan tidak boleh negatif; penjualan tidak boleh melebihi produksi.");
-        var record = menu.ProductionRecords.SingleOrDefault(r => r.RecordDate == date);
-        var rescued = record?.RescuedQuantity ?? 0;
-        if (regularSold + rescued + Allocated(menu, date) > produced)
-            throw new InvalidOperationException("Produksi tidak cukup untuk penjualan, pesanan, dan stok yang sudah ditawarkan.");
-        record ??= new ProductionRecord { MenuId = menu.Id, Menu = menu, RecordDate = date };
+        var errors = ValidateProduction(menu, date, produced, regularSold);
+        if (errors.Count > 0) throw new InvalidOperationException(errors.First().Value);
+        var record = menu.ProductionRecords.SingleOrDefault(r => r.RecordDate == date)
+            ?? new ProductionRecord { MenuId = menu.Id, Menu = menu, RecordDate = date };
         record.ProducedQuantity = produced; record.RegularSoldQuantity = regularSold;
         if (!menu.ProductionRecords.Contains(record)) menu.ProductionRecords.Add(record);
         Persist();
     }
-
     public void ConfirmOrder(Order order, int preparationMinutes)
     {
         EnsureWritable();
@@ -213,7 +297,7 @@ public sealed class DemoSession
 
     public static string Status(Order order) => order.Status switch
     {
-        OrderStatus.Reserved => "Menunggu konfirmasi", OrderStatus.Confirmed => "Sedang disiapkan",
-        OrderStatus.ReadyForPickup => "Siap diambil", OrderStatus.Completed => "Selesai", _ => "Dibatalkan"
+        OrderStatus.Reserved => "Menunggu Konfirmasi", OrderStatus.Confirmed => "Diproses",
+        OrderStatus.ReadyForPickup => "Siap Diambil", OrderStatus.Completed => "Selesai", _ => "Dibatalkan"
     };
 }
