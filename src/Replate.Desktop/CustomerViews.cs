@@ -57,7 +57,14 @@ public sealed class CartView : UserControl
             Content = Ui.Page(Ui.Heading("Keranjang", "Belum ada makanan yang dipilih."),
                 Ui.Button("Jelajahi makanan", host.ShowMarketplace, true)); return;
         }
-        CheckoutButton = Ui.Button("Reservasi pesanan", () => host.Run(() => session.Checkout(), () => host.ShowOrder(session.LastOrder!, false)), true);
+        CheckoutButton = Ui.Button("Reservasi pesanan", async () =>
+        {
+            await host.RunAsync(async () =>
+            {
+                await session.CheckoutAsync();
+                host.ShowOrder(session.LastOrder!, false);
+            }, "Pesanan berhasil dibuat.", "Pesanan belum dapat dibuat. Periksa koneksi PostgreSQL lalu coba lagi.");
+        }, true);
         CheckoutButton.IsEnabled = session.Cart.ValidateCart() && session.Cart.Items.All(i => i.Listing.Menu.IsActive);
         Content = Ui.Page(Ui.Heading("Keranjang", $"{session.Restaurant.Name} · {session.Restaurant.Address}"), items,
             Ui.Columns("*,Auto", Ui.Text("Total pesanan", 20, bold: true), Ui.Text(DemoSession.Rupiah(session.Cart.CalculateSubtotal()), 26, Ui.Green, true)),

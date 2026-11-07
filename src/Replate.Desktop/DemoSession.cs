@@ -2,6 +2,7 @@ using System.Globalization;
 using Replate.Domain.Entities;
 using Replate.Domain.Services;
 using Replate.Domain.Enums;
+using Replate.Desktop.Data;
 
 namespace Replate.Desktop;
 
@@ -71,11 +72,32 @@ public sealed class DemoSession
 
     public Order Checkout()
     {
+        var order = PrepareCheckout();
+        if (StorePath == DefaultStorePath)
+        {
+            new DatabaseService().SaveOrderAsync(order).GetAwaiter().GetResult();
+        }
+        Persist();
+        return order;
+    }
+
+    public async Task<Order> CheckoutAsync()
+    {
+        var order = PrepareCheckout();
+        if (StorePath == DefaultStorePath)
+        {
+            await new DatabaseService().SaveOrderAsync(order);
+        }
+        Persist();
+        return order;
+    }
+
+    private Order PrepareCheckout()
+    {
         EnsureWritable();
         if (Cart.Items.Any(i => !i.Listing.Menu.IsActive)) throw new InvalidOperationException("Ada menu yang sudah tidak aktif. Hapus menu tersebut dari keranjang.");
         LastOrder = new CheckoutService(new StockService()).CreateOrder(Cart);
         Restaurant.Orders.Add(LastOrder);
-        Persist();
         return LastOrder;
     }
 

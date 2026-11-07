@@ -14,13 +14,15 @@ public sealed class MainWindow : Window
     private readonly TextBlock successText = Ui.Text("", 14, Ui.Green);
     private readonly Border successBanner;
     private readonly Avalonia.Threading.DispatcherTimer successTimer = new() { Interval = TimeSpan.FromSeconds(4) };
+    private readonly string? startupError;
     internal string? SuccessMessage => successBanner.IsVisible ? successText.Text : null;
     private TextBlock? alert;
     private Button? cartLink;
 
-    public MainWindow(DemoSession? session = null)
+    public MainWindow(DemoSession? session = null, string? startupError = null)
     {
         Session = session ?? new DemoSession(DemoSession.DefaultStorePath);
+        this.startupError = startupError;
         Title = "Replate"; Width = 1360; Height = 940; MinWidth = 1040; MinHeight = 720;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         Background = Brush.Parse("#FAFAF8");
@@ -46,6 +48,12 @@ public sealed class MainWindow : Window
     {
         cartLink = null;
         var body = Ui.Stack(24, Ui.Text("replate.", 36, Ui.Green, true),
+            startupError is null ? new Border() : new Border
+            {
+                Child = Ui.Text("Database belum tersambung. Aplikasi tetap terbuka, tetapi pesanan tidak dapat disimpan sampai PostgreSQL diperbaiki.\n\n" + startupError, 14, Brush.Parse("#7A4E00")),
+                Background = Brush.Parse("#FFF4D6"), BorderBrush = Brush.Parse("#E5B94A"), BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(6), Padding = new Thickness(14)
+            },
             Ui.Text("Pilih area Replate", 28, bold: true),
             Ui.Text("Jelajahi makanan surplus sebagai pelanggan atau kelola operasional restoran.", 16, Ui.Muted),
             Ui.Divider(),

@@ -8,6 +8,7 @@
   <ItemGroup>
     <PackageReference Include="Avalonia.Desktop" Version="12.1.4" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.4" />
+    <PackageReference Include="Npgsql" Version="10.0.3" />
     <ProjectReference Include="../Replate.Domain/Replate.Domain.csproj" />
   </ItemGroup>
 </Project>

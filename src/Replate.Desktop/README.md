@@ -97,6 +97,16 @@ dotnet run --project src/Replate.Desktop -- --verify-state
 dotnet run --project src/Replate.Desktop -- --verify-ui /tmp/replate-ui-preview
 ```
 
+Normal startup initializes PostgreSQL before opening the window. Configure the connection, including the password,
+with `REPLATE_DB_CONNECTION_STRING` when the local PostgreSQL server requires authentication, for example:
+
+`REPLATE_DB_CONNECTION_STRING="Host=localhost;Port=5432;Database=replate_db;Username=postgres;Password=..."`
+
+Alternatively, keep the connection string without a password and set only `REPLATE_DB_PASSWORD`.
+
+If PostgreSQL is unavailable, the application still opens and displays a warning; checkout reports the database
+failure instead of terminating the desktop process.
+
 Pemeriksaan state memakai berkas sementara terisolasi: muat ulang keranjang/status,
 timestamp, stok, pickup salah/benar, pembatalan berulang, kapasitas surplus, tanggal,
 harga, menu nonaktif, kedaluwarsa, dan perlindungan berkas rusak. Pemeriksaan UI
