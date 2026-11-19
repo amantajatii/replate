@@ -26,8 +26,10 @@ internal sealed class AuthSurface : Grid
     internal const double MinPlate = 360;
     internal const double SmallestPlate = 320;
     internal const double PlateGap = 24;
-    internal const double BoundaryShare = 0.70;
-    internal const double CardShare = 0.14;
+    internal const double BoundaryShare = 0.72;
+    internal const double CardShare = 0.12;
+    internal const double PlateShare = 0.56;
+    internal const double GapShare = 0.08;
     internal const double MinMargin = 48;
     internal const double Inset = 32;
     internal const double ScrollBarWidth = 6;
@@ -165,17 +167,21 @@ internal sealed class AuthSurface : Grid
     // Layout
     internal static (double Boundary, double Plate, double Card, double Left) Layout(Size size)
     {
-        var plate = Math.Min(Math.Max(MinPlate, size.Height * 0.6), Math.Min(size.Height, size.Width * 2 * (1 - BoundaryShare)));
+        var plate = Math.Min(Math.Max(MinPlate, size.Height * PlateShare), Math.Min(size.Height, size.Width * 2 * (1 - BoundaryShare)));
         var boundary = size.Width * BoundaryShare;
-        var room = boundary - plate / 2 - PlateGap;
-        var left = Math.Max(MinMargin, Math.Min(size.Width * CardShare, room - MinCardWidth));
-        if (room - left < MinCardWidth)
+        var left = Math.Max(MinMargin, size.Width * CardShare);
+        var gap = Math.Max(PlateGap, Math.Min(size.Width * GapShare, boundary - plate / 2 - left - MinCardWidth));
+        if (boundary - plate / 2 - left - gap < MinCardWidth)
         {
+            left = Math.Max(MinMargin, boundary - plate / 2 - MinCardWidth - PlateGap);
             var need = left + MinCardWidth + PlateGap;
-            if (need + plate > size.Width) plate = Math.Max(SmallestPlate, size.Width - need);
-            boundary = need + plate / 2;
+            if (need > boundary - plate / 2)
+            {
+                if (need + plate > size.Width) plate = Math.Max(SmallestPlate, size.Width - need);
+                boundary = need + plate / 2;
+            }
         }
-        var card = Math.Max(0, Math.Min(CardWidth, boundary - plate / 2 - PlateGap - left));
+        var card = Math.Max(0, Math.Min(CardWidth, boundary - plate / 2 - gap - left));
         return (boundary, plate, card, left);
     }
 

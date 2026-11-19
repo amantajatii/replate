@@ -59,7 +59,7 @@ ROUTES AND ROLES:
 AUTH SURFACE (Masuk and Daftar, implemented in `AuthViews.cs` as `AuthSurface`):
 - A two-column Grid fills the page: the left canvas column and the right primary
   (#245B43) panel, full height. The first column width is set in pixels from the
-  plate position (`AuthSurface.Layout`); the panel is about 30% of the width.
+  plate position (`AuthSurface.Layout`); the panel is about 28% of the width.
 - Left column: canvas background. The wordmark replate. sits at the top (inset 32),
   left-aligned with the card, outside the scroll area, so it is never clipped while
   scrolling. Below it a
@@ -71,18 +71,20 @@ AUTH SURFACE (Masuk and Daftar, implemented in `AuthViews.cs` as `AuthSurface`):
   The panel's left edge passes through the plate center: half over canvas, half
   over the panel (tolerance 0.02 of the diameter). No text over the photo; panel,
   overlay and image are hidden from assistive technology (AccessibilityView Raw).
-- Placement: D = clamp(0.6 x height, 360, min(height, 0.6 x width)); boundary B =
-  0.70 x width; plate left = B - D/2; card left L = max(48, 0.14 x width); card =
-  min(440, plate left - 24 - L), minimum 360. If the card would be under 360, L
-  shrinks first (minimum 48), then B moves right, then D shrinks (minimum 320). The
-  scroll area ends at plate left. The wordmark, the warning and the demo-account
+- Placement: D = clamp(0.56 x height, 360, min(height, 0.56 x width)); boundary B =
+  0.72 x width; plate left = B - D/2; card left L = max(48, 0.12 x width); target
+  gap G = 0.08 x width; card = min(440, plate left - G - L), minimum 360, and the
+  gap takes whatever the 440 card leaves (wide on large windows). If the card would
+  be under 360, G shrinks first (minimum 24), then L (minimum 48), then B moves
+  right, then D shrinks (minimum 320). The scroll area ends at plate left. The wordmark, the warning and the demo-account
   line share L, and the warning and demo line share the card width.
 - Card: white surface, `rounded.card` (16), `elevation.card` shadow
   (`0 8 24 0 #1F23382C`), padding 32, fields 20 apart, no border. Hard rule: the
   plate box never intersects the card box and the gap is at least 24. At 1360x940
-  the plate is 564, the card 440 at 190 and the panel 30%; at 1920x1080 the plate is
-  648 and the card 440 at 269; at 1040x720 the plate is 432, the card 360 at 128 and
-  the panel 30%. The primary
+  the plate is 526, the card 440 at 163, the gap about 113 and the panel 28%; at
+  1283x780 the plate is 437, the card 440 at 154 and the gap about 111; at 1920x1080
+  the plate is 605, the card 440 at 230 and the gap about 410; at 1040x720 the plate
+  is 403, the card 360 at 125, the gap about 62 and the panel 28%. The primary
   action spans the card; the secondary action (Daftar akun baru / Kembali ke masuk)
   spans it below. No Google sign-in, Ingat saya, or Lupa kata sandi.
 - Titles Masuk and Daftar akun: 28, bold (`auth-title`).

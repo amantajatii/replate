@@ -17,9 +17,11 @@ Aplikasi dibuka di layar **Masuk**. Masuk dengan akun demo (lihat tabel di bawah
 atau pilih **Daftar akun baru**. Layar Masuk dan Daftar memakai kolom kiri berlatar
 terang dan panel hijau penuh tinggi di kanan. Batas kiri panel hijau tepat melewati
 titik tengah foto piring `Assets/auth-hero.png` (tanpa teks): setengah piring di atas
-latar terang dan setengah di atas panel hijau. Batas itu berada di sekitar 70% lebar
-jendela, sehingga panel hijau sekitar 30% lebar. Kartu formulir mulai di sekitar 14%
-lebar jendela (minimal 48) dan piring selalu berjarak minimal 24 dari kartu. Wordmark
+latar terang dan setengah di atas panel hijau. Batas itu berada di sekitar 72% lebar
+jendela, sehingga panel hijau sekitar 28% lebar. Diameter piring sekitar 56% tinggi
+jendela. Kartu formulir mulai di sekitar 12% lebar jendela (minimal 48) dan berjarak
+sekitar 8% lebar jendela dari piring; pada jendela kecil jarak itu mengecil sampai
+minimal 24. Wordmark
 tetap di atas, sejajar dengan tepi kiri kartu, sedangkan satu kartu formulir di
 bawahnya dapat digulir vertikal; baris akun demo mengikuti lebar dan tepi kiri kartu. Area gulir memakai scrollbar tipis tanpa
 track dan tanpa tombol panah yang hanya tampil saat menggulir atau saat kursor berada
@@ -158,8 +160,9 @@ membuka jendela native, menjalankan alur lintas area, menyimpan screenshot, lalu
 menutup otomatis. Untuk layar Masuk dan Daftar, pemeriksaan UI juga memastikan pada
 1360 × 940, 1040 × 720, 1283 × 780, dan 1920 × 1080: batas panel hijau berada di
 tengah piring (setengah di atas latar terang, toleransi 0,02 diameter) dan di sekitar
-70% lebar (panel sekitar 30%), tepi kiri kartu di sekitar 14% lebar dan minimal 48,
-piring tidak berpotongan dengan kartu (jarak minimal 24), kartu tidak terpotong,
+72% lebar (panel sekitar 28%), tepi kiri kartu di sekitar 12% lebar dan minimal 48,
+piring tidak berpotongan dengan kartu (jarak minimal 24, dan minimal 8% lebar pada
+1360 × 940, 1283 × 780, dan 1920 × 1080), kartu tidak terpotong,
 wordmark dan baris akun demo sejajar tepi kiri kartu, wordmark tidak terpotong saat
 digulir, tidak ada gulir horizontal, tidak ada scrollbar bertrack atau berpanah yang
 tampil, dan setiap kolom yang difokuskan dengan Tab tergulir ke tampilan. Pemeriksaan

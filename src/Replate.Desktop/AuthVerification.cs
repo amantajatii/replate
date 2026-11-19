@@ -36,7 +36,7 @@ internal static class AuthVerification
         var bounds = surface.Bounds; var panel = surface.HeroPanel.Bounds;
         Check(surface.ColumnDefinitions.Count == 2 && Math.Abs(bounds.Width - size.Width) < 1 && Math.Abs(bounds.Height - size.Height) < 1 &&
             panel.X >= bounds.Width * AuthSurface.BoundaryShare - .5 && Math.Abs(panel.Right - bounds.Width) < 1 && Math.Abs(panel.Height - bounds.Height) < 1,
-            $"{where}: primary panel is full height on the right and starts at or after 70% ({panel.X:0.#} of {bounds.Width:0.#})");
+            $"{where}: primary panel is full height on the right and starts at or after 72% ({panel.X:0.#} of {bounds.Width:0.#})");
         Check(ColorOf(surface.HeroPanel.Background) == Color.Parse("#245B43"), $"{where}: panel uses the primary color");
         Check(surface.Hero.Source is Bitmap { PixelSize: { Width: 1080, Height: 1080 } } && surface.Hero.Stretch == Stretch.Uniform &&
             surface.Hero.Bounds.Width > 0, $"{where}: hero image loaded from {AuthSurface.HeroUri}");
@@ -46,7 +46,7 @@ internal static class AuthVerification
             $"{where}: hero is decorative for screen readers");
         Check(!surface.HeroPanel.GetVisualDescendants().Concat(surface.HeroLayer.GetVisualDescendants()).OfType<TextBlock>().Any(), $"{where}: no text over the photo");
         var plate = RectIn(surface.Hero, surface);
-        var diameter = Math.Max(AuthSurface.MinPlate, size.Height * 0.6);
+        var diameter = Math.Max(AuthSurface.MinPlate, size.Height * AuthSurface.PlateShare);
         Check(Math.Abs(plate.Width - plate.Height) < 1 && Math.Abs(plate.Width - diameter) < 1 && Math.Abs(plate.Center.Y - bounds.Height / 2) < 1 &&
             plate.Right <= bounds.Width + .5, $"{where}: plate diameter follows window height and is centered vertically ({plate.Width:0.#}, expected {diameter:0.#})");
         var onCanvas = (panel.X - plate.X) / plate.Width;
@@ -59,12 +59,18 @@ internal static class AuthVerification
         Check(card.Bounds.Width >= AuthSurface.MinCardWidth - .5 && card.Bounds.Width <= AuthSurface.CardWidth + .5,
             $"{where}: card width stays between {AuthSurface.MinCardWidth} and {AuthSurface.CardWidth} ({card.Bounds.Width:0.#})");
         var atMinCard = card.Bounds.Width <= AuthSurface.MinCardWidth + .5;
+        var gap = Gap(cardBox, plate);
+        var targetGap = bounds.Width * AuthSurface.GapShare;
+        var atMinGap = gap <= AuthSurface.PlateGap + .5;
+        var roomy = bounds.Width * AuthSurface.BoundaryShare - diameter / 2 - Math.Max(AuthSurface.MinMargin, bounds.Width * AuthSurface.CardShare) - AuthSurface.MinCardWidth >= targetGap;
         Check(cardBox.X >= AuthSurface.MinMargin - .5 && cardBox.X <= bounds.Width * AuthSurface.CardShare + .5 &&
-            (Math.Abs(cardBox.X - bounds.Width * AuthSurface.CardShare) < 1 || atMinCard),
-            $"{where}: card starts at about 14% and at least {AuthSurface.MinMargin} ({cardBox.X:0.#}, target {bounds.Width * AuthSurface.CardShare:0.#})");
-        Check(panel.X <= bounds.Width * AuthSurface.BoundaryShare + .5 || atMinCard && cardBox.X <= AuthSurface.MinMargin + .5,
-            $"{where}: panel edge moves right of 70% only when the card and margin are at their minimum ({panel.X:0.#})");
-        Check(Gap(cardBox, plate) >= AuthSurface.PlateGap - .5, $"{where}: card and plate do not intersect and stay at least 24 apart (gap {Gap(cardBox, plate):0.#})");
+            (Math.Abs(cardBox.X - bounds.Width * AuthSurface.CardShare) < 1 || atMinCard && atMinGap),
+            $"{where}: card starts at about 12% and at least {AuthSurface.MinMargin} ({cardBox.X:0.#}, target {bounds.Width * AuthSurface.CardShare:0.#})");
+        Check(panel.X <= bounds.Width * AuthSurface.BoundaryShare + .5 || atMinCard && atMinGap && cardBox.X <= AuthSurface.MinMargin + .5,
+            $"{where}: panel edge moves right of 72% only when the gap, card and margin are at their minimum ({panel.X:0.#})");
+        Check(gap >= AuthSurface.PlateGap - .5, $"{where}: card and plate do not intersect and stay at least 24 apart (gap {gap:0.#})");
+        Check(roomy ? gap >= targetGap - .5 : atMinCard && gap >= AuthSurface.PlateGap - .5,
+            $"{where}: card and plate keep a gap of 8% of the width when the window allows, otherwise the card is at its minimum first (gap {gap:0.#}, target {targetGap:0.#})");
         if (surface.Below is { } below)
         {
             var line = RectIn(below, surface);
@@ -195,7 +201,10 @@ internal static class AuthVerification
                     var surface = surfaceOf(view);
                     await CheckSurface(frame, surface, name, size);
                     var share = surface.HeroPanel.Bounds.Width / size.Width;
-                    Check(Math.Abs(share - .30) <= .01, $"{name} at {size.Width:0}x{size.Height:0}: panel is about 30% of the width ({share:0.###})");
+                    Check(Math.Abs(share - .28) <= .01, $"{name} at {size.Width:0}x{size.Height:0}: panel is about 28% of the width ({share:0.###})");
+                    var gap = RectIn(surface.Hero, surface).X - RectIn(surface.Card, surface).Right;
+                    Check(gap >= AuthSurface.PlateGap - .5 && (size.Width == 1040 || gap >= size.Width * AuthSurface.GapShare - .5),
+                        $"{name} at {size.Width:0}x{size.Height:0}: card and plate gap is at least {(size.Width == 1040 ? AuthSurface.PlateGap : size.Width * AuthSurface.GapShare):0.#} ({gap:0.#})");
                     var expectedCard = size.Width == 1040 ? AuthSurface.MinCardWidth : AuthSurface.CardWidth;
                     Check(Math.Abs(surface.Card.Bounds.Width - expectedCard) < 1, $"{name} at {size.Width:0}x{size.Height:0}: card is {expectedCard} wide ({surface.Card.Bounds.Width:0.#})");
                     var scroll = surface.FormScroll;
