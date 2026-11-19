@@ -2,6 +2,11 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Automation;
+using Avalonia.Controls.Presenters;
+using Avalonia.Controls.Primitives;
+using Avalonia.LogicalTree;
+using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.VisualTree;
 using Replate.Domain.Entities;
@@ -11,6 +16,240 @@ namespace Replate.Desktop;
 
 internal static class AuthVerification
 {
+    private static void Check(bool ok, string message) { if (!ok) throw new InvalidOperationException(message); }
+
+    private static Rect RectIn(Control control, Visual root) =>
+        new(control.TranslatePoint(default, root) ?? throw new InvalidOperationException($"{control.GetType().Name} is not in the surface"), control.Bounds.Size);
+
+    private static double Gap(Rect a, Rect b) =>
+        Math.Max(Math.Max(b.X - a.Right, a.X - b.Right), Math.Max(b.Y - a.Bottom, a.Y - b.Bottom));
+
+    private static Color ColorOf(IBrush? brush) => brush is ISolidColorBrush solid ? solid.Color : default;
+
+    private static void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+    internal static async Task CheckSurface(Window window, AuthSurface surface, string screen, Size? frame = null)
+    {
+        await Task.Delay(300);
+        var size = frame ?? window.ClientSize;
+        var where = $"{screen} at {size.Width:0}x{size.Height:0}";
+        var bounds = surface.Bounds; var panel = surface.HeroPanel.Bounds;
+        Check(surface.ColumnDefinitions.Count == 2 && Math.Abs(bounds.Width - size.Width) < 1 && Math.Abs(bounds.Height - size.Height) < 1 &&
+            Math.Abs(panel.Width - bounds.Width * AuthSurface.PanelShare) < 1 && Math.Abs(panel.Right - bounds.Width) < 1 && Math.Abs(panel.Height - bounds.Height) < 1,
+            $"{where}: primary panel is 40% wide, full height, on the right ({panel.Width:0.#} of {bounds.Width:0.#})");
+        Check(ColorOf(surface.HeroPanel.Background) == Color.Parse("#245B43"), $"{where}: panel uses the primary color");
+        Check(surface.Hero.Source is Bitmap { PixelSize: { Width: 1080, Height: 1080 } } && surface.Hero.Stretch == Stretch.Uniform &&
+            surface.Hero.Bounds.Width > 0, $"{where}: hero image loaded from {AuthSurface.HeroUri}");
+        Check(surface.Hero.GetVisualParent() == surface.HeroLayer && !surface.HeroLayer.IsHitTestVisible &&
+            !surface.FormScroll.GetVisualDescendants().Contains(surface.Hero), $"{where}: plate sits in a fixed overlay outside the scroll area");
+        Check(new Control[] { surface.Hero, surface.HeroLayer, surface.HeroPanel }.All(c => AutomationProperties.GetAccessibilityView(c) == AccessibilityView.Raw),
+            $"{where}: hero is decorative for screen readers");
+        Check(!surface.HeroPanel.GetVisualDescendants().Concat(surface.HeroLayer.GetVisualDescendants()).OfType<TextBlock>().Any(), $"{where}: no text over the photo");
+        var plate = RectIn(surface.Hero, surface);
+        var diameter = Math.Max(AuthSurface.MinPlate, size.Height * 0.6);
+        Check(Math.Abs(plate.Width - plate.Height) < 1 && Math.Abs(plate.Width - diameter) < 1 && Math.Abs(plate.Center.Y - bounds.Height / 2) < 1 &&
+            plate.Right <= bounds.Width + .5, $"{where}: plate diameter follows window height and is centered vertically ({plate.Width:0.#}, expected {diameter:0.#})");
+        var onCanvas = (panel.X - plate.X) / plate.Width;
+        Check(Math.Abs(onCanvas - 1d / 3) < .02, $"{where}: plate crosses the column edge, one third on canvas and two thirds on the panel ({onCanvas:0.###})");
+        var card = surface.Card;
+        Check(ColorOf(card.Background) == Colors.White && card.CornerRadius == new CornerRadius(16) &&
+            card.Padding == new Thickness(32) && card.BorderThickness == default && card.BoxShadow == BoxShadows.Parse("0 8 24 0 #1F23382C"),
+            $"{where}: card is white, rounded, shadowed, padded and borderless");
+        var cardBox = RectIn(card, surface);
+        Check(card.Bounds.Width >= AuthSurface.MinCardWidth - .5 && card.Bounds.Width <= AuthSurface.CardWidth + .5 && cardBox.X >= AuthSurface.Inset - .5,
+            $"{where}: card width stays between {AuthSurface.MinCardWidth} and {AuthSurface.CardWidth} ({card.Bounds.Width:0.#})");
+        Check(Gap(cardBox, plate) >= AuthSurface.PlateGap - .5, $"{where}: card and plate do not intersect and stay at least 24 apart (gap {Gap(cardBox, plate):0.#})");
+        var buttons = card.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("auth-primary")).ToList();
+        Check(buttons.Count == 1 && Math.Abs(buttons[0].Bounds.Width - (card.Bounds.Width - 64)) < 1, $"{where}: primary button spans the card");
+        var mark = RectIn(surface.Wordmark, surface); var scrollBox = RectIn(surface.FormScroll, surface);
+        Check(surface.Wordmark.Text == "replate." && mark.X >= 0 && mark.Y >= 0 && mark.Bottom <= scrollBox.Y + .5 && Gap(mark, plate) > 0 &&
+            !surface.FormScroll.GetVisualDescendants().Contains(surface.Wordmark), $"{where}: wordmark stays fully visible above the scroll area");
+        var scroll = surface.FormScroll;
+        Check(scroll.HorizontalScrollBarVisibility == Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled &&
+            scroll.Extent.Width <= scroll.Viewport.Width + .5 &&
+            surface.GetVisualDescendants().OfType<ScrollViewer>().Where(s => s.TemplatedParent is null)
+                .All(s => s.HorizontalScrollBarVisibility == Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled),
+            $"{where}: no horizontal scrolling (extent {scroll.Extent.Width:0.#}, viewport {scroll.Viewport.Width:0.#})");
+        Check(!window.GetVisualDescendants().OfType<TextBlock>().Any(t => t.IsVisible && t.Text?.Contains((char)0x2014) == true), $"{where}: no em dash in UI text");
+    }
+
+    internal static async Task CheckScrolled(AuthSurface surface, string where, Action? capture = null)
+    {
+        var scroll = surface.FormScroll;
+        var mark = RectIn(surface.Wordmark, surface);
+        scroll.Offset = new Vector(0, scroll.Extent.Height); await Task.Delay(300);
+        var plate = RectIn(surface.Hero, surface); var card = RectIn(surface.Card, surface);
+        Check(scroll.Offset.Y > 0 && scroll.Offset.X == 0, $"{where}: left column scrolls vertically only");
+        Check(RectIn(surface.Wordmark, surface) == mark, $"{where}: wordmark does not move or clip while scrolling");
+        Check(Math.Abs(plate.Center.Y - surface.Bounds.Height / 2) < 1 && Gap(card, plate) >= AuthSurface.PlateGap - .5, $"{where}: plate stays fixed and clear of the scrolled card");
+        capture?.Invoke();
+        scroll.Offset = default; await Task.Delay(300);
+    }
+
+    internal static async Task CheckSizes(MainWindow host, string output)
+    {
+        var screens = new (string Name, Func<Control> Make, Func<Control, AuthSurface> Surface)[]
+        {
+            ("sign-in", () => new SignInView(host, host.Session, "Simulated connection failure"), v => ((SignInView)v).Surface),
+            ("register", () => new RegisterView(host, host.Session), v => ((RegisterView)v).Surface),
+            ("register-owner", () => { var v = new RegisterView(host, host.Session); v.OwnerOption.IsChecked = true; return v; }, v => ((RegisterView)v).Surface)
+        };
+        foreach (var size in new[] { new Size(1360, 940), new Size(1040, 720), new Size(1283, 780) })
+            foreach (var (name, make, surfaceOf) in screens)
+            {
+                var view = make();
+                var canvas = new Border { Child = view, Width = size.Width, Height = size.Height, Background = Brush.Parse("#FAFAF8") };
+                var frame = new Window
+                {
+                    Width = 1040, Height = 720, FontFamily = new FontFamily("Helvetica Neue, Segoe UI, sans-serif"),
+                    Content = new Canvas { Children = { canvas } }
+                };
+                try
+                {
+                    frame.Show();
+                    var surface = surfaceOf(view);
+                    await CheckSurface(frame, surface, name, size);
+                    var scroll = surface.FormScroll;
+                    Check(name != "register-owner" || scroll.Extent.Height > scroll.Viewport.Height || size.Height > 720,
+                        $"{name} at {size.Width:0}x{size.Height:0}: long owner form scrolls vertically");
+                    void Capture(string suffix)
+                    {
+                        using var bitmap = new RenderTargetBitmap(new PixelSize((int)size.Width, (int)size.Height), new Vector(96, 96));
+                        bitmap.Render(canvas); bitmap.Save(Path.Combine(output, $"auth-{name}-{size.Width:0}x{size.Height:0}{suffix}.png"), PngBitmapEncoderOptions.Default);
+                    }
+                    if (scroll.Extent.Height > scroll.Viewport.Height) await CheckScrolled(surface, $"{name} at {size.Width:0}x{size.Height:0}", () => Capture("-scrolled"));
+                    Capture("");
+                }
+                finally { frame.Close(); }
+            }
+        host.Activate();
+        Console.WriteLine("All Replate auth surface checks passed (sign-in, registration, owner registration at 1360x940, 1040x720 and 1283x780).");
+    }
+
+    private static async Task Pseudo(StyledElement element, string pseudo, bool on)
+    {
+        ((IPseudoClasses)element.Classes).Set(pseudo, on); await Task.Delay(100);
+    }
+
+    internal static async Task CheckState(TemplatedControl control, string pseudo, Color background, Color foreground, string what)
+    {
+        await Pseudo(control, pseudo, true);
+        var (fill, ink) = (ColorOf(control.Background), ColorOf(control.Foreground));
+        await Pseudo(control, pseudo, false);
+        Check(fill == background && ink == foreground, $"{what} {pseudo} uses {background}/{foreground} (got {fill}/{ink})");
+    }
+
+    internal static async Task CheckReveal(TextBox input, string screen)
+    {
+        var previous = input.Text;
+        input.Text = ""; await Task.Delay(300);
+        var toggle = AuthSurface.RevealToggle(input);
+        var icon = (Avalonia.Controls.Shapes.Path)toggle.Content!;
+        Check(!input.Classes.Contains("revealPasswordButton") && !input.GetVisualDescendants().OfType<Avalonia.Controls.Primitives.ToggleButton>().Any(),
+            $"{screen}: native Fluent reveal button is not used");
+        Check(toggle.IsEffectivelyVisible && toggle.Bounds.Width > 0 && toggle.GetVisualAncestors().Contains(input) && input.PasswordChar != default &&
+            AutomationProperties.GetName(toggle) == AuthSurface.RevealName && icon.Data == AuthSurface.EyeIcon,
+            $"{screen}: password toggle is visible inside the empty field with an eye icon");
+        Click(toggle); await Task.Delay(100);
+        Check(input.PasswordChar == default && AutomationProperties.GetName(toggle) == AuthSurface.ConcealName && icon.Data == AuthSurface.EyeOffIcon,
+            $"{screen}: toggle shows the password and switches to the crossed eye");
+        Click(toggle); await Task.Delay(100);
+        Check(input.PasswordChar != default && AutomationProperties.GetName(toggle) == AuthSurface.RevealName && icon.Data == AuthSurface.EyeIcon,
+            $"{screen}: toggle hides the password again");
+        var ink = Color.Parse("#23382C"); var green = Color.Parse("#245B43");
+        Check(ColorOf(toggle.Background) == Colors.Transparent && ColorOf(toggle.Foreground) == ink && ColorOf(icon.Stroke) == ink && toggle.Focusable,
+            $"{screen}: toggle defaults to an ink icon and is keyboard focusable");
+        await CheckState(toggle, ":pointerover", Color.Parse("#E0E9DF"), green, $"{screen}: password toggle");
+        await CheckState(toggle, ":pressed", Color.Parse("#DDE3DA"), green, $"{screen}: password toggle");
+        await Pseudo(toggle, ":focus-visible", true);
+        var ring = ColorOf(toggle.BorderBrush);
+        await Pseudo(toggle, ":focus-visible", false);
+        Check(ring == green && ColorOf(toggle.BorderBrush) == Colors.Transparent, $"{screen}: password toggle shows a keyboard focus ring");
+        input.Text = previous;
+    }
+
+    internal static async Task CheckHover(Button button, Color background, string screen)
+    {
+        var presenter = button.GetVisualDescendants().OfType<ContentPresenter>().Single(p => p.Name == "PART_ContentPresenter");
+        Color Fill() => ColorOf(presenter.Background);
+        await Pseudo(button, ":pointerover", false);
+        var normal = Fill();
+        await Pseudo(button, ":pointerover", true);
+        var hovered = Fill();
+        await Pseudo(button, ":pointerover", false);
+        Check(hovered != normal && hovered == background && Fill() == normal, $"{screen}: {button.Content} hover changes its background ({normal} to {hovered}, expected {background})");
+    }
+
+    internal static void CheckTitle(TextBlock title, string text, string screen) =>
+        Check(title.Text == text && title.FontSize == 28 && title.FontWeight == FontWeight.Bold && title.IsEffectivelyVisible, $"{screen}: title {text} is 28 bold");
+
+    internal static async Task CheckRoles(RegisterView register)
+    {
+        var (customer, owner) = (register.CustomerOption, register.OwnerOption);
+        var content = register.Surface.Card.Bounds.Width - 64;
+        Check(customer.GroupName == owner.GroupName && AutomationProperties.GetName(customer) == "Pelanggan" && AutomationProperties.GetName(owner) == "Pemilik restoran",
+            "Daftar: role options are one radio group with automation names");
+        Check(Math.Abs(customer.Bounds.Width - owner.Bounds.Width) < 1 && Math.Abs(owner.Bounds.Right - customer.Bounds.X - content) < 1 &&
+            customer.CornerRadius == new CornerRadius(6) && Math.Abs(customer.Bounds.Y - owner.Bounds.Y) < 1,
+            "Daftar: role buttons are equal width, rounded, and span the card together");
+        var (green, ink, white) = (Color.Parse("#245B43"), Color.Parse("#23382C"), Colors.White);
+        customer.IsChecked = true; await Task.Delay(100);
+        Check(ColorOf(customer.Background) == green && ColorOf(customer.Foreground) == white &&
+            ColorOf(owner.Background) == Color.Parse("#F1F3EE") && ColorOf(owner.Foreground) == ink &&
+            ColorOf(customer.BorderBrush) == Colors.Transparent && ColorOf(owner.BorderBrush) == Colors.Transparent,
+            "Daftar: selected role is primary with white text, unselected role is sidebar with ink text and no border");
+        Check(!customer.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Ellipse>().Any(), "Daftar: role buttons show no radio circle");
+        await CheckState(customer, ":pointerover", ink, white, "Daftar: selected role");
+        await CheckState(owner, ":pointerover", Color.Parse("#E0E9DF"), green, "Daftar: unselected role");
+        owner.IsChecked = true; await Task.Delay(100);
+        Check(customer.IsChecked == false, "Daftar: role buttons are exclusive");
+        customer.IsChecked = true; customer.Focus(NavigationMethod.Directional); await Task.Delay(100);
+        customer.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Right }); await Task.Delay(100);
+        Check(owner.IsChecked == true && customer.IsChecked == false && owner.IsFocused, "Daftar: right arrow selects and focuses Pemilik restoran");
+        owner.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Left }); await Task.Delay(100);
+        Check(customer.IsChecked == true && owner.IsChecked == false && customer.IsFocused, "Daftar: left arrow returns to Pelanggan");
+        await Pseudo(customer, ":focus-visible", true);
+        var ring = ColorOf(customer.BorderBrush);
+        await Pseudo(customer, ":focus-visible", false);
+        Check(ring == ink, "Daftar: role buttons show a keyboard focus ring");
+    }
+
+    internal static async Task CheckTimeFields(RegisterView register)
+    {
+        await Task.Delay(300);
+        Check(!register.GetVisualDescendants().OfType<TimePicker>().Any() && !register.GetLogicalDescendants().OfType<TimePicker>().Any(), "Daftar pemilik: no TimePicker remains");
+        foreach (var (field, label) in new[] { (register.OpeningInput, "Jam buka"), (register.ClosingInput, "Jam tutup") })
+        {
+            Check(field.Hour.ItemsSource is IEnumerable<string> hours && hours.SequenceEqual(Enumerable.Range(0, 24).Select(i => i.ToString("00"))) &&
+                field.Minute.ItemsSource is IEnumerable<string> minutes && minutes.SequenceEqual(Enumerable.Range(0, 60).Select(i => i.ToString("00"))),
+                $"{label}: hour 00-23 and minute 00-59 dropdowns");
+            Check(AutomationProperties.GetName(field) == label && AutomationProperties.GetName(field.Hour) == $"{label}, jam" &&
+                AutomationProperties.GetName(field.Minute) == $"{label}, menit", $"{label}: hour and minute automation names");
+            Check(field.CornerRadius.TopLeft >= field.Bounds.Height / 2 - .5 && ColorOf(field.Background) == Colors.White &&
+                field.BorderThickness == new Thickness(1) && field.BorderBrush is not null && field.BorderBrush.Equals(register.NameInput.BorderBrush) &&
+                field.BoxShadow == default && field.Effect is null && field.GetVisualDescendants().All(v => v.Effect is null),
+                $"{label}: white pill with the text field border and no shadow or effect");
+            Check(!field.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text is { } s && (s.Contains("AM") || s.Contains("PM"))), $"{label}: no AM/PM text");
+            field.Value = null;
+            field.Hour.SelectedIndex = 7; await Task.Delay(50);
+            Check(field.Value == new TimeOnly(7, 0), $"{label}: picking an hour fills minute 00");
+            field.Minute.SelectedIndex = 30;
+            Check(field.Value == new TimeOnly(7, 30), $"{label}: hour and minute produce a TimeOnly");
+            field.Hour.SelectedIndex = 23; field.Minute.SelectedIndex = 59;
+            Check(field.Value == new TimeOnly(23, 59), $"{label}: 24-hour values without AM/PM");
+            field.Value = null;
+            Check(field.Value is null && field.Hour.SelectedIndex == -1 && field.Minute.SelectedIndex == -1, $"{label}: value can be cleared");
+        }
+        var open = RectIn(register.OpeningInput, register); var close = RectIn(register.ClosingInput, register);
+        Check(Math.Abs(open.Y - close.Y) < 1 && open.Right < close.X, "Jam buka and Jam tutup sit side by side");
+        foreach (var (field, label) in new[] { (open, "Jam buka"), (close, "Jam tutup") })
+        {
+            var text = register.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == label && t.IsEffectivelyVisible);
+            var box = RectIn(text, register);
+            Check(box.Bottom <= field.Y && Math.Abs(box.X - field.X) < 2, $"{label}: visible label sits above its time field");
+        }
+    }
+
     internal static async Task Run(string output)
     {
         void Ensure(bool ok, string message) { if (!ok) throw new InvalidOperationException(message); }
@@ -61,11 +300,23 @@ internal static class AuthVerification
             Ensure(!window.GetVisualDescendants().OfType<Button>().Any(b => b.Content as string is "Jelajahi makanan" or "Buka area restoran" or "Ganti area"),
                 "Old automatic demo entry buttons are removed");
             Ensure(((Avalonia.Media.ISolidColorBrush)signIn.SignInButton.Background!).Color == Avalonia.Media.Color.Parse("#245B43"), "Masuk is the green primary action");
+            await CheckSurface(window, signIn.Surface, "Masuk");
+            Ensure(signIn.Surface.Warning is null, "No database warning without a startup error");
+            Ensure(Texts().Single(t => t.Text?.StartsWith("Akun demo:") == true).TranslatePoint(default, signIn.Surface)!.Value.Y >
+                signIn.Surface.Card.TranslatePoint(default, signIn.Surface)!.Value.Y + signIn.Surface.Card.Bounds.Height, "Demo account line sits below the card");
+            CheckTitle(signIn.TitleText, "Masuk", "Masuk");
+            await CheckReveal(signIn.PasswordInput, "Masuk");
+            await CheckHover(signIn.SignInButton, Color.Parse("#23382C"), "Masuk");
+            await CheckHover(signIn.RegisterButton, Color.Parse("#E0E9DF"), "Masuk");
             Shot("auth-sign-in");
+            Click(AuthSurface.RevealToggle(signIn.PasswordInput));
+            Ensure(signIn.PasswordInput.PasswordChar == default, "Password revealed before submission");
             await SignIn(DemoAccounts.CustomerEmail, "salah-sekali", true);
             Ensure(window.CurrentPage == signIn && !session.IsSignedIn && signIn.ErrorText.IsVisible &&
                 signIn.ErrorText.Text == AccountService.SignInFailedMessage, "Wrong password shows generic message and stays on sign-in");
             Ensure(signIn.PasswordInput.Text == "" && signIn.EmailInput.Text == DemoAccounts.CustomerEmail, "Password cleared after submission");
+            Ensure(signIn.PasswordInput.PasswordChar != default && AutomationProperties.GetName(AuthSurface.RevealToggle(signIn.PasswordInput)) == AuthSurface.RevealName,
+                "Password returns to hidden mode after submission");
             Shot("auth-sign-in-error");
             await SignIn("tidak-ada@replate.demo", "replate123");
             Ensure(window.CurrentPage == signIn && signIn.ErrorText.Text == AccountService.SignInFailedMessage, "Unknown email uses the same generic message");
@@ -118,15 +369,28 @@ internal static class AuthVerification
             var register = window.CurrentPage as RegisterView ?? throw new InvalidOperationException("Daftar akun baru opens registration");
             Ensure(window.FocusManager?.GetFocusedElement() == register.NameInput, "Registration focuses Nama");
             Ensure(register.CustomerOption.IsChecked == true && !register.ProfileSection.IsVisible, "Customer is default and hides restaurant profile");
+            Ensure(Texts().Any(t => t.Text == "Daftar akun"), "Registration card shows its title");
+            CheckTitle(register.TitleText, "Daftar akun", "Daftar");
+            Ensure(!window.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text is { } text &&
+                (text.Contains("Pemilik restoran mengisi profil restoran") || text.StartsWith("Kata sandi minimal"))), "Registration subtitle sentence is removed");
+            await CheckSurface(window, register.Surface, "Daftar");
+            await CheckReveal(register.PasswordInput, "Daftar");
+            await CheckReveal(register.ConfirmPasswordInput, "Daftar");
+            await CheckHover(register.RegisterButton, Color.Parse("#23382C"), "Daftar");
+            await CheckHover(register.BackButton, Color.Parse("#E0E9DF"), "Daftar");
+            await CheckRoles(register);
             var users = session.Users.Count;
             register.NameInput.Text = "Pelanggan Uji";
             register.EmailInput.Text = DemoAccounts.CustomerEmail.ToUpperInvariant();
             register.PasswordInput.Text = "pendek"; register.ConfirmPasswordInput.Text = "berbeda";
-            Click(register.RegisterButton); await Settle();
+            Click(AuthSurface.RevealToggle(register.PasswordInput));
+            register.ConfirmPasswordInput.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter });
+            await Settle();
             Ensure(register.FieldErrors["email"].IsVisible && register.FieldErrors["email"].Text == "Email sudah terdaftar.", "Duplicate email shown inline");
             Ensure(register.FieldErrors["password"].Text == $"Kata sandi minimal {AccountService.MinimumPasswordLength} karakter.", "Short password shown inline");
             Ensure(register.FieldErrors["confirmPassword"].Text == "Kata sandi tidak sama.", "Mismatched confirmation shown inline");
             Ensure(!register.FieldErrors["restaurantName"].IsVisible, "Customer registration does not validate restaurant profile");
+            Ensure(register.PasswordInput.PasswordChar != default && register.PasswordInput.Text == "pendek", "Submitting hides the password and keeps it for correction");
             Ensure(window.CurrentPage == register && session.Users.Count == users && !session.IsSignedIn, "Invalid registration creates nothing");
             Ensure(window.FocusManager?.GetFocusedElement() == register.EmailInput, "Focus first invalid registration field");
             Shot("auth-register-errors");
@@ -142,6 +406,11 @@ internal static class AuthVerification
                 Ensure(Avalonia.Automation.AutomationProperties.GetName(input) == label && (input is RadioButton || Texts().Any(t => t.Text == label)),
                     $"{label} has visible label and matching automation name");
             Ensure(Texts().Any(t => t.Text == "Untuk buka 24 jam, isi 00:00 sampai 23:59."), "24-hour helper text shown");
+            await CheckSurface(window, register.Surface, "Daftar pemilik");
+            await CheckTimeFields(register);
+            var formScroll = register.Surface.FormScroll;
+            Ensure(formScroll.Extent.Height > formScroll.Viewport.Height, "Owner registration form scrolls vertically at 1040x720");
+            await CheckScrolled(register.Surface, "Daftar pemilik at 1040x720");
             Shot("auth-register-owner-errors");
             register.CustomerOption.IsChecked = true; await Settle();
             Ensure(!register.ProfileSection.IsVisible && !register.FieldErrors["restaurantName"].IsVisible, "Switching back hides profile errors");
@@ -164,11 +433,15 @@ internal static class AuthVerification
             register.PasswordInput.Text = "rahasia123"; register.ConfirmPasswordInput.Text = "rahasia123";
             register.RestaurantNameInput.Text = "Kedai Uji Baru"; register.AddressInput.Text = "Jl. Uji No. 1, Yogyakarta";
             register.PhoneInput.Text = "0274 555 0909"; register.DescriptionInput.Text = "Restoran untuk pemeriksaan.";
-            register.OpeningInput.SelectedTime = new TimeSpan(0, 0, 0); register.ClosingInput.SelectedTime = new TimeSpan(23, 59, 0);
+            register.OpeningInput.Hour.SelectedIndex = 0; register.OpeningInput.Minute.SelectedIndex = 0;
+            register.ClosingInput.Hour.SelectedIndex = 23; register.ClosingInput.Minute.SelectedIndex = 59;
+            Ensure(register.OpeningInput.Value == new TimeOnly(0, 0) && register.ClosingInput.Value == new TimeOnly(23, 59), "Time fields hold 24-hour TimeOnly values");
             Shot("auth-register-owner");
             Click(register.RegisterButton); await Settle();
             Ensure(window.CurrentPage is DashboardView && session.CurrentUser is RestaurantOwner && session.Restaurant.Name == "Kedai Uji Baru" &&
                 window.SuccessMessage == "Akun berhasil dibuat.", "New owner registration opens own dashboard");
+            Ensure(register.PasswordInput.Text == "" && register.ConfirmPasswordInput.Text == "" && register.PasswordInput.PasswordChar != default,
+                "Submitted registration clears both password fields and hides them");
             var created = session.Restaurant;
             Ensure(created.Menus.Count == 0 && created.Orders.Count == 0 && !session.RestaurantListings.Any(), "New restaurant starts empty");
             Ensure(created.OpeningTime == new TimeOnly(0, 0) && created.ClosingTime == new TimeOnly(23, 59), "Opening hours saved");
@@ -216,6 +489,25 @@ internal static class AuthVerification
             await SignIn(DemoAccounts.CustomerEmail, DemoAccounts.Password);
             Ensure(window.Marketplace.VisibleCount > 0 && !Texts().Any(t => t.Text == "Nasi uji"), "Menu without listing is not in marketplace");
             await SignOut();
+
+            // Database warning
+            var warned = new MainWindow(new DemoSession(Path.Combine(Path.GetDirectoryName(path)!, "warning", "state.json")), "Simulated connection failure") { Width = 1040, Height = 720 };
+            try
+            {
+                warned.Show(); await Settle();
+                var warnedPage = warned.CurrentPage as SignInView ?? throw new InvalidOperationException("Warning window opens on sign-in");
+                var warning = warnedPage.Surface.Warning ?? throw new InvalidOperationException("Database warning shown on startup error");
+                var warningTop = warning.TranslatePoint(default, warnedPage.Surface)!.Value;
+                var cardTop = warnedPage.Surface.Card.TranslatePoint(default, warnedPage.Surface)!.Value;
+                Ensure(warning.IsVisible && Math.Abs(warning.Bounds.Width - warnedPage.Surface.Card.Bounds.Width) < 1 &&
+                    Math.Abs(warningTop.X - cardTop.X) < 1 && warningTop.Y + warning.Bounds.Height < cardTop.Y, "Database warning sits above the card at card width");
+                Ensure(warning.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == "Database belum tersambung. Pesanan belum dapat disimpan."),
+                    "Database warning uses the short message");
+                await CheckSurface(warned, warnedPage.Surface, "Masuk with database warning");
+                using var bitmap = new RenderTargetBitmap(new PixelSize((int)warned.Bounds.Width, (int)warned.Bounds.Height), new Vector(96, 96));
+                bitmap.Render(warned); bitmap.Save(Path.Combine(output, "auth-sign-in-database-warning.png"), PngBitmapEncoderOptions.Default);
+            }
+            finally { warned.Close(); }
 
             // Persistence
             var reloaded = new DemoSession(path);

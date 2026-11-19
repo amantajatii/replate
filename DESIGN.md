@@ -15,6 +15,10 @@ typography:
     fontFamily: "Helvetica Neue, Segoe UI, sans-serif"
     fontSize: "28px"
     fontWeight: 600
+  auth-title:
+    fontFamily: "Helvetica Neue, Segoe UI, sans-serif"
+    fontSize: "28px"
+    fontWeight: 700
   section:
     fontFamily: "Helvetica Neue, Segoe UI, sans-serif"
     fontSize: "20px"
@@ -38,6 +42,7 @@ typography:
 rounded:
   control: "6px"
   card: "16px"
+  full: "9999px"
 elevation:
   card:
     offsetX: "0px"
@@ -88,7 +93,48 @@ components:
     rounded: "{rounded.card}"
     shadow: "{elevation.card}"
     padding: "32px"
-    width: "400px"
+    width: "440px"
+    minWidth: "360px"
+  role-button:
+    backgroundColor: "{colors.sidebar}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.control}"
+    padding: "11px 16px"
+  role-button-hover:
+    backgroundColor: "{colors.selection}"
+    textColor: "{colors.primary}"
+    rounded: "{rounded.control}"
+    padding: "11px 16px"
+  role-button-selected:
+    backgroundColor: "{colors.primary}"
+    textColor: "{colors.surface}"
+    rounded: "{rounded.control}"
+    padding: "11px 16px"
+  role-button-selected-hover:
+    backgroundColor: "{colors.ink}"
+    textColor: "{colors.surface}"
+    rounded: "{rounded.control}"
+    padding: "11px 16px"
+  password-toggle:
+    backgroundColor: "transparent"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.control}"
+    size: "32px"
+  password-toggle-hover:
+    backgroundColor: "{colors.selection}"
+    textColor: "{colors.primary}"
+    rounded: "{rounded.control}"
+    size: "32px"
+  password-toggle-pressed:
+    backgroundColor: "{colors.divider}"
+    textColor: "{colors.primary}"
+    rounded: "{rounded.control}"
+    size: "32px"
+  time-field:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.full}"
+    height: "42px"
 ---
 
 # Design System: Replate Desktop
@@ -127,10 +173,11 @@ Forest green is a functional accent within a pale, warm-neutral workspace. Front
 
 ## Typography
 
-**Body and UI Font:** Helvetica Neue, Segoe UI, sans-serif, inherited from the main window. Avalonia uses normal and semibold weights; line-height and tracking are not customized.
+**Body and UI Font:** Helvetica Neue, Segoe UI, sans-serif, inherited from the main window. Avalonia uses normal and semibold weights, plus bold for the auth title only; line-height and tracking are not customized.
 
 ### Hierarchy
 - **Headline:** page headings; semibold, using the frontmatter headline role.
+- **Auth title:** the card titles Masuk and Daftar akun; bold (700) at the headline size, using the `auth-title` role. No subtitle sits under either title.
 - **Section:** grouped content headings and status summaries.
 - **Row title:** food/menu names and prominent row amounts.
 - **Body:** descriptions, field labels, status, and supporting copy; visible field labels also use semibold.
@@ -151,15 +198,15 @@ Full-page menu/listing forms are left-aligned (640 wide), food details use (680)
 
 ### Auth surface
 
-Status: planned. The current sign-in and registration screens use a single column; this section describes the target layout until it is implemented.
+The sign-in (Masuk) and registration (Daftar) screens fill the window with two columns: the left column takes about 60% of the width and the right column about 40%.
 
-The sign-in (Masuk) and registration (Daftar) screens use two columns that fill the window.
+- **Left column:** canvas background. The wordmark sits at the top left (inset 32) outside the scroll area, so it stays fully visible while the form scrolls. Below it, a vertical-only scroll area holds a single auth-card. Masuk also shows the demo-account line under the card and, on a database startup error, one compact warning above it. No other containers, banners, or helper panels sit beside the card.
+- **Right column:** a full-height panel filled with the primary color. The panel itself holds nothing.
+- **Plate:** `src/Replate.Desktop/Assets/auth-hero.png` (a transparent round cut-out of a plate) sits in an overlay layer above both columns that does not scroll. It is centered vertically and crosses the column edge: about one third of its diameter lies over the canvas and two thirds over the green panel. The diameter follows the window height (0.6 × height, minimum 360).
+- **Card and plate never touch:** the plate box and the card box never intersect and keep a gap of at least (24). The card is centered in the left area before the plate. When that area is short, the card narrows (from 440 down to 360) and then the plate shrinks.
+- **Photo content:** no text, slogan, logo, or overlay is placed on the plate or the panel. Both are decorative and hidden from assistive technology.
 
-- **Left column:** the wordmark at the top and a single auth-card holding the form. The column background is canvas. No other containers, banners, or helper panels sit beside the card.
-- **Right column:** a full-height panel filled with the primary color, showing a real food photograph from `src/Replate.Desktop/Assets/auth-hero.png`. The photo fills the panel and is cropped to cover it; the primary fill shows wherever the photo does not reach.
-- **Photo panel content:** the panel carries no text, slogan, logo, or overlay. It is purely visual and is hidden from assistive technology.
-
-The minimum window size stays at (1040 × 720). At that size the auth-card keeps its full width (400), and the left column scrolls vertically if the registration form is taller than the window.
+Reference sizes: at (1360 × 940) the card is 440 wide and the plate 564; at the minimum (1040 × 720) the card is 424 wide and the plate 432, and the owner registration form scrolls vertically. There is no horizontal scrolling at any size.
 
 ## Elevation & Depth
 
@@ -167,7 +214,7 @@ Custom application surfaces stay flat. Tonal backgrounds, whitespace, and thin d
 
 **The One Shadow Rule.** `elevation.card` is offset (0, 8), blur (24), spread (0), in ink (`#23382C`) at about 12% alpha. In Avalonia this is the `BoxShadow` string `0 8 24 0 #1F23382C` (Avalonia colors are `#AARRGGBB`, and `1F` is 31 of 255, about 12%). The CSS equivalent is `0px 8px 24px 0px rgba(35, 56, 44, 0.12)`. Do not stack shadows, tint them with the primary color, or apply them to buttons, rows, or the shell.
 
-Status: planned. No custom `BoxShadow` is applied in the current build.
+The current build applies `elevation.card` to the auth-card only.
 
 Native Avalonia Fluent controls retain their theme behavior; this document does not override native popups, focus, or interaction states.
 
@@ -178,10 +225,17 @@ Buttons and text fields use gently rounded control corners (`rounded.control`). 
 ## Components
 
 ### Buttons
-Direct, compact action labels. Primary buttons use green with white text; secondary buttons use white with ink text. Both share the control radius, semibold text (13), and portable padding token. Inactive navigation and filters use transparent backgrounds. Hover, focus, pressed, and disabled behavior come from Avalonia FluentTheme, not custom state tokens.
+Direct, compact action labels. Primary buttons use green with white text; secondary buttons use white with ink text. Both share the control radius, semibold text (13), and portable padding token. Inactive navigation and filters use transparent backgrounds. Hover, focus, pressed, and disabled behavior come from Avalonia FluentTheme, not custom state tokens, except on the auth surface: there the primary button hovers to an ink fill with white text, the secondary button to a selection fill with primary text, and the auth controls below document their own states.
 
 ### Inputs / Fields
-Visible labels sit above native TextBox, NumericUpDown, ComboBox, DatePicker, and TimePicker controls. Text and numeric inputs have a minimum height (42); multiline text inputs use (88). The marketplace search field has its own height token and white background. Automation names mirror visible labels. Native controls own focus and disabled treatments.
+Visible labels sit above native TextBox, NumericUpDown, ComboBox, DatePicker, and TimePicker controls (restaurant forms); the auth surface uses the time-field instead of TimePicker. Text and numeric inputs have a minimum height (42); multiline text inputs use (88). The marketplace search field has its own height token and white background. Automation names mirror visible labels. Native controls own focus and disabled treatments.
+
+### Auth controls
+These three components exist only on the auth surface. Their states are documented here because they replace the native Fluent look; they use only the color tokens above, with no blur, glow, gradient, or animation.
+
+- **role-button:** the Daftar sebagai choice (Pelanggan / Pemilik restoran). Two equal-width buttons that together span the card (12 apart), `rounded.control`, no visible border. They keep RadioButton semantics: one group, arrow keys move and select, automation names match the labels. Unselected: sidebar fill with ink text; hover: selection fill with primary text. Selected: primary fill with white text; hover: ink fill with white text. Keyboard focus shows a 2 px ink ring.
+- **password-toggle:** a 32 × 32 button inside the right edge of every Kata sandi field, always visible, even when the field is empty. Its eye and crossed-eye icons are drawn as Path geometry (no icon package). Default: transparent with an ink icon; hover: selection fill with a primary icon; pressed: divider fill with a primary icon; keyboard focus: 2 px primary ring. Pressing it switches the field between masked and plain text, and its automation name switches between "Tampilkan kata sandi" and "Sembunyikan kata sandi". Submitting the form returns every password field to masked mode; sign-in and an accepted registration also clear them.
+- **time-field:** Jam buka and Jam tutup in the restaurant profile. A white pill (`rounded.full`, height 42) with the same border as native text fields, holding a native hour ComboBox (00 to 23), a ":" separator, and a native minute ComboBox (00 to 59). No AM/PM and no shadow. Picking an hour fills the minute with 00. The two fields share one row (16 apart) with visible labels above each; automation names follow the pattern "Jam buka, jam" and "Jam buka, menit". The value is a 24-hour `TimeOnly`.
 
 ### Navigation and Filters
 Selected routes and category filters share pale sage fill and forest-green text; inactive items use muted text. Category filters are buttons, not a separate invented chip shape. Customer navigation is horizontal and restaurant navigation vertical.
@@ -190,10 +244,10 @@ Selected routes and category filters share pale sage fill and forest-green text;
 Marketplace food rows have generous vertical padding (22), with description, pickup, price, and action columns. Shared operational rows use minimum heights (40 header / 64 body), while compact dashboard tables use (36 / 48). All use the divider token. Avoid wrapping each datum in a separate card.
 
 ### Cards
-Status: planned. A card is a white surface (`surface`) with `rounded.card` corners and the `elevation.card` shadow. It has no border of any kind: no colored border, no accent stripe, and no thin outline. Separation comes from the shadow and the canvas around it. Use a card to hold one coherent unit of work, not to wrap each datum. Table and list row dividers are unchanged and stay as described under Lists and Tables.
+Implemented on the auth surface. A card is a white surface (`surface`) with `rounded.card` corners and the `elevation.card` shadow. It has no border of any kind: no colored border, no accent stripe, and no thin outline. Separation comes from the shadow and the canvas around it. Use a card to hold one coherent unit of work, not to wrap each datum. Table and list row dividers are unchanged and stay as described under Lists and Tables.
 
 ### Auth Card
-Status: planned. The auth-card is the card used on the auth surface. It holds the sign-in or registration form: visible field labels, inputs, inline errors, the primary action, and the link to switch between Masuk and Daftar. It uses the card treatment with padding (32) and width (400), and it is the only card on the auth surface.
+The auth-card is the card used on the auth surface. It holds the sign-in or registration form: the bold auth title, visible field labels, inputs, inline errors, the primary action, and the link to switch between Masuk and Daftar. It uses the card treatment with padding (32) and a width of (440), narrowing to no less than (360) to keep its gap from the plate. It is the only card on the auth surface.
 
 ### Empty and Error States
 Empty lists preserve a direct recovery path when applicable. Operational errors appear inline near the top of the content area; positive cart feedback uses green. Error colors vary between two source literals and are not promoted to a shared token until reconciled.
@@ -231,4 +285,4 @@ Empty lists preserve a direct recovery path when applicable. Operational errors 
 - **Don't** pair Space Grotesk with Instrument Serif.
 - **Don't** add grain or noise overlays on gradients.
 
-Source evidence: `src/Replate.Desktop/Ui.cs` (shared primitives), `MainWindow.cs` (font, palette, shell), `MarketplaceView.cs` (filters and rows), `DashboardView.cs` (aligned data tables), `CustomerViews.cs` and `RestaurantViews.cs` (full-page forms and states), `AuthViews.cs` (current single-column sign-in and registration forms), and `Program.cs` (light FluentTheme). The photo asset `src/Replate.Desktop/Assets/auth-hero.png` exists but no code references it yet. The `elevation.card` and `rounded.card` tokens, the card and auth-card components, and the two-column auth surface are planned and not yet verified in the build. Product guardrails come from `PRODUCT.md`. The sidecar contains browser-panel translations of five native patterns; its HTML/CSS focus outlines, native-control approximations, and synthesized tonal ramps are preview metadata, not additional application tokens or verified native state styles. No HTML/CSS implementation or iOS/Android behavior is claimed.
+Source evidence: `src/Replate.Desktop/Ui.cs` (shared primitives), `MainWindow.cs` (font, palette, shell), `MarketplaceView.cs` (filters and rows), `DashboardView.cs` (aligned data tables), `CustomerViews.cs` and `RestaurantViews.cs` (full-page forms and states), `AuthViews.cs` (auth surface, role-button, password-toggle, and time-field), and `Program.cs` (light FluentTheme). The photo asset `src/Replate.Desktop/Assets/auth-hero.png` is loaded by `AuthViews.cs`. The `elevation.card`, `rounded.card`, and `rounded.full` tokens, the auth-card, role-button, password-toggle, and time-field components, and the auth surface layout are implemented and verified by `--verify-ui` (`AuthVerification.cs`) at (1360 × 940), (1040 × 720), and (1283 × 780). Product guardrails come from `PRODUCT.md`. The sidecar contains browser-panel translations of five native patterns; its HTML/CSS focus outlines, native-control approximations, and synthesized tonal ramps are preview metadata, not additional application tokens or verified native state styles. No HTML/CSS implementation or iOS/Android behavior is claimed.

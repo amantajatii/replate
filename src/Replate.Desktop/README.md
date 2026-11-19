@@ -14,7 +14,16 @@ dotnet run --project src/Replate.Desktop
 ```
 
 Aplikasi dibuka di layar **Masuk**. Masuk dengan akun demo (lihat tabel di bawah)
-atau pilih **Daftar akun baru**. Pelanggan diarahkan ke marketplace, pemilik
+atau pilih **Daftar akun baru**. Layar Masuk dan Daftar memakai kolom kiri berlatar
+terang (sekitar 60% lebar) dan panel hijau penuh tinggi di kanan (sekitar 40%).
+Wordmark tetap di kiri atas, sedangkan satu kartu formulir di bawahnya dapat digulir
+vertikal. Foto piring `Assets/auth-hero.png` (tanpa teks) melintasi batas kedua kolom,
+sepertiga di atas latar terang dan dua pertiga di atas panel hijau, dan selalu
+berjarak minimal 24 dari kartu. Setiap kolom kata sandi memiliki tombol mata yang
+selalu terlihat untuk menampilkan atau menyembunyikan isi. Di Daftar, peran dipilih
+dengan dua tombol **Pelanggan** / **Pemilik restoran** (bisa juga dengan tombol panah),
+dan Jam buka serta Jam tutup dipilih dari daftar jam 00 sampai 23 dan menit 00 sampai
+59 (format 24 jam). Jika database belum tersambung, peringatan ringkas tampil di atas kartu Masuk. Pelanggan diarahkan ke marketplace, pemilik
 restoran ke dashboard restorannya. **Keluar** di navigasi pelanggan atau sidebar
 restoran mengakhiri sesi dan kembali ke layar Masuk. Halaman pelanggan hanya untuk
 pelanggan yang masuk; halaman restoran hanya untuk pemilik restoran tersebut. Peran
@@ -41,8 +50,8 @@ Akun demo tidak digandakan dan tidak menimpa akun yang sudah ada.
 
 | Area | Halaman | Fungsi |
 | --- | --- | --- |
-| Awal | Masuk | Email dan kata sandi; arah halaman mengikuti peran akun |
-| Awal | Daftar | Akun pelanggan atau pemilik restoran beserta profil restoran |
+| Awal | Masuk | Kartu email dan kata sandi di samping foto; arah halaman mengikuti peran akun |
+| Awal | Daftar | Kartu akun pelanggan atau pemilik restoran beserta profil restoran, di samping foto |
 | Pelanggan | Marketplace | Cari, filter, lihat harga, stok, jadwal pengambilan |
 | Pelanggan | Detail makanan | Deskripsi, harga, jumlah porsi, tambah ke keranjang |
 | Pelanggan | Keranjang | Ubah jumlah, hapus item, periksa total, reservasi |
@@ -141,4 +150,12 @@ timestamp, stok, pickup salah/benar, pembatalan berulang, kapasitas surplus, tan
 harga, menu nonaktif, kedaluwarsa, perlindungan berkas rusak, serta akun: pendaftaran,
 login, akun demo, isolasi antar pemilik, dan keranjang per pelanggan. Pemeriksaan UI
 membuka jendela native, menjalankan alur lintas area, menyimpan screenshot, lalu
-menutup otomatis. Kedua pemeriksaan tidak menggunakan berkas data aplikasi normal.
+menutup otomatis. Untuk layar Masuk dan Daftar, pemeriksaan UI juga memastikan pada
+1360 × 940, 1040 × 720, dan 1283 × 780: panel hijau selebar 40%, piring melintasi
+batas kolom (sekitar 1/3 dan 2/3) tanpa berpotongan dengan kartu (jarak minimal 24),
+wordmark tidak terpotong saat digulir, dan tidak ada gulir horizontal. Pemeriksaan
+juga mencakup judul tebal tanpa subjudul, tombol mata yang terlihat saat kolom kosong
+dan mengganti mode, tombol peran yang eksklusif dan bisa dipakai dengan keyboard,
+kolom jam yang menghasilkan `TimeOnly` 24 jam tanpa AM/PM, serta hover tombol.
+Langkah salin kode pengambilan memakai clipboard sistem dan gagal bila clipboard
+tidak tersedia di lingkungan pengujian. Kedua pemeriksaan tidak menggunakan berkas data aplikasi normal.

@@ -21,7 +21,23 @@ internal static class UiVerification
             async Task Shot(string name) { await Settle(); Capture(window, Path.Combine(output, name + ".png")); }
             void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Ensure(window.CurrentPage is SignInView && !window.Session.IsSignedIn, "Startup shows sign-in");
+            var startSignIn = (SignInView)window.CurrentPage!;
+            await AuthVerification.CheckSurface(window, startSignIn.Surface, "Masuk");
+            Ensure(window.FocusManager?.GetFocusedElement() == startSignIn.EmailInput, "Startup focus is Email");
+            AuthVerification.CheckTitle(startSignIn.TitleText, "Masuk", "Masuk");
+            await AuthVerification.CheckReveal(startSignIn.PasswordInput, "Masuk");
             await Shot("sign-in");
+            Click(startSignIn.RegisterButton); await Settle();
+            var startRegister = window.CurrentPage as RegisterView ?? throw new InvalidOperationException("Daftar akun baru opens registration");
+            await AuthVerification.CheckSurface(window, startRegister.Surface, "Daftar");
+            startRegister.OwnerOption.IsChecked = true;
+            await AuthVerification.CheckSurface(window, startRegister.Surface, "Daftar pemilik");
+            await AuthVerification.CheckTimeFields(startRegister);
+            await AuthVerification.CheckRoles(startRegister);
+            startRegister.OwnerOption.IsChecked = true;
+            await Shot("register-owner");
+            Click(startRegister.BackButton); await Settle();
+            Ensure(window.CurrentPage is SignInView, "Kembali ke masuk returns to sign-in");
             async Task SignInWithForm(string email)
             {
                 var signIn = (SignInView)window.CurrentPage!;
@@ -193,6 +209,7 @@ internal static class UiVerification
             await PickupCopyVerification.Run(output);
             await OrdersEmptyVerification.Run(output);
             await AuthVerification.Run(output);
+            await AuthVerification.CheckSizes(window, output);
             Console.WriteLine($"All Replate desktop UI checks passed. Screenshots: {output}"); desktop.Shutdown();
         }
         catch (Exception exception) { Console.Error.WriteLine(exception); desktop.Shutdown(1); }
