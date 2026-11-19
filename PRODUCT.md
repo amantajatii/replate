@@ -75,7 +75,11 @@ production-readiness claim are outside this prototype.
 
 Replate name, Indonesian task-oriented copy, restrained green/neutral identity.
 The user explicitly requested Impeccable to remove AI slop. No promotional banners,
-generic slogans, decorative food drawings, or repeated statistic-card scaffolding.
+generic slogans, hand-drawn decorative food images, or repeated statistic-card
+scaffolding.
+Real food photography is allowed on the sign-in (Masuk) and registration (Daftar)
+screens, with no text placed over the photo. No slogans appear anywhere in the
+product.
 
 ## Evidence on Hand
 

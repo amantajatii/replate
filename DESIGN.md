@@ -37,6 +37,15 @@ typography:
     fontWeight: 400
 rounded:
   control: "6px"
+  card: "16px"
+elevation:
+  card:
+    offsetX: "0px"
+    offsetY: "8px"
+    blur: "24px"
+    spread: "0px"
+    color: "rgba(35, 56, 44, 0.12)"
+    avaloniaBoxShadow: "0 8 24 0 #1F23382C"
 spacing:
   tight: "6px"
   field: "8px"
@@ -70,6 +79,16 @@ components:
     backgroundColor: "{colors.surface}"
     rounded: "{rounded.control}"
     height: "44px"
+  card:
+    backgroundColor: "{colors.surface}"
+    rounded: "{rounded.card}"
+    shadow: "{elevation.card}"
+  auth-card:
+    backgroundColor: "{colors.surface}"
+    rounded: "{rounded.card}"
+    shadow: "{elevation.card}"
+    padding: "32px"
+    width: "400px"
 ---
 
 # Design System: Replate Desktop
@@ -85,7 +104,8 @@ This records the implemented Avalonia desktop system, currently verified on macO
 **Key Characteristics:**
 - Quiet green actions and selection
 - Native controls with visible field labels
-- Flat surfaces, dividers, and structured rows
+- Flat application surfaces, dividers, and structured rows
+- One soft shadow, reserved for cards
 
 ## Colors
 
@@ -129,13 +149,31 @@ Customer navigation sits above the page with horizontal links. Restaurant naviga
 
 Full-page menu/listing forms are left-aligned (640 wide), food details use (680), and the production editor uses (760). Data grids combine flexible description columns with consistent fixed action, time, and price columns. Dashboard numeric columns align right.
 
+### Auth surface
+
+Status: planned. The current sign-in and registration screens use a single column; this section describes the target layout until it is implemented.
+
+The sign-in (Masuk) and registration (Daftar) screens use two columns that fill the window.
+
+- **Left column:** the wordmark at the top and a single auth-card holding the form. The column background is canvas. No other containers, banners, or helper panels sit beside the card.
+- **Right column:** a full-height panel filled with the primary color, showing a real food photograph from `src/Replate.Desktop/Assets/auth-hero.png`. The photo fills the panel and is cropped to cover it; the primary fill shows wherever the photo does not reach.
+- **Photo panel content:** the panel carries no text, slogan, logo, or overlay. It is purely visual and is hidden from assistive technology.
+
+The minimum window size stays at (1040 × 720). At that size the auth-card keeps its full width (400), and the left column scrolls vertically if the registration form is taller than the window.
+
 ## Elevation & Depth
 
-Custom application surfaces are flat: there are no custom shadow or motion tokens. Tonal backgrounds, whitespace, and thin dividers separate shell, rows, and content. Native Avalonia Fluent controls retain their theme behavior; this document does not override native popups, focus, or interaction states.
+Custom application surfaces stay flat. Tonal backgrounds, whitespace, and thin dividers separate shell, rows, and content. The only exception is the card, which may carry one soft shadow: `elevation.card`. There are no other shadow tokens and no motion tokens.
+
+**The One Shadow Rule.** `elevation.card` is offset (0, 8), blur (24), spread (0), in ink (`#23382C`) at about 12% alpha. In Avalonia this is the `BoxShadow` string `0 8 24 0 #1F23382C` (Avalonia colors are `#AARRGGBB`, and `1F` is 31 of 255, about 12%). The CSS equivalent is `0px 8px 24px 0px rgba(35, 56, 44, 0.12)`. Do not stack shadows, tint them with the primary color, or apply them to buttons, rows, or the shell.
+
+Status: planned. No custom `BoxShadow` is applied in the current build.
+
+Native Avalonia Fluent controls retain their theme behavior; this document does not override native popups, focus, or interaction states.
 
 ## Shapes
 
-Buttons and text fields use gently rounded control corners. Lists and tables remain open rectangular rows separated by a single bottom rule (1). The build does not establish a reusable card component or decorative container silhouette.
+Buttons and text fields use gently rounded control corners (`rounded.control`). Cards use a larger radius (`rounded.card`, 16). Lists and tables remain open rectangular rows separated by a single bottom rule (1). The card is the only sanctioned container silhouette; no other decorative container shapes are established.
 
 ## Components
 
@@ -151,6 +189,12 @@ Selected routes and category filters share pale sage fill and forest-green text;
 ### Lists and Tables
 Marketplace food rows have generous vertical padding (22), with description, pickup, price, and action columns. Shared operational rows use minimum heights (40 header / 64 body), while compact dashboard tables use (36 / 48). All use the divider token. Avoid wrapping each datum in a separate card.
 
+### Cards
+Status: planned. A card is a white surface (`surface`) with `rounded.card` corners and the `elevation.card` shadow. It has no border of any kind: no colored border, no accent stripe, and no thin outline. Separation comes from the shadow and the canvas around it. Use a card to hold one coherent unit of work, not to wrap each datum. Table and list row dividers are unchanged and stay as described under Lists and Tables.
+
+### Auth Card
+Status: planned. The auth-card is the card used on the auth surface. It holds the sign-in or registration form: visible field labels, inputs, inline errors, the primary action, and the link to switch between Masuk and Daftar. It uses the card treatment with padding (32) and width (400), and it is the only card on the auth surface.
+
 ### Empty and Error States
 Empty lists preserve a direct recovery path when applicable. Operational errors appear inline near the top of the content area; positive cart feedback uses green. Error colors vary between two source literals and are not promoted to a shared token until reconciled.
 
@@ -160,10 +204,31 @@ Empty lists preserve a direct recovery path when applicable. Operational errors 
 - **Do** use green for primary actions, selected navigation, and meaningful emphasis.
 - **Do** preserve native focus and disabled affordances and pair fields with visible labels and automation names.
 - **Do** use direct Indonesian task labels and recovery actions for empty or error states.
+- **Do** keep real food photography to the auth surface, and to other surfaces only once this document names them explicitly. Menu photos uploaded by restaurants are content, not decoration, and this rule does not affect them.
 
 ### Don't:
-- **Don't** add promotional banners, generic slogans, decorative food drawings, or repeated statistic-card scaffolding.
+- **Don't** add promotional banners, generic slogans, hand-drawn food images, decorative illustrations, or repeated statistic-card scaffolding.
+- **Don't** place text, slogans, or logos over the auth photo panel.
 - **Don't** restore the requested Praktikum UI / Data contoh sidebar footer.
 - **Don't** replace native control states with undocumented custom behavior.
+- **Don't** use purple-to-blue gradients.
+- **Don't** use gradient text in headings or hero text.
+- **Don't** put emojis in headings.
+- **Don't** apply Inter everywhere; use the documented font stack.
+- **Don't** give cards colored borders.
+- **Don't** use glassmorphism cards (blur, frosted translucent panels).
+- **Don't** ship a low-contrast dark mode; keep readable contrast in any theme.
+- **Don't** place three icon boxes in a row.
+- **Don't** put a badge above the headline.
+- **Don't** apply icon sets (such as Lucide) everywhere; use icons only where they carry meaning.
+- **Don't** use untouched stock component kits (such as shadcn UI); adapt them to the tokens.
+- **Don't** add cursor-following beams or glows.
+- **Don't** make buttons that only fade on hover; hover must change background or contrast visibly.
+- **Don't** space inconsistently; use only the spacing tokens.
+- **Don't** scatter em dashes through copy; prefer commas, periods, and colons.
+- **Don't** write generic buzzword copy; labels state the task directly.
+- **Don't** use serif italic accents.
+- **Don't** pair Space Grotesk with Instrument Serif.
+- **Don't** add grain or noise overlays on gradients.
 
-Source evidence: `src/Replate.Desktop/Ui.cs` (shared primitives), `MainWindow.cs` (font, palette, shell), `MarketplaceView.cs` (filters and rows), `DashboardView.cs` (aligned data tables), `CustomerViews.cs` and `RestaurantViews.cs` (full-page forms and states), and `Program.cs` (light FluentTheme). Product guardrails come from `PRODUCT.md`. The sidecar contains browser-panel translations of five native patterns; its HTML/CSS focus outlines, native-control approximations, and synthesized tonal ramps are preview metadata, not additional application tokens or verified native state styles. No HTML/CSS implementation or iOS/Android behavior is claimed.
+Source evidence: `src/Replate.Desktop/Ui.cs` (shared primitives), `MainWindow.cs` (font, palette, shell), `MarketplaceView.cs` (filters and rows), `DashboardView.cs` (aligned data tables), `CustomerViews.cs` and `RestaurantViews.cs` (full-page forms and states), `AuthViews.cs` (current single-column sign-in and registration forms), and `Program.cs` (light FluentTheme). The photo asset `src/Replate.Desktop/Assets/auth-hero.png` exists but no code references it yet. The `elevation.card` and `rounded.card` tokens, the card and auth-card components, and the two-column auth surface are planned and not yet verified in the build. Product guardrails come from `PRODUCT.md`. The sidecar contains browser-panel translations of five native patterns; its HTML/CSS focus outlines, native-control approximations, and synthesized tonal ramps are preview metadata, not additional application tokens or verified native state styles. No HTML/CSS implementation or iOS/Android behavior is claimed.
