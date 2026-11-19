@@ -52,6 +52,32 @@ Ensure(order.Status == OrderStatus.Completed, "Pickup must complete the order");
 var dashboard = new SurplusDashboard();
 Ensure(dashboard.CalculateTotalProduced([record]) == 20, "Dashboard must total production");
 
+// Multi-restaurant cart
+var firstRestaurant = new Restaurant { Name = "Dapur Bumi" };
+var secondRestaurant = new Restaurant { Name = "Warung Sambal Ijo" };
+SurplusListing ListingAt(Restaurant restaurant, string name) => new()
+{
+    Menu = new Menu { Name = name, NormalPrice = 20_000m, RestaurantId = restaurant.Id, Restaurant = restaurant },
+    RescuePrice = 10_000m,
+    Quantity = 3,
+    PickupStart = DateTime.UtcNow.AddMinutes(-5),
+    PickupEnd = DateTime.UtcNow.AddHours(1)
+};
+var firstListing = ListingAt(firstRestaurant, "Chicken rice bowl");
+var secondListing = ListingAt(secondRestaurant, "Gado-gado");
+var multiCart = new Cart();
+multiCart.AddItem(firstListing, 1);
+Ensure(multiCart.RestaurantId == firstRestaurant.Id, "Cart must take the restaurant of its first item");
+var rejected = false;
+try { multiCart.AddItem(secondListing, 1); }
+catch (InvalidOperationException) { rejected = true; }
+Ensure(rejected && multiCart.Items.Count == 1 && secondListing.Quantity == 3, "Cart must reject items from another restaurant");
+Ensure(checkout.CreateOrder(multiCart).RestaurantId == firstRestaurant.Id, "Order must belong to the cart restaurant");
+multiCart.AddItem(secondListing, 1);
+Ensure(multiCart.RestaurantId == secondRestaurant.Id, "Cleared cart may switch restaurant");
+var marketplace = new MarketplaceService([firstListing, secondListing]);
+Ensure(marketplace.SearchByRestaurant("sambal").Single() == secondListing, "Marketplace must search by restaurant name");
+
 Console.WriteLine("All Replate domain checks passed.");
 
 static void Ensure(bool condition, string message)

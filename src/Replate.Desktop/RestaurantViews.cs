@@ -219,7 +219,7 @@ public sealed class ListingsView : UserControl
     internal ListingsView(MainWindow host, DemoSession session)
     {
         var list = Ui.Stack(0);
-        foreach (var listing in session.Listings.OrderByDescending(l => l.CreatedAt))
+        foreach (var listing in session.RestaurantListings.OrderByDescending(l => l.CreatedAt))
         {
             var ended = listing.PickupEnd <= DateTime.UtcNow || listing.Status is ListingStatus.Cancelled or ListingStatus.Expired;
             var status = listing.Status == ListingStatus.Cancelled ? "Dibatalkan" : listing.PickupEnd <= DateTime.UtcNow ? "Berakhir" :

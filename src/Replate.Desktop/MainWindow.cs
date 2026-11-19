@@ -62,7 +62,7 @@ public sealed class MainWindow : Window
                 Ui.Button("Jelajahi makanan", ShowMarketplace, true)),
             Ui.Divider(),
             Ui.Stack(10, Ui.Text("Pemilik restoran", 20, bold: true),
-                Ui.Text("Kelola menu, penawaran, produksi, dan pesanan di Dapur Bumi.", 14, Ui.Muted),
+                Ui.Text($"Kelola menu, penawaran, produksi, dan pesanan di {Session.Restaurant.Name}.", 14, Ui.Muted),
                 Ui.Button("Buka area restoran", ShowDashboard)),
             Ui.Text("Pilihan area untuk demonstrasi lokal. Tidak menggunakan autentikasi akun.", 12, Ui.Muted));
         body.MaxWidth = 600; body.HorizontalAlignment = HorizontalAlignment.Center;

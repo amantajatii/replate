@@ -23,11 +23,14 @@ internal static class UiVerification
             await Shot("entry");
             window.ShowMarketplace(); await Shot("marketplace");
             var market = window.Marketplace;
-            Ensure(market.VisibleCount == 4, "Initial listings");
+            Ensure(market.VisibleCount == 10, "Initial listings from all restaurants");
             market.SearchBox.Text = "croissant"; await Settle(); Ensure(market.VisibleCount == 1, "Search");
             market.SelectCategory("Vegetarian"); Ensure(market.VisibleCount == 0, "Combined empty filter");
             await Shot("marketplace-empty");
-            market.SearchBox.Text = ""; await Settle(); Ensure(market.VisibleCount == 1, "Category");
+            market.SearchBox.Text = ""; await Settle(); Ensure(market.VisibleCount == 3, "Category");
+            market.SearchBox.Text = "sambal"; await Settle(); Ensure(market.VisibleCount == 1, "Restaurant search with category");
+            market.SelectCategory("Semua"); Ensure(market.VisibleCount == 3, "Restaurant search");
+            market.SearchBox.Text = ""; await Settle();
             market.SelectCategory("Semua");
             var listing = window.Session.Listings[0];
             window.ShowFood(listing); await Shot("food-detail");
@@ -61,7 +64,7 @@ internal static class UiVerification
             editor.WeightInput.Value = .3m;
             editor.NameInput.Text = "Menu tambahan";
             Ensure(editor.FieldErrors.Values.All(e => !e.IsVisible), "Corrected fields clear immediately");
-            Ensure(window.SuccessMessage is null, "Invalid menu has no success notification");
+            Ensure(window.SuccessMessage != "Menu berhasil disimpan.", "Invalid menu has no success notification");
             editor.NameInput.Text = "Menu tambahan"; Click(editor.SaveButton);
             Ensure(window.SuccessMessage == "Menu berhasil disimpan.", "Menu creation notification");
             var savedMenu = window.Session.Restaurant.Menus.Last();
