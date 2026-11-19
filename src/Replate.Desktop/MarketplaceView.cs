@@ -32,8 +32,8 @@ public sealed class MarketplaceView : UserControl
         }
         SearchBox.TextChanged += (_, _) => Refresh();
         var search = Ui.Stack(8, Ui.Text("Cari makanan atau restoran", 13, bold: true), SearchBox, filterRow);
-        var section = Ui.Columns("*,Auto", Ui.Stack(4, Ui.Text(session.Restaurant.Name, 20, bold: true),
-            Ui.Text(session.Restaurant.Address, 13, Ui.Muted)), resultLabel);
+        var section = Ui.Columns("*,Auto", Ui.Stack(4, Ui.Text("Semua restoran", 20, bold: true),
+            Ui.Text($"{session.Restaurants.Count} restoran", 13, Ui.Muted)), resultLabel);
         section.Margin = new Thickness(0, 8, 0, 0);
         notice.IsVisible = false;
         var body = Ui.Stack(24, top, search, section, notice, listingsPanel,
@@ -78,7 +78,8 @@ public sealed class MarketplaceView : UserControl
         var details = Ui.Button(listing.Menu.Name, () => owner.ShowFood(listing));
         details.Background = Brushes.Transparent; details.Padding = new Thickness(0); details.FontSize = 18;
         var description = Ui.Stack(6, details,
-            Ui.Text(listing.Menu.Description, 13, Ui.Muted), Ui.Text(listing.Menu.Category, 12, Ui.Muted));
+            Ui.Text(listing.Menu.Description, 13, Ui.Muted),
+            Ui.Text($"{listing.Menu.Restaurant?.Name} · {listing.Menu.Category}", 12, Ui.Muted));
         description.Margin = new Thickness(0, 0, 24, 0);
         var pickup = Ui.Stack(5, Ui.Text("Pengambilan", 12, Ui.Muted),
             Ui.Text($"{listing.PickupStart.ToLocalTime():HH:mm}–{listing.PickupEnd.ToLocalTime():HH:mm}", 14),

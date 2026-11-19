@@ -1,47 +1,58 @@
 using System.Text.Json;
 using Replate.Domain.Entities;
+using Replate.Domain.Enums;
 
 namespace Replate.Desktop;
 
 // Acyclic snapshots keep UI persistence independent of domain navigation graphs.
 internal static class SessionStore
 {
+    internal const int CurrentVersion = 2;
     private static readonly JsonSerializerOptions Json = new()
     {
         WriteIndented = true,
         PreferredObjectCreationHandling = System.Text.Json.Serialization.JsonObjectCreationHandling.Populate
     };
-    internal sealed record Snapshot(int Version, RestaurantState Restaurant, List<MenuState> Menus,
+    internal sealed record VersionProbe(int Version);
+    internal sealed record Snapshot(int Version, List<RestaurantState> Restaurants, List<MenuState> Menus,
+        List<ListingState> Listings, List<RecordState> Records, List<OrderState> Orders,
+        List<UserState> Users, List<CartState> Carts);
+    internal sealed record SnapshotV1(int Version, RestaurantState Restaurant, List<MenuState> Menus,
         List<ListingState> Listings, List<RecordState> Records, List<OrderState> Orders, CartState Cart);
     internal sealed record RestaurantState(Guid Id, string Name, string Address);
     internal sealed record MenuState(Guid Id, string Name, string Description, string Category,
-        decimal NormalPrice, decimal WeightPerPortion, bool IsActive, string ImageUrl = "");
+        decimal NormalPrice, decimal WeightPerPortion, bool IsActive, string ImageUrl = "", Guid RestaurantId = default);
     internal sealed record ListingState(Guid Id, Guid MenuId, decimal RescuePrice, int Quantity,
-        DateTime PickupStart, DateTime PickupEnd, Replate.Domain.Enums.ListingStatus Status);
+        DateTime PickupStart, DateTime PickupEnd, ListingStatus Status);
     internal sealed record RecordState(Guid Id, Guid MenuId, DateOnly RecordDate, int ProducedQuantity,
         int RegularSoldQuantity, int RescuedQuantity);
     internal sealed record ItemState(Guid ListingId, string MenuName, int Quantity, decimal UnitPrice);
     internal sealed record OrderState(Guid Id, Guid CustomerId, Guid RestaurantId, string PickupCode,
-        decimal TotalPrice, Replate.Domain.Enums.OrderStatus Status, TimeSpan PreparationDuration,
+        decimal TotalPrice, OrderStatus Status, TimeSpan PreparationDuration,
         DateTime EstimatedReadyTime, DateTime OrderedAt, DateTime? CompletedAt, List<ItemState> Items);
+    internal sealed record UserState(Guid Id, string Name, string Email, string PasswordHash, UserRole Role);
     internal sealed record CartState(Guid Id, Guid CustomerId, Guid RestaurantId, List<CartItemState> Items);
     internal sealed record CartItemState(Guid ListingId, int Quantity, decimal UnitPrice);
 
+    internal static string BackupPath(string path) => path + ".v1.bak";
+
     internal static void Save(DemoSession session, string path)
     {
-        var state = new Snapshot(1,
-            new(session.Restaurant.Id, session.Restaurant.Name, session.Restaurant.Address),
-            session.Restaurant.Menus.Select(m => new MenuState(m.Id, m.Name, m.Description, m.Category,
-                m.NormalPrice, m.WeightPerPortion, m.IsActive, m.ImageUrl)).ToList(),
+        var menus = session.Restaurants.SelectMany(r => r.Menus).ToList();
+        var state = new Snapshot(CurrentVersion,
+            session.Restaurants.Select(r => new RestaurantState(r.Id, r.Name, r.Address)).ToList(),
+            menus.Select(m => new MenuState(m.Id, m.Name, m.Description, m.Category,
+                m.NormalPrice, m.WeightPerPortion, m.IsActive, m.ImageUrl, m.RestaurantId)).ToList(),
             session.Listings.Select(l => new ListingState(l.Id, l.MenuId, l.RescuePrice, l.Quantity,
                 l.PickupStart, l.PickupEnd, l.Status)).ToList(),
-            session.Restaurant.Menus.SelectMany(m => m.ProductionRecords).Select(r =>
+            menus.SelectMany(m => m.ProductionRecords).Select(r =>
                 new RecordState(r.Id, r.MenuId, r.RecordDate, r.ProducedQuantity, r.RegularSoldQuantity, r.RescuedQuantity)).ToList(),
-            session.Restaurant.Orders.Select(o => new OrderState(o.Id, o.CustomerId, o.RestaurantId, o.PickupCode,
+            session.Restaurants.SelectMany(r => r.Orders.Select(o => new OrderState(o.Id, o.CustomerId, r.Id, o.PickupCode,
                 o.TotalPrice, o.Status, o.PreparationDuration, o.EstimatedReadyTime, o.OrderedAt, o.CompletedAt,
-                o.Items.Select(i => new ItemState(i.ListingId, i.MenuName, i.Quantity, i.UnitPrice)).ToList())).ToList(),
-            new(session.Cart.Id, session.Cart.CustomerId, session.Cart.RestaurantId,
-                session.Cart.Items.Select(i => new CartItemState(i.ListingId, i.Quantity, i.UnitPrice)).ToList()));
+                o.Items.Select(i => new ItemState(i.ListingId, i.MenuName, i.Quantity, i.UnitPrice)).ToList()))).ToList(),
+            session.Users.Select(u => new UserState(u.Id, u.Name, u.Email, u.PasswordHash, u.Role)).ToList(),
+            session.Carts.Select(c => new CartState(c.Id, c.CustomerId, c.RestaurantId,
+                c.Items.Select(i => new CartItemState(i.ListingId, i.Quantity, i.UnitPrice)).ToList())).ToList());
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
         var temporary = path + ".tmp";
         File.WriteAllText(temporary, JsonSerializer.Serialize(state, Json));
@@ -50,15 +61,27 @@ internal static class SessionStore
 
     internal static void Load(DemoSession session, string path)
     {
-        var state = JsonSerializer.Deserialize<Snapshot>(File.ReadAllText(path), Json)
-            ?? throw new InvalidDataException("Berkas data kosong.");
-        if (state.Version != 1) throw new InvalidDataException("Versi berkas data tidak didukung.");
+        var text = File.ReadAllText(path);
+        var probe = JsonSerializer.Deserialize<VersionProbe>(text, Json) ?? throw new InvalidDataException("Berkas data kosong.");
+        Snapshot state;
+        if (probe.Version == 1)
+        {
+            BackUpVersion1(path);
+            state = Migrate(JsonSerializer.Deserialize<SnapshotV1>(text, Json) ?? throw new InvalidDataException("Berkas data kosong."));
+        }
+        else if (probe.Version == CurrentVersion)
+            state = JsonSerializer.Deserialize<Snapshot>(text, Json) ?? throw new InvalidDataException("Berkas data kosong.");
+        else throw new InvalidDataException("Versi berkas data tidak didukung.");
+
         // Materialize JSON snapshots into entities, then rebuild references in one pass.
-        var restaurant = new Restaurant { Id = state.Restaurant.Id, Name = state.Restaurant.Name, Address = state.Restaurant.Address };
+        var restaurantList = state.Restaurants.Select(r => new Restaurant { Id = r.Id, Name = r.Name, Address = r.Address }).ToList();
+        if (restaurantList.Count == 0) throw new InvalidDataException("Berkas data tidak memuat restoran.");
+        var restaurants = restaurantList.ToDictionary(r => r.Id);
         var menus = state.Menus.Select(Convert<Menu>).ToDictionary(m => m.Id);
         foreach (var menu in menus.Values)
         {
-            menu.Restaurant = restaurant; menu.RestaurantId = restaurant.Id; restaurant.Menus.Add(menu);
+            var restaurant = restaurants[menu.RestaurantId];
+            menu.Restaurant = restaurant; restaurant.Menus.Add(menu);
         }
         var listings = state.Listings.Select(Convert<SurplusListing>).ToDictionary(l => l.Id);
         foreach (var listing in listings.Values)
@@ -72,20 +95,50 @@ internal static class SessionStore
         foreach (var order in state.Orders.Select(Convert<Order>))
         {
             foreach (var item in order.Items) { item.Listing = listings[item.ListingId]; item.OrderId = order.Id; }
-            restaurant.Orders.Add(order);
+            restaurants[order.RestaurantId].Orders.Add(order);
         }
-        var cart = Convert<Cart>(state.Cart);
-        foreach (var item in cart.Items) { item.Listing = listings[item.ListingId]; item.CartId = cart.Id; }
+        var carts = state.Carts.Select(Convert<Cart>).ToList();
+        foreach (var cart in carts)
+            foreach (var item in cart.Items) { item.Listing = listings[item.ListingId]; item.CartId = cart.Id; }
+        var users = state.Users.Select(ToUser).ToList();
+        var orders = restaurantList.SelectMany(r => r.Orders).ToList();
         if (menus.Values.Any(m => string.IsNullOrWhiteSpace(m.Name) || m.NormalPrice <= 0 || m.WeightPerPortion <= 0) ||
             listings.Values.Any(l => l.Quantity < 0 || l.RescuePrice <= 0 || l.PickupEnd <= l.PickupStart || !Enum.IsDefined(l.Status)) ||
-            restaurant.Menus.SelectMany(m => m.ProductionRecords).Any(r => r.ProducedQuantity < 0 || r.RegularSoldQuantity < 0 ||
+            menus.Values.SelectMany(m => m.ProductionRecords).Any(r => r.ProducedQuantity < 0 || r.RegularSoldQuantity < 0 ||
                 r.RegularSoldQuantity > r.ProducedQuantity || r.RescuedQuantity < 0 || r.RescuedQuantity > r.CalculateSurplus()) ||
-            restaurant.Orders.Any(o => !Enum.IsDefined(o.Status) || o.Items.Count == 0 ||
+            orders.Any(o => !Enum.IsDefined(o.Status) || o.Items.Count == 0 ||
                 o.Items.Any(i => i.Quantity <= 0 || i.UnitPrice <= 0) || o.TotalPrice != o.Items.Sum(i => i.CalculateSubtotal())) ||
-            cart.Items.Any(i => i.Quantity <= 0 || i.UnitPrice <= 0))
+            carts.Any(c => c.Items.Any(i => i.Quantity <= 0 || i.UnitPrice <= 0 || i.Listing.Menu.RestaurantId != c.RestaurantId)) ||
+            users.Select(u => u.Id).Distinct().Count() != users.Count)
             throw new InvalidDataException("Berkas data mengandung nilai yang tidak valid.");
-        session.Restore(restaurant, cart, listings.Values.ToList());
+        session.Restore(restaurantList, carts, users, listings.Values.ToList());
     }
+
+    // Version 1 migration
+    private static void BackUpVersion1(string path)
+    {
+        var backup = BackupPath(path);
+        if (!File.Exists(backup)) File.Copy(path, backup, false);
+    }
+
+    private static Snapshot Migrate(SnapshotV1 old)
+    {
+        var restaurant = old.Restaurant ?? throw new InvalidDataException("Berkas data tidak memuat restoran.");
+        var cart = old.Cart ?? throw new InvalidDataException("Berkas data tidak memuat keranjang.");
+        return new Snapshot(CurrentVersion, [restaurant],
+            old.Menus.Select(m => m with { RestaurantId = restaurant.Id }).ToList(),
+            old.Listings, old.Records,
+            old.Orders.Select(o => o with { RestaurantId = restaurant.Id }).ToList(),
+            [],
+            [cart with { RestaurantId = cart.Items.Count == 0 ? Guid.Empty : restaurant.Id }]);
+    }
+
+    private static User ToUser(UserState state) => state.Role switch
+    {
+        UserRole.Customer => new Customer { Id = state.Id, Name = state.Name, Email = state.Email, PasswordHash = state.PasswordHash },
+        UserRole.RestaurantOwner => new RestaurantOwner { Id = state.Id, Name = state.Name, Email = state.Email, PasswordHash = state.PasswordHash },
+        _ => throw new InvalidDataException("Peran pengguna tidak dikenal.")
+    };
 
     private static T Convert<T>(object value) => JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(value, Json), Json)!;
 }

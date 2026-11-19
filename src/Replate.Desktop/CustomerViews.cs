@@ -23,7 +23,7 @@ public sealed class FoodDetailView : UserControl
             Ui.Text($"Harga normal {DemoSession.Rupiah(listing.Menu.NormalPrice)} · hemat {listing.CalculateDiscount():0}%", 14, Ui.Muted),
             Ui.Text($"Stok tersedia: {listing.Quantity} porsi", 14),
             Ui.Text($"Pengambilan {listing.PickupStart.ToLocalTime():dd MMM yyyy, HH:mm}–{listing.PickupEnd.ToLocalTime():HH:mm}", 14),
-            Ui.Text($"{session.Restaurant.Name} · {session.Restaurant.Address}", 14, Ui.Muted),
+            Ui.Text(session.RestaurantLine(listing.Menu.RestaurantId), 14, Ui.Muted),
             Ui.Text("Pesanan diambil langsung. Simpan kode reservasi untuk ditunjukkan kepada restoran.", 14, Ui.Muted),
             Ui.Field("Jumlah porsi", quantity), add);
         facts.Width = 680; facts.HorizontalAlignment = HorizontalAlignment.Left;
@@ -66,7 +66,7 @@ public sealed class CartView : UserControl
             }, "Pesanan berhasil dibuat.", "Pesanan belum dapat dibuat. Periksa koneksi PostgreSQL lalu coba lagi.");
         }, true);
         CheckoutButton.IsEnabled = session.Cart.ValidateCart() && session.Cart.Items.All(i => i.Listing.Menu.IsActive);
-        Content = Ui.Page(Ui.Heading("Keranjang", $"{session.Restaurant.Name} · {session.Restaurant.Address}"), items,
+        Content = Ui.Page(Ui.Heading("Keranjang", session.RestaurantLine(session.Cart.RestaurantId)), items,
             Ui.Columns("*,Auto", Ui.Text("Total pesanan", 20, bold: true), Ui.Text(DemoSession.Rupiah(session.Cart.CalculateSubtotal()), 26, Ui.Green, true)),
             Ui.Text("Periksa jumlah dan jadwal sebelum reservasi. Pembayaran belum tersedia pada prototipe ini.", 14, Ui.Muted),
             Ui.Row(16, CheckoutButton, Ui.Button("Tambah makanan lain", host.ShowMarketplace)));
@@ -285,6 +285,6 @@ public sealed class OrderDetailView : UserControl
             Ui.Heading($"Pesanan #{order.Id.ToString("N")[..8].ToUpperInvariant()}", order.OrderedAt.ToLocalTime().ToString("dd MMM yyyy, HH:mm")),
             status, Ui.Divider(), rows,
             Ui.Columns("*,Auto", Ui.Text("Total pesanan", 20, bold: true), Ui.Text(DemoSession.Rupiah(order.TotalPrice), 24, bold: true)),
-            Ui.Text($"{session.Restaurant.Name} · {session.Restaurant.Address}", 14, Ui.Muted), actions);
+            Ui.Text(session.RestaurantLine(order.RestaurantId), 14, Ui.Muted), actions);
     }
 }
