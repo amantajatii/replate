@@ -26,7 +26,9 @@ internal sealed class AuthSurface : Grid
     internal const double MinPlate = 360;
     internal const double SmallestPlate = 320;
     internal const double PlateGap = 24;
-    internal const double BoundaryShare = 0.6;
+    internal const double BoundaryShare = 0.70;
+    internal const double CardShare = 0.14;
+    internal const double MinMargin = 48;
     internal const double Inset = 32;
     internal const double ScrollBarWidth = 6;
     internal const string ScrollingClass = "auth-scrolling";
@@ -78,6 +80,7 @@ internal sealed class AuthSurface : Grid
     internal TextBlock Wordmark { get; }
     internal ScrollViewer FormScroll { get; }
     internal Border? Warning { get; }
+    internal Control? Below { get; }
     private readonly StackPanel column;
 
     internal AuthSurface(Control cardContent, string? databaseError = null, Control? below = null)
@@ -104,6 +107,7 @@ internal sealed class AuthSurface : Grid
             column.Children.Add(Warning);
         }
         column.Children.Add(Card);
+        Below = below;
         if (below is not null) column.Children.Add(below);
         Wordmark = Ui.Text("replate.", 36, Ui.Green, true);
         Wordmark.HorizontalAlignment = HorizontalAlignment.Left; Wordmark.Margin = new Thickness(Inset, Inset, Inset, 0);
@@ -159,14 +163,20 @@ internal sealed class AuthSurface : Grid
         };
 
     // Layout
-    internal static (double Boundary, double Plate, double Card) Layout(Size size)
+    internal static (double Boundary, double Plate, double Card, double Left) Layout(Size size)
     {
-        var leftNeed = MinCardWidth + 2 * Inset + PlateGap;
         var plate = Math.Min(Math.Max(MinPlate, size.Height * 0.6), Math.Min(size.Height, size.Width * 2 * (1 - BoundaryShare)));
-        plate = Math.Max(SmallestPlate, Math.Min(plate, size.Width - leftNeed));
-        var boundary = Math.Max(size.Width * BoundaryShare, leftNeed + plate / 2);
-        var card = Math.Max(0, Math.Min(CardWidth, boundary - plate / 2 - PlateGap - 2 * Inset));
-        return (boundary, plate, card);
+        var boundary = size.Width * BoundaryShare;
+        var room = boundary - plate / 2 - PlateGap;
+        var left = Math.Max(MinMargin, Math.Min(size.Width * CardShare, room - MinCardWidth));
+        if (room - left < MinCardWidth)
+        {
+            var need = left + MinCardWidth + PlateGap;
+            if (need + plate > size.Width) plate = Math.Max(SmallestPlate, size.Width - need);
+            boundary = need + plate / 2;
+        }
+        var card = Math.Max(0, Math.Min(CardWidth, boundary - plate / 2 - PlateGap - left));
+        return (boundary, plate, card, left);
     }
 
     private Size measuredFor;
@@ -185,12 +195,13 @@ internal sealed class AuthSurface : Grid
     private void Place(Size size)
     {
         if (!double.IsFinite(size.Width) || !double.IsFinite(size.Height)) return;
-        var (boundary, plate, cardWidth) = Layout(size);
+        var (boundary, plate, cardWidth, left) = Layout(size);
         var plateX = boundary - plate / 2;
         if (ColumnDefinitions[0].Width != new GridLength(boundary)) ColumnDefinitions[0].Width = new GridLength(boundary);
         FormScroll.Width = Math.Max(0, plateX);
         column.Width = cardWidth;
-        column.Margin = new Thickness(Inset + Math.Max(0, plateX - PlateGap - 2 * Inset - cardWidth) / 2, 0, 0, 0);
+        column.Margin = new Thickness(left, 0, 0, 0);
+        Wordmark.Margin = new Thickness(left, Inset, 0, 0);
         Hero.Width = plate; Hero.Height = plate;
         Canvas.SetLeft(Hero, plateX); Canvas.SetTop(Hero, (size.Height - plate) / 2);
     }

@@ -59,9 +59,10 @@ ROUTES AND ROLES:
 AUTH SURFACE (Masuk and Daftar, implemented in `AuthViews.cs` as `AuthSurface`):
 - A two-column Grid fills the page: the left canvas column and the right primary
   (#245B43) panel, full height. The first column width is set in pixels from the
-  plate position (`AuthSurface.Layout`); the panel is not a fixed share.
-- Left column: canvas background. The wordmark replate. sits at the top left (inset
-  32) outside the scroll area, so it is never clipped while scrolling. Below it a
+  plate position (`AuthSurface.Layout`); the panel is about 30% of the width.
+- Left column: canvas background. The wordmark replate. sits at the top (inset 32),
+  left-aligned with the card, outside the scroll area, so it is never clipped while
+  scrolling. Below it a
   ScrollViewer scrolls vertically only (the owner registration form is taller than
   720); it ends where the plate begins.
 - Plate: `Assets/auth-hero.png` (1080x1080, transparent round cut-out) is loaded
@@ -70,16 +71,18 @@ AUTH SURFACE (Masuk and Daftar, implemented in `AuthViews.cs` as `AuthSurface`):
   The panel's left edge passes through the plate center: half over canvas, half
   over the panel (tolerance 0.02 of the diameter). No text over the photo; panel,
   overlay and image are hidden from assistive technology (AccessibilityView Raw).
-- Placement: D = clamp(0.6 x height, 360, min(height, 0.8 x width)); boundary B =
-  0.6 x width; plate left = B - D/2; scroll area = plate left - 24; card =
-  min(440, scroll area - 64). If the card would be under 360, B moves right until
-  it is 360; if the plate would then leave the window, D shrinks (minimum 320).
+- Placement: D = clamp(0.6 x height, 360, min(height, 0.6 x width)); boundary B =
+  0.70 x width; plate left = B - D/2; card left L = max(48, 0.14 x width); card =
+  min(440, plate left - 24 - L), minimum 360. If the card would be under 360, L
+  shrinks first (minimum 48), then B moves right, then D shrinks (minimum 320). The
+  scroll area ends at plate left. The wordmark, the warning and the demo-account
+  line share L, and the warning and demo line share the card width.
 - Card: white surface, `rounded.card` (16), `elevation.card` shadow
-  (`0 8 24 0 #1F23382C`), padding 32, fields 20 apart, no border. It is centered in
-  the scroll area with 32 on either side. Hard rule: the plate box never
-  intersects the card box and the gap is at least 24. At 1360x940 the plate is
-  564, the card 440 and the panel about 40%; at 1040x720 the plate is 432, the card
-  360 and the panel about 36%. The primary
+  (`0 8 24 0 #1F23382C`), padding 32, fields 20 apart, no border. Hard rule: the
+  plate box never intersects the card box and the gap is at least 24. At 1360x940
+  the plate is 564, the card 440 at 190 and the panel 30%; at 1920x1080 the plate is
+  648 and the card 440 at 269; at 1040x720 the plate is 432, the card 360 at 128 and
+  the panel 30%. The primary
   action spans the card; the secondary action (Daftar akun baru / Kembali ke masuk)
   spans it below. No Google sign-in, Ingat saya, or Lupa kata sandi.
 - Titles Masuk and Daftar akun: 28, bold (`auth-title`).
@@ -117,4 +120,4 @@ AUTH SURFACE (Masuk and Daftar, implemented in `AuthViews.cs` as `AuthSurface`):
   buttons change to selection background with primary text. Pressed, focus and
   disabled states of those two remain native Fluent. No blur, glow, gradients or
   animation.
-- Verified at 1360x940, 1040x720 and 1283x780 by `--verify-ui` (AuthVerification).
+- Verified at 1360x940, 1040x720, 1283x780 and 1920x1080 by `--verify-ui` (AuthVerification).

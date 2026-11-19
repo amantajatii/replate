@@ -36,7 +36,7 @@ internal static class AuthVerification
         var bounds = surface.Bounds; var panel = surface.HeroPanel.Bounds;
         Check(surface.ColumnDefinitions.Count == 2 && Math.Abs(bounds.Width - size.Width) < 1 && Math.Abs(bounds.Height - size.Height) < 1 &&
             panel.X >= bounds.Width * AuthSurface.BoundaryShare - .5 && Math.Abs(panel.Right - bounds.Width) < 1 && Math.Abs(panel.Height - bounds.Height) < 1,
-            $"{where}: primary panel is full height on the right and starts at or after 60% ({panel.Width:0.#} of {bounds.Width:0.#})");
+            $"{where}: primary panel is full height on the right and starts at or after 70% ({panel.X:0.#} of {bounds.Width:0.#})");
         Check(ColorOf(surface.HeroPanel.Background) == Color.Parse("#245B43"), $"{where}: panel uses the primary color");
         Check(surface.Hero.Source is Bitmap { PixelSize: { Width: 1080, Height: 1080 } } && surface.Hero.Stretch == Stretch.Uniform &&
             surface.Hero.Bounds.Width > 0, $"{where}: hero image loaded from {AuthSurface.HeroUri}");
@@ -56,14 +56,29 @@ internal static class AuthVerification
             card.Padding == new Thickness(32) && card.BorderThickness == default && card.BoxShadow == BoxShadows.Parse("0 8 24 0 #1F23382C"),
             $"{where}: card is white, rounded, shadowed, padded and borderless");
         var cardBox = RectIn(card, surface);
-        Check(card.Bounds.Width >= AuthSurface.MinCardWidth - .5 && card.Bounds.Width <= AuthSurface.CardWidth + .5 && cardBox.X >= AuthSurface.Inset - .5,
+        Check(card.Bounds.Width >= AuthSurface.MinCardWidth - .5 && card.Bounds.Width <= AuthSurface.CardWidth + .5,
             $"{where}: card width stays between {AuthSurface.MinCardWidth} and {AuthSurface.CardWidth} ({card.Bounds.Width:0.#})");
+        var atMinCard = card.Bounds.Width <= AuthSurface.MinCardWidth + .5;
+        Check(cardBox.X >= AuthSurface.MinMargin - .5 && cardBox.X <= bounds.Width * AuthSurface.CardShare + .5 &&
+            (Math.Abs(cardBox.X - bounds.Width * AuthSurface.CardShare) < 1 || atMinCard),
+            $"{where}: card starts at about 14% and at least {AuthSurface.MinMargin} ({cardBox.X:0.#}, target {bounds.Width * AuthSurface.CardShare:0.#})");
+        Check(panel.X <= bounds.Width * AuthSurface.BoundaryShare + .5 || atMinCard && cardBox.X <= AuthSurface.MinMargin + .5,
+            $"{where}: panel edge moves right of 70% only when the card and margin are at their minimum ({panel.X:0.#})");
         Check(Gap(cardBox, plate) >= AuthSurface.PlateGap - .5, $"{where}: card and plate do not intersect and stay at least 24 apart (gap {Gap(cardBox, plate):0.#})");
+        if (surface.Below is { } below)
+        {
+            var line = RectIn(below, surface);
+            Check(Math.Abs(line.X - cardBox.X) < 1 && Math.Abs(line.Width - cardBox.Width) < 1 && line.Y >= cardBox.Bottom,
+                $"{where}: demo account line follows the card width and left edge ({line.X:0.#}+{line.Width:0.#}, card {cardBox.X:0.#}+{cardBox.Width:0.#})");
+        }
         var buttons = card.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("auth-primary")).ToList();
         Check(buttons.Count == 1 && Math.Abs(buttons[0].Bounds.Width - (card.Bounds.Width - 64)) < 1, $"{where}: primary button spans the card");
         var mark = RectIn(surface.Wordmark, surface); var scrollBox = RectIn(surface.FormScroll, surface);
         Check(surface.Wordmark.Text == "replate." && mark.X >= 0 && mark.Y >= 0 && mark.Bottom <= scrollBox.Y + .5 && Gap(mark, plate) > 0 &&
             !surface.FormScroll.GetVisualDescendants().Contains(surface.Wordmark), $"{where}: wordmark stays fully visible above the scroll area");
+        Check(Math.Abs(mark.X - cardBox.X) < 1, $"{where}: wordmark aligns with the card left edge ({mark.X:0.#}, card {cardBox.X:0.#})");
+        Check(cardBox.X >= scrollBox.X - .5 && cardBox.Right <= scrollBox.Right + .5 && scrollBox.Right <= plate.X + 1,
+            $"{where}: card is not clipped and the scroll area stays clear of the plate (card {cardBox.X:0.#}-{cardBox.Right:0.#}, scroll {scrollBox.X:0.#}-{scrollBox.Right:0.#}, plate {plate.X:0.#})");
         var scroll = surface.FormScroll;
         Check(scroll.HorizontalScrollBarVisibility == Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled &&
             scroll.Extent.Width <= scroll.Viewport.Width + .5 &&
@@ -164,7 +179,7 @@ internal static class AuthVerification
             ("register", () => new RegisterView(host, host.Session), v => ((RegisterView)v).Surface),
             ("register-owner", () => { var v = new RegisterView(host, host.Session); v.OwnerOption.IsChecked = true; return v; }, v => ((RegisterView)v).Surface)
         };
-        foreach (var size in new[] { new Size(1360, 940), new Size(1040, 720), new Size(1283, 780) })
+        foreach (var size in new[] { new Size(1360, 940), new Size(1040, 720), new Size(1283, 780), new Size(1920, 1080) })
             foreach (var (name, make, surfaceOf) in screens)
             {
                 var view = make();
@@ -180,8 +195,9 @@ internal static class AuthVerification
                     var surface = surfaceOf(view);
                     await CheckSurface(frame, surface, name, size);
                     var share = surface.HeroPanel.Bounds.Width / size.Width;
-                    var expected = size.Width == 1040 ? .36 : .40;
-                    Check(Math.Abs(share - expected) <= .01, $"{name} at {size.Width:0}x{size.Height:0}: panel width follows the plate ({share:0.###}, about {expected:0.##})");
+                    Check(Math.Abs(share - .30) <= .01, $"{name} at {size.Width:0}x{size.Height:0}: panel is about 30% of the width ({share:0.###})");
+                    var expectedCard = size.Width == 1040 ? AuthSurface.MinCardWidth : AuthSurface.CardWidth;
+                    Check(Math.Abs(surface.Card.Bounds.Width - expectedCard) < 1, $"{name} at {size.Width:0}x{size.Height:0}: card is {expectedCard} wide ({surface.Card.Bounds.Width:0.#})");
                     var scroll = surface.FormScroll;
                     Check(name != "register-owner" || scroll.Extent.Height > scroll.Viewport.Height || size.Height > 720,
                         $"{name} at {size.Width:0}x{size.Height:0}: long owner form scrolls vertically");
@@ -198,7 +214,7 @@ internal static class AuthVerification
                 finally { frame.Close(); }
             }
         host.Activate();
-        Console.WriteLine("All Replate auth surface checks passed (sign-in, registration, owner registration at 1360x940, 1040x720 and 1283x780).");
+        Console.WriteLine("All Replate auth surface checks passed (sign-in, registration, owner registration at 1360x940, 1040x720, 1283x780 and 1920x1080).");
     }
 
     private static async Task Pseudo(StyledElement element, string pseudo, bool on)

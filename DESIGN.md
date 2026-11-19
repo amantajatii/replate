@@ -198,17 +198,17 @@ Full-page menu/listing forms are left-aligned (640 wide), food details use (680)
 
 ### Auth surface
 
-The sign-in (Masuk) and registration (Daftar) screens fill the window with two columns: a canvas column on the left and a primary panel on the right. The panel width is not fixed; its left edge follows the plate.
+The sign-in (Masuk) and registration (Daftar) screens fill the window with two columns: a canvas column on the left and a primary panel on the right. The panel takes about 30% of the width; its left edge follows the plate.
 
-- **Left column:** canvas background. The wordmark sits at the top left (inset 32) outside the scroll area, so it stays fully visible while the form scrolls. Below it, a vertical-only scroll area holds a single auth-card. Masuk also shows the demo-account line under the card and, on a database startup error, one compact warning above it. No other containers, banners, or helper panels sit beside the card.
+- **Left column:** canvas background. The wordmark sits at the top (inset 32), aligned with the card's left edge and outside the scroll area, so it stays fully visible while the form scrolls. Below it, a vertical-only scroll area holds a single auth-card. The demo-account line and the warning share the card's width and left edge. Masuk also shows the demo-account line under the card and, on a database startup error, one compact warning above it. No other containers, banners, or helper panels sit beside the card.
 - **Right column:** a full-height panel filled with the primary color. The panel itself holds nothing.
 - **Plate:** `src/Replate.Desktop/Assets/auth-hero.png` (a transparent round cut-out of a plate) sits in an overlay layer above both columns that does not scroll. It is centered vertically, and the panel's left edge passes exactly through the plate's center: half of the plate lies over the canvas and half over the green panel.
-- **Placement:** the diameter is 0.6 × window height, at least (360) and never taller than the window. The panel edge (the plate center) targets 0.6 × window width. The scroll area ends (24) before the plate, and the card is centered in it with (32) on either side, 440 wide at most. If that leaves the card under (360), the panel edge moves right until the card is 360; if the plate would then leave the window, the plate shrinks (to no less than 320).
+- **Placement:** the diameter is 0.6 × window height, at least (360) and never taller than the window. The panel edge (the plate center) sits at 0.70 × window width. The card starts at about 0.14 × window width (never under 48) and is 440 wide at most, ending at least (24) before the plate. If that leaves the card under (360), the left margin shrinks first (to no less than 48), then the panel edge moves right, then the plate shrinks (to no less than 320). The scroll area ends at the plate's left edge, so the plate never covers it.
 - **Card and plate never touch:** the plate box and the card box never intersect and keep a gap of at least (24).
 - **Scrollbar:** the scroll area uses a thin scrollbar (6 wide): one rounded thumb in `muted`, with no track and no arrow buttons. It is hidden at rest and shows only while the form scrolls or while the pointer is over the scroll area, with no transition. Mouse wheel, touchpad, and keyboard (PageUp, PageDown, arrows) scroll as usual, and a field reached with Tab is scrolled into view. Other screens keep the native scrollbar.
 - **Photo content:** no text, slogan, logo, or overlay is placed on the plate or the panel. Both are decorative and hidden from assistive technology.
 
-Reference sizes: at (1360 × 940) the plate is 564, the card 440, and the panel about 40% of the width; at the minimum (1040 × 720) the plate is 432, the card 360, and the panel about 36%, and the owner registration form scrolls vertically. There is no horizontal scrolling at any size.
+Reference sizes: at (1360 × 940) the plate is 564, the card 440 starting at 190 (14%), and the panel 30% of the width; at (1920 × 1080) the plate is 648 and the card 440 starting at 269; at the minimum (1040 × 720) the plate is 432, the card 360 starting at 128 (the margin gives way first), the panel still 30%, and the owner registration form scrolls vertically. There is no horizontal scrolling at any size.
 
 ## Elevation & Depth
 
