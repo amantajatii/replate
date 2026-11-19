@@ -11,7 +11,7 @@ internal static class Program
     [STAThread]
     public static async Task Main(string[] args)
     {
-        if (args.Contains("--verify-state")) { StateVerification.Run(); MultiRestaurantVerification.Run(); return; }
+        if (args.Contains("--verify-state")) { StateVerification.Run(); MultiRestaurantVerification.Run(); AccountVerification.Run(); return; }
 
         string? databaseError = null;
         if (!args.Contains("--verify-ui"))

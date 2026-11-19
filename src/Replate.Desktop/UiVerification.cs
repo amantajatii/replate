@@ -21,7 +21,10 @@ internal static class UiVerification
             async Task Shot(string name) { await Settle(); Capture(window, Path.Combine(output, name + ".png")); }
             void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             await Shot("entry");
-            window.ShowMarketplace(); await Shot("marketplace");
+            Button EntryButton(string text) => window.GetVisualDescendants().OfType<Button>().Single(b => b.Content as string == text);
+            Click(EntryButton("Jelajahi makanan"));
+            Ensure(window.Session.CurrentUser?.Email == DemoAccounts.CustomerEmail && window.CurrentPage is MarketplaceView, "Customer entry signs in demo customer");
+            await Shot("marketplace");
             var market = window.Marketplace;
             Ensure(market.VisibleCount == 10, "Initial listings from all restaurants");
             market.SearchBox.Text = "croissant"; await Settle(); Ensure(market.VisibleCount == 1, "Search");
@@ -43,7 +46,11 @@ internal static class UiVerification
             await Shot("reservation");
             var order = window.Session.LastOrder!;
             window.ShowCustomerOrders(); await Shot("customer-orders");
-            window.ShowDashboard(); await Shot("dashboard");
+            window.ShowEntry(); await Settle();
+            Click(EntryButton("Buka area restoran"));
+            Ensure(window.Session.CurrentUser is Replate.Domain.Entities.RestaurantOwner && window.Session.Restaurant.Name == "Dapur Bumi" &&
+                window.CurrentPage is DashboardView, "Restaurant entry signs in Dapur Bumi demo owner");
+            await Shot("dashboard");
             window.ShowMenus(); await Shot("menus");
             window.ShowMenuEditor(); await Shot("menu-editor");
             var editor = (MenuEditorView)window.CurrentPage!;
@@ -99,6 +106,7 @@ internal static class UiVerification
             Ensure(order.Status == Replate.Domain.Enums.OrderStatus.Completed, "Cross-role pickup flow");
             await Shot("pickup-completed");
             var cancellationListing = window.Session.Listings[1];
+            window.Session.AsCustomer();
             window.Session.AddToCart(cancellationListing, 1);
             var cancelledOrder = window.Session.Checkout();
             var reservedStock = cancellationListing.Quantity;
@@ -124,6 +132,7 @@ internal static class UiVerification
             Ensure(window.SuccessMessage == "Pesanan berhasil dibatalkan.", "Cancellation notification survives navigation");
             await Task.Delay(4200);
             Ensure(window.SuccessMessage is null, "Cancellation notification expires");
+            window.Session.AsOwner();
             window.ShowMenus(); await Settle();
             Ensure(window.GetVisualDescendants().OfType<Button>().Any(b => b.Content as string == "Hapus"), "Menu delete action exists");
             var deletion = MenuDeletionDialog.Show(window, window.Session, savedMenu); await Settle();

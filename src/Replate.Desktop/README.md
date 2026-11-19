@@ -14,7 +14,27 @@ dotnet run --project src/Replate.Desktop
 ```
 
 Pilih **Jelajahi makanan** atau **Buka area restoran**. **Ganti area** kembali ke
-pemilihan area. Ini navigasi demonstrasi, bukan login atau pemeriksaan hak akses.
+pemilihan area. Sebelum layar login tersedia, kedua tombol masuk otomatis dengan
+akun demo: pelanggan demo untuk area pelanggan dan pemilik Dapur Bumi untuk area
+restoran. Operasi keranjang dan reservasi hanya untuk pelanggan yang masuk;
+operasi area restoran hanya untuk pemilik restoran tersebut.
+
+## Akun demo
+
+Autentikasi bersifat lokal tingkat prototype. Akun disimpan di `state.json` dengan
+kata sandi yang di-hash PBKDF2-HMAC-SHA256; kata sandi polos tidak disimpan. Sesi
+masuk tidak diingat antar peluncuran. Semua akun demo memakai kata sandi `replate123`.
+
+| Peran | Email | Restoran |
+| --- | --- | --- |
+| Pelanggan | `pelanggan@replate.demo` | — |
+| Pemilik restoran | `dapur-bumi@replate.demo` | Dapur Bumi |
+| Pemilik restoran | `warung-sambal-ijo@replate.demo` | Warung Sambal Ijo |
+| Pemilik restoran | `roti-pagi-kotabaru@replate.demo` | Roti Pagi Kotabaru |
+
+Restoran tanpa pemilik (misalnya hasil migrasi data versi 1) otomatis mendapat akun
+pemilik demo dengan email dari nama restoran, contoh `dapur-bumi@replate.demo`.
+Akun demo tidak digandakan dan tidak menimpa akun yang sudah ada.
 
 ## Halaman
 
@@ -66,7 +86,8 @@ belum dialokasikan. Prototipe memakai kategori makanan utama, roti & kue, vegeta
 - Berkas yang tidak dapat dibaca dipertahankan. Aplikasi menampilkan peringatan dan
   menolak perubahan agar berkas asli tidak tertimpa data baru.
 - Data lokal hanya untuk satu pengguna/satu aplikasi. Belum ada sinkronisasi antar
-  perangkat, koneksi PostgreSQL, autentikasi nyata, atau pembayaran.
+  perangkat, koneksi PostgreSQL untuk akun, atau pembayaran. Autentikasi memakai
+  akun lokal tingkat prototype, bukan autentikasi produksi.
 
 Dashboard menghitung rekomendasi dari rata-rata penjualan reguler pada periode
 terpilih ditambah buffer dua porsi, mengikuti model domain; bukan machine learning.
@@ -109,6 +130,7 @@ failure instead of terminating the desktop process.
 
 Pemeriksaan state memakai berkas sementara terisolasi: muat ulang keranjang/status,
 timestamp, stok, pickup salah/benar, pembatalan berulang, kapasitas surplus, tanggal,
-harga, menu nonaktif, kedaluwarsa, dan perlindungan berkas rusak. Pemeriksaan UI
+harga, menu nonaktif, kedaluwarsa, perlindungan berkas rusak, serta akun: pendaftaran,
+login, akun demo, isolasi antar pemilik, dan keranjang per pelanggan. Pemeriksaan UI
 membuka jendela native, menjalankan alur lintas area, menyimpan screenshot, lalu
 menutup otomatis. Kedua pemeriksaan tidak menggunakan berkas data aplikasi normal.

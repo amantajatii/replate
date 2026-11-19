@@ -16,7 +16,7 @@ internal static class PickupCopyVerification
         void Ensure(bool ok, string message) { if (!ok) throw new InvalidOperationException(message); }
         void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         async Task Settle() => await Task.Delay(350);
-        var session = new DemoSession();
+        var session = new DemoSession().AsCustomer();
         session.AddToCart(session.Listings[0], 1);
         var order = session.Checkout();
         var window = new MainWindow(session) { Width = 1040, Height = 720 };
@@ -77,6 +77,7 @@ internal static class PickupCopyVerification
             await CheckVisible("maximized");
             window.ShowOrder(order, true);
             Ensure(((OrderDetailView)window.CurrentPage!).CopyCodeButton is null, "Copy button never appears in restaurant area");
+            session.AsOwner();
             foreach (var transition in new Action[] { () => session.ConfirmOrder(order, 15), () => session.ReadyOrder(order), () => session.CompletePickup(order, order.PickupCode) })
             {
                 transition(); window.ShowOrder(order, false);
@@ -86,6 +87,7 @@ internal static class PickupCopyVerification
             order.PickupCode = ""; window.ShowOrder(order, false);
             Ensure(((OrderDetailView)window.CurrentPage!).CopyCodeButton is null, "No copy button for empty code");
             order.PickupCode = savedCode;
+            session.AsCustomer();
             session.AddToCart(session.Listings[0], 1);
             var cancelled = session.Checkout(); session.CancelOrder(cancelled);
             window.ShowOrder(cancelled, false);

@@ -59,16 +59,22 @@ public sealed class MainWindow : Window
             Ui.Divider(),
             Ui.Stack(10, Ui.Text("Pelanggan", 20, bold: true),
                 Ui.Text("Cari makanan, buat reservasi, dan pantau waktu pengambilan.", 14, Ui.Muted),
-                Ui.Button("Jelajahi makanan", ShowMarketplace, true)),
+                Ui.Button("Jelajahi makanan", EnterCustomerArea, true)),
             Ui.Divider(),
             Ui.Stack(10, Ui.Text("Pemilik restoran", 20, bold: true),
                 Ui.Text($"Kelola menu, penawaran, produksi, dan pesanan di {Session.Restaurant.Name}.", 14, Ui.Muted),
-                Ui.Button("Buka area restoran", ShowDashboard)),
-            Ui.Text("Pilihan area untuk demonstrasi lokal. Tidak menggunakan autentikasi akun.", 12, Ui.Muted));
+                Ui.Button("Buka area restoran", EnterRestaurantArea)),
+            Ui.Text("Pilihan area untuk demonstrasi lokal. Masuk otomatis dengan akun demo.", 12, Ui.Muted));
         body.MaxWidth = 600; body.HorizontalAlignment = HorizontalAlignment.Center;
         body.VerticalAlignment = VerticalAlignment.Center; body.Margin = new Thickness(40);
         pageHost.Content = Ui.Scroll(body);
     }
+
+    internal void EnterCustomerArea() =>
+        Run(() => Session.SignIn(DemoAccounts.CustomerEmail, DemoAccounts.Password), ShowMarketplace);
+
+    internal void EnterRestaurantArea() =>
+        Run(() => Session.SignIn(DemoAccounts.OwnerEmail("Dapur Bumi"), DemoAccounts.Password), ShowDashboard);
 
     internal void ShowMarketplace()
     {

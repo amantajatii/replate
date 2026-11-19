@@ -53,8 +53,10 @@ internal static class OrderBadgeVerification
             window.Show(); await Settle();
             foreach (var target in expected.Keys)
             {
+                session.AsCustomer();
                 session.AddToCart(listing, 1);
                 var order = session.Checkout(); orders.Add(order);
+                session.AsOwner();
                 window.ShowOrder(order, true); await Settle(); CheckDetail(window, order);
                 if (target is OrderStatus.Confirmed or OrderStatus.ReadyForPickup or OrderStatus.Completed)
                 {
@@ -86,13 +88,15 @@ internal static class OrderBadgeVerification
             Ensure(listing.Quantity == 2, "Five reservations and one cancellation preserve stock rules");
             var ids = orders.ToDictionary(o => o.Id, o => o.Status);
             window.Close();
-            session = new DemoSession(path);
-            Ensure(session.StorageError is null && session.CustomerOrders.Count() == 5 && session.Restaurant.Orders.All(o => ids[o.Id] == o.Status),
+            session = new DemoSession(path).AsCustomer();
+            var customerOrders = session.CustomerOrders.ToList();
+            Ensure(session.StorageError is null && customerOrders.Count == 5 && session.Restaurant.Orders.All(o => ids[o.Id] == o.Status),
                 "All five order statuses survive reload");
             window = new MainWindow(session); window.Show(); await Settle();
             foreach (var restaurant in new[] { false, true })
             {
                 var area = restaurant ? "restaurant" : "customer";
+                if (restaurant) session.AsOwner(); else session.AsCustomer();
                 if (restaurant) window.ShowRestaurantOrders(); else window.ShowCustomerOrders();
                 await Settle();
                 var filter = window.GetVisualDescendants().OfType<ComboBox>().Single();
@@ -106,7 +110,7 @@ internal static class OrderBadgeVerification
                 CheckBadge(window.GetVisualDescendants().OfType<OrderStatusBadge>().Single(), OrderStatus.Completed);
                 filter.SelectedIndex = 3; await Settle();
                 CheckBadge(window.GetVisualDescendants().OfType<OrderStatusBadge>().Single(), OrderStatus.Cancelled);
-                foreach (var order in session.CustomerOrders)
+                foreach (var order in customerOrders)
                 {
                     window.ShowOrder(order, restaurant); await Settle(); CheckDetail(window, order);
                     var detail = (OrderDetailView)window.CurrentPage!;

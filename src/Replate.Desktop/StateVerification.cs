@@ -9,14 +9,15 @@ internal static class StateVerification
         var directory = Path.Combine(Path.GetTempPath(), "replate-check-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         var path = Path.Combine(directory, "state.json");
-        var session = new DemoSession(path);
+        var session = new DemoSession(path).AsCustomer();
         var listingId = session.Listings[0].Id;
         session.AddToCart(session.Listings[0], 2);
-        session = new DemoSession(path);
+        session = new DemoSession(path).AsCustomer();
         Ensure(session.StorageError is null && session.Cart.Items.Single().Quantity == 2, "Cart survives restart");
         var listing = session.Listings.Single(l => l.Id == listingId);
         var order = session.Checkout();
         Ensure(order.TotalPrice == 32000 && listing.Quantity == 4, "Checkout snapshots and reserves stock");
+        session.AsOwner();
         ExpectFailure(() => session.ConfirmOrder(order, -1));
         Ensure(order.Status == OrderStatus.Reserved, "Invalid confirmation is atomic");
         session.ConfirmOrder(order, 15); session.ReadyOrder(order);
@@ -30,7 +31,7 @@ internal static class StateVerification
         ExpectFailure(() => session.CompletePickup(order, order.PickupCode));
         ExpectFailure(() => session.CancelOrder(order));
         Ensure(today.RescuedQuantity == rescuedBefore + 2 && listing.Quantity == 4, "Completed orders cannot mutate twice");
-        session = new DemoSession(path);
+        session = new DemoSession(path).AsCustomer();
         order = session.CustomerOrders.Single();
         Ensure(order.Status == OrderStatus.Completed && order.CompletedAt == completedAt, "Status and timestamp survive restart");
         Ensure(order.Items.Single().Listing.Menu.Name == "Chicken rice bowl", "Navigation references restored");
@@ -39,6 +40,7 @@ internal static class StateVerification
         var cancelled = session.Checkout(); session.CancelOrder(cancelled);
         ExpectFailure(() => session.CancelOrder(cancelled));
         Ensure(listing.Quantity == 4, "Cancellation restores stock exactly once");
+        session.AsOwner();
         var menu = session.SaveMenu(null, "Menu pengujian", "Menu lokal", "Makanan utama", 20000, .25m);
         var date = DateOnly.FromDateTime(DateTime.Today);
         session.SaveProduction(menu, date, 10, 6);
@@ -55,9 +57,10 @@ internal static class StateVerification
         Ensure(!session.Restaurant.Menus.Single(m => m.Id == menu.Id).IsActive, "Menu status survives restart");
         Ensure(session.Listings.Single(l => l.Id == offer.Id).Quantity == 4, "Listing survives restart");
         listing = session.Listings.Single(l => l.Id == listingId);
+        session.AsCustomer();
         session.AddToCart(listing, 1);
         listing.PickupEnd = DateTime.UtcNow.AddSeconds(-1); session.Persist();
-        session = new DemoSession(path);
+        session = new DemoSession(path).AsCustomer();
         Ensure(session.Cart.Items.Count == 1 && !session.Cart.ValidateCart(), "Expired cart retained but cannot checkout");
         Ensure(!session.Search("", "Semua").Any(l => l.Id == listingId), "Expired offer hidden after restart");
         session.ChangeQuantity(listingId, 0);
@@ -66,9 +69,10 @@ internal static class StateVerification
         var broken = new DemoSession(corrupt);
         ExpectFailure(broken.Persist);
         Ensure(broken.StorageError is not null && File.ReadAllText(corrupt) == "invalid json", "Corrupt storage is preserved read-only");
+        session.AsOwner();
         var removable = session.SaveMenu(null, "Menu tanpa relasi", "", "Makanan utama", 20000, .3m);
         session.DeleteMenu(removable);
-        session = new DemoSession(path);
+        session = new DemoSession(path).AsOwner();
         Ensure(session.StorageError is null && session.Restaurant.Menus.All(m => m.Id != removable.Id), "Deleted menu stays deleted after restart");
         var usedMenu = session.Restaurant.Menus[0];
         ExpectFailure(() => session.DeleteMenu(usedMenu));
@@ -82,9 +86,9 @@ internal static class StateVerification
         ExpectFailure(() => session.DeleteMenu(probe));
         probe.SurplusListings.Clear();
         var cartItem = new Replate.Domain.Entities.CartItem { Listing = linked, ListingId = linked.Id };
-        session.Cart.Items.Add(cartItem);
+        session.Carts.Single().Items.Add(cartItem);
         ExpectFailure(() => session.DeleteMenu(probe));
-        session.Cart.Items.Remove(cartItem);
+        session.Carts.Single().Items.Remove(cartItem);
         var historical = new Replate.Domain.Entities.Order();
         historical.Items.Add(new Replate.Domain.Entities.OrderItem { Listing = linked, ListingId = linked.Id });
         session.Restaurant.Orders.Add(historical);
@@ -104,7 +108,7 @@ internal static class StateVerification
             Ensure(new DemoSession(path).Restaurant.Menus.Any(m => m.Id == probe.Id), "Failed deletion preserves stored menu");
         }
         finally { Directory.Delete(path + ".tmp"); }
-        var allocationSession = new DemoSession();
+        var allocationSession = new DemoSession().AsCustomer();
         var allocationListing = allocationSession.Listings[0];
         var allocationMenu = allocationListing.Menu;
         var allocationDate = DateOnly.FromDateTime(allocationListing.PickupStart.ToLocalTime());
@@ -117,8 +121,10 @@ internal static class StateVerification
         CheckMinimum();
         allocationSession.AddToCart(allocationListing, 2);
         var allocationOrder = allocationSession.Checkout(); CheckMinimum();
+        allocationSession.AsOwner();
         allocationSession.ConfirmOrder(allocationOrder, 15); allocationSession.ReadyOrder(allocationOrder);
         allocationSession.CompletePickup(allocationOrder, allocationOrder.PickupCode); CheckMinimum();
+        allocationSession.AsCustomer();
         allocationSession.AddToCart(allocationListing, 1);
         allocationOrder = allocationSession.Checkout(); CheckMinimum();
         allocationSession.CancelOrder(allocationOrder); CheckMinimum();

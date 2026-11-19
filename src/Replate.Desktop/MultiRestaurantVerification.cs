@@ -26,11 +26,17 @@ internal static class MultiRestaurantVerification
             migratedMenu.Restaurant == migrated.Restaurant, "Menus migrate with restaurant id");
         Ensure(migrated.Listings.Single().Menu == migratedMenu && migratedMenu.ProductionRecords.Single().RescuedQuantity == 2, "Listings and records migrate");
         var migratedOrder = migrated.Restaurant.Orders.Single();
+        Ensure(migrated.Users.Count == 2 && migrated.Restaurant.Owner is { } migratedOwner &&
+            migratedOwner.Email == "dapur-lama@replate.demo" && migrated.Restaurant.OwnerId == migratedOwner.Id &&
+            migrated.Users.OfType<Customer>().Single().Email == DemoAccounts.CustomerEmail, "Migrated data receives demo accounts");
+        migrated.AsCustomer();
+        Ensure(migrated.CurrentUser!.Id == fixture.CustomerId, "Demo customer adopts the migrated cart owner");
         Ensure(migratedOrder.Id == fixture.OrderId && migratedOrder.RestaurantId == fixture.RestaurantId &&
             migrated.CustomerOrders.Single() == migratedOrder, "Orders migrate");
         Ensure(migrated.Carts.Count == 1 && migrated.Cart == migrated.Carts[0] && migrated.Cart.Id == fixture.CartId &&
             migrated.Cart.RestaurantId == fixture.RestaurantId && migrated.Cart.Items.Single().Quantity == 1, "Single cart migrates to carts");
-        Ensure(migrated.Users.Count == 0, "Migrated users are empty");
+        migrated.SignIn("dapur-lama@replate.demo", DemoAccounts.Password);
+        Ensure(migrated.Restaurant.Id == fixture.RestaurantId, "Migrated demo owner manages the migrated restaurant");
 
         // Version 1 backup
         var backup = path + ".v1.bak";
@@ -39,8 +45,14 @@ internal static class MultiRestaurantVerification
         migrated.Persist();
         Ensure(Version(path) == 2 && File.ReadAllText(backup) == original, "Save writes version 2 and keeps backup");
         var reloaded = new DemoSession(path);
-        Ensure(reloaded.StorageError is null && reloaded.Restaurant.Orders.Single().Id == fixture.OrderId &&
+        Ensure(reloaded.StorageError is null && reloaded.Users.Count == 2 &&
+            reloaded.Users.Select(u => (u.Id, u.Email, u.PasswordHash)).SequenceEqual(migrated.Users.Select(u => (u.Id, u.Email, u.PasswordHash))),
+            "Demo accounts are not duplicated after reload");
+        reloaded.AsCustomer();
+        Ensure(reloaded.Restaurant.Orders.Single().Id == fixture.OrderId &&
             reloaded.Cart.Items.Single().ListingId == fixture.ListingId, "Migrated data survives version 2 reload");
+        reloaded.Persist();
+        Ensure(new DemoSession(path).Users.Count == 2, "Demo accounts stay single after repeated saves");
         Ensure(File.ReadAllText(backup) == original, "Version 2 load leaves backup untouched");
 
         var keptPath = Path.Combine(directory, "kept.json");
@@ -76,7 +88,10 @@ internal static class MultiRestaurantVerification
         Ensure(session.Search("", "Semua").Select(l => l.Menu.RestaurantId).Distinct().Count() == 3, "Marketplace lists all restaurants");
         Ensure(session.Search("sambal ijo", "Semua").Count() == sambal.Menus.Count &&
             session.Search("sambal ijo", "Semua").All(l => l.Menu.RestaurantId == sambal.Id), "Search by another restaurant name");
+        session.AsOwner("Roti Pagi Kotabaru");
         session.SelectRestaurant(pagi.Id);
+        ExpectFailure(() => session.SelectRestaurant(bumi.Id));
+        Ensure(session.Restaurant == pagi, "Owner cannot select another owner's restaurant");
         Ensure(session.Search("dapur bumi", "Semua").Count() == bumi.Menus.Count, "Search ignores active restaurant");
         Ensure(session.Search("gado", "Vegetarian").Single().Menu.RestaurantId == sambal.Id, "Search by menu name across restaurants");
         Ensure(session.RestaurantListings.All(l => l.Menu.RestaurantId == pagi.Id) && session.RestaurantListings.Count() == pagi.Menus.Count,
@@ -84,7 +99,7 @@ internal static class MultiRestaurantVerification
         ExpectFailure(() => session.SelectRestaurant(Guid.NewGuid()));
 
         // Checkout restaurant
-        session.SelectRestaurant(bumi.Id);
+        session.AsCustomer();
         var pagiListing = session.Listings.First(l => l.Menu.RestaurantId == pagi.Id);
         var bumiOrders = bumi.Orders.Count; var pagiOrders = pagi.Orders.Count;
         session.AddToCart(pagiListing, 1);
@@ -103,7 +118,7 @@ internal static class MultiRestaurantVerification
         var orphanMenu = new Menu { Name = "Menu tanpa restoran", NormalPrice = 20000, WeightPerPortion = .3m, RestaurantId = Guid.NewGuid() };
         var orphanListing = new SurplusListing { Menu = orphanMenu, MenuId = orphanMenu.Id, RescuePrice = 10000, Quantity = 3,
             PickupStart = DateTime.UtcNow.AddHours(-1), PickupEnd = DateTime.UtcNow.AddHours(1) };
-        var orphanSession = new DemoSession();
+        var orphanSession = new DemoSession().AsCustomer();
         orphanSession.Cart.AddItem(orphanListing, 1);
         var message = "";
         try { orphanSession.Checkout(); } catch (InvalidOperationException e) { message = e.Message; }
@@ -114,29 +129,33 @@ internal static class MultiRestaurantVerification
         // Cart restaurant rule
         var sambalListing = session.Listings.First(l => l.Menu.RestaurantId == sambal.Id && l.IsAvailable(DateTime.UtcNow));
         var bumiListing = session.Listings.First(l => l.Menu.RestaurantId == bumi.Id && l.IsAvailable(DateTime.UtcNow));
+        session.AsCustomer();
         session.AddToCart(sambalListing, 1);
         ExpectFailure(() => session.AddToCart(bumiListing, 1));
         Ensure(session.Cart.Items.Single().ListingId == sambalListing.Id && session.Cart.RestaurantId == sambal.Id, "Cart rejects another restaurant");
-        session = new DemoSession(seededPath);
+        session = new DemoSession(seededPath).AsCustomer();
         Ensure(session.Cart.Items.Single().ListingId == sambalListing.Id && session.Cart.RestaurantId == sambal.Id, "Cart restaurant survives reload");
 
         // Version 2 round trip
-        session.Users.Add(new Customer { Name = "Sari", Email = "sari@example.com", PasswordHash = "hash-pelanggan" });
-        session.Users.Add(new RestaurantOwner { Name = "Bima", Email = "bima@example.com", PasswordHash = "hash-pemilik" });
-        session.SelectRestaurant(sambal.Id);
+        session.Register(UserRole.Customer, "Sari", "sari@example.com", "kata-sandi-1");
+        session.Register(UserRole.RestaurantOwner, "Bima", "bima@example.com", "kata-sandi-2",
+            new Replate.Domain.Services.RestaurantProfile("Bakmi Bima", "Jl. Magelang 5", "0812 3456 789", new TimeOnly(17, 0), new TimeOnly(1, 0)));
+        session.AsOwner("Warung Sambal Ijo");
         var sambalMenu = session.SaveMenu(null, "Es teh sereh", "Teh dingin dengan sereh.", "Vegetarian", 8000, .2m);
         var savedText = File.ReadAllText(seededPath);
         Ensure(Version(seededPath) == 2, "Save writes version 2");
         var roundTrip = new DemoSession(seededPath);
         Ensure(roundTrip.StorageError is null, "Version 2 file loads: " + roundTrip.StorageError);
-        Ensure(roundTrip.Restaurants.Select(r => (r.Id, r.Name, r.Address)).SequenceEqual(session.Restaurants.Select(r => (r.Id, r.Name, r.Address))),
+        Ensure(roundTrip.Restaurants.Select(r => (r.Id, r.Name, r.Address, r.OwnerId, r.Owner?.Id, r.Description, r.Phone, r.OpeningTime, r.ClosingTime))
+            .SequenceEqual(session.Restaurants.Select(r => (r.Id, r.Name, r.Address, r.OwnerId, r.Owner?.Id, r.Description, r.Phone, r.OpeningTime, r.ClosingTime))),
             "Restaurants round trip");
         Ensure(roundTrip.Restaurants.SelectMany(r => r.Menus).All(m => m.Restaurant!.Id == m.RestaurantId) &&
             roundTrip.FindRestaurant(sambal.Id)!.Menus.Any(m => m.Id == sambalMenu.Id), "Menus round trip into their restaurants");
         Ensure(roundTrip.Users.Select(u => (u.Id, u.Name, u.Email, u.PasswordHash, u.Role))
             .SequenceEqual(session.Users.Select(u => (u.Id, u.Name, u.Email, u.PasswordHash, u.Role))), "Users round trip");
         Ensure(roundTrip.AllOrders.Count() == session.AllOrders.Count() && roundTrip.Listings.Count == session.Listings.Count &&
-            roundTrip.Carts.Count == 1 && roundTrip.Cart.Id == session.Cart.Id, "Orders, listings, and carts round trip");
+            roundTrip.Carts.Select(c => (c.Id, c.CustomerId)).SequenceEqual(session.Carts.Select(c => (c.Id, c.CustomerId))),
+            "Orders, listings, and carts round trip");
         var copyPath = Path.Combine(directory, "copy.json");
         SessionStore.Save(roundTrip, copyPath);
         Ensure(File.ReadAllText(copyPath) == savedText, "Version 2 save and load are lossless");
@@ -146,7 +165,7 @@ internal static class MultiRestaurantVerification
         Console.WriteLine("All Replate multi-restaurant checks passed.");
     }
 
-    private sealed record Fixture(object Json, Guid RestaurantId, Guid MenuId, Guid ListingId, Guid OrderId, Guid CartId);
+    private sealed record Fixture(object Json, Guid RestaurantId, Guid MenuId, Guid ListingId, Guid OrderId, Guid CartId, Guid CustomerId);
 
     private static Fixture Version1Fixture()
     {
@@ -170,7 +189,7 @@ internal static class MultiRestaurantVerification
             Cart = new { Id = cartId, CustomerId = customerId, RestaurantId = restaurantId,
                 Items = new[] { new { ListingId = listingId, Quantity = 1, UnitPrice = 15000m } } }
         };
-        return new Fixture(json, restaurantId, menuId, listingId, orderId, cartId);
+        return new Fixture(json, restaurantId, menuId, listingId, orderId, cartId, customerId);
     }
 
     private static int Version(string path) => JsonNode.Parse(File.ReadAllText(path))!["Version"]!.GetValue<int>();

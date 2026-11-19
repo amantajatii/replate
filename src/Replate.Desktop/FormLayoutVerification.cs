@@ -14,7 +14,7 @@ internal static class FormLayoutVerification
         void Ensure(bool ok, string message) { if (!ok) throw new InvalidOperationException(message); }
         async Task Settle() => await Task.Delay(350);
         void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        var session = new DemoSession();
+        var session = new DemoSession().AsOwner();
         var window = new MainWindow(session);
         try
         {

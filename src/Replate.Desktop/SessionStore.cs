@@ -19,7 +19,8 @@ internal static class SessionStore
         List<UserState> Users, List<CartState> Carts);
     internal sealed record SnapshotV1(int Version, RestaurantState Restaurant, List<MenuState> Menus,
         List<ListingState> Listings, List<RecordState> Records, List<OrderState> Orders, CartState Cart);
-    internal sealed record RestaurantState(Guid Id, string Name, string Address);
+    internal sealed record RestaurantState(Guid Id, string Name, string Address, Guid OwnerId = default, string Description = "",
+        string Phone = "", TimeOnly OpeningTime = default, TimeOnly ClosingTime = default);
     internal sealed record MenuState(Guid Id, string Name, string Description, string Category,
         decimal NormalPrice, decimal WeightPerPortion, bool IsActive, string ImageUrl = "", Guid RestaurantId = default);
     internal sealed record ListingState(Guid Id, Guid MenuId, decimal RescuePrice, int Quantity,
@@ -40,7 +41,8 @@ internal static class SessionStore
     {
         var menus = session.Restaurants.SelectMany(r => r.Menus).ToList();
         var state = new Snapshot(CurrentVersion,
-            session.Restaurants.Select(r => new RestaurantState(r.Id, r.Name, r.Address)).ToList(),
+            session.Restaurants.Select(r => new RestaurantState(r.Id, r.Name, r.Address, r.OwnerId, r.Description,
+                r.Phone, r.OpeningTime, r.ClosingTime)).ToList(),
             menus.Select(m => new MenuState(m.Id, m.Name, m.Description, m.Category,
                 m.NormalPrice, m.WeightPerPortion, m.IsActive, m.ImageUrl, m.RestaurantId)).ToList(),
             session.Listings.Select(l => new ListingState(l.Id, l.MenuId, l.RescuePrice, l.Quantity,
@@ -74,7 +76,8 @@ internal static class SessionStore
         else throw new InvalidDataException("Versi berkas data tidak didukung.");
 
         // Materialize JSON snapshots into entities, then rebuild references in one pass.
-        var restaurantList = state.Restaurants.Select(r => new Restaurant { Id = r.Id, Name = r.Name, Address = r.Address }).ToList();
+        var restaurantList = state.Restaurants.Select(r => new Restaurant { Id = r.Id, Name = r.Name, Address = r.Address,
+            Description = r.Description ?? "", Phone = r.Phone ?? "", OpeningTime = r.OpeningTime, ClosingTime = r.ClosingTime }).ToList();
         if (restaurantList.Count == 0) throw new InvalidDataException("Berkas data tidak memuat restoran.");
         var restaurants = restaurantList.ToDictionary(r => r.Id);
         var menus = state.Menus.Select(Convert<Menu>).ToDictionary(m => m.Id);
@@ -100,7 +103,15 @@ internal static class SessionStore
         var carts = state.Carts.Select(Convert<Cart>).ToList();
         foreach (var cart in carts)
             foreach (var item in cart.Items) { item.Listing = listings[item.ListingId]; item.CartId = cart.Id; }
-        var users = state.Users.Select(ToUser).ToList();
+        var users = (state.Users ?? []).Select(ToUser).ToList();
+        var owners = users.OfType<RestaurantOwner>().ToDictionary(u => u.Id);
+        foreach (var (restaurant, snapshot) in restaurantList.Zip(state.Restaurants))
+        {
+            if (snapshot.OwnerId == Guid.Empty) continue;
+            if (!owners.TryGetValue(snapshot.OwnerId, out var owner))
+                throw new InvalidDataException("Pemilik restoran tidak ditemukan dalam berkas data.");
+            owner.ManageRestaurant(restaurant);
+        }
         var orders = restaurantList.SelectMany(r => r.Orders).ToList();
         if (menus.Values.Any(m => string.IsNullOrWhiteSpace(m.Name) || m.NormalPrice <= 0 || m.WeightPerPortion <= 0) ||
             listings.Values.Any(l => l.Quantity < 0 || l.RescuePrice <= 0 || l.PickupEnd <= l.PickupStart || !Enum.IsDefined(l.Status)) ||
@@ -109,7 +120,9 @@ internal static class SessionStore
             orders.Any(o => !Enum.IsDefined(o.Status) || o.Items.Count == 0 ||
                 o.Items.Any(i => i.Quantity <= 0 || i.UnitPrice <= 0) || o.TotalPrice != o.Items.Sum(i => i.CalculateSubtotal())) ||
             carts.Any(c => c.Items.Any(i => i.Quantity <= 0 || i.UnitPrice <= 0 || i.Listing.Menu.RestaurantId != c.RestaurantId)) ||
-            users.Select(u => u.Id).Distinct().Count() != users.Count)
+            users.Select(u => u.Id).Distinct().Count() != users.Count ||
+            users.Any(u => string.IsNullOrWhiteSpace(u.Email) || string.IsNullOrWhiteSpace(u.PasswordHash)) ||
+            users.Select(u => Replate.Domain.Services.AccountService.NormalizeEmail(u.Email)).Distinct().Count() != users.Count)
             throw new InvalidDataException("Berkas data mengandung nilai yang tidak valid.");
         session.Restore(restaurantList, carts, users, listings.Values.ToList());
     }
