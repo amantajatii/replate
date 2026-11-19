@@ -10,8 +10,8 @@ public sealed class MarketplaceView : UserControl
 {
     private readonly MainWindow owner;
     private readonly DemoSession session;
-    internal TextBox SearchBox { get; } = new() { PlaceholderText = "Cari makanan atau restoran…", Height = 44,
-        CornerRadius = new CornerRadius(6), Background = Brushes.White, PlaceholderForeground = Ui.Muted };
+    internal TextBox SearchBox { get; } = new() { PlaceholderText = "Cari menu atau restoran", Height = 44,
+        CornerRadius = new CornerRadius(6), Background = Brushes.White };
     private readonly StackPanel listingsPanel = Ui.Stack(0);
     private readonly TextBlock resultLabel = Ui.Text("", 13, Ui.Muted);
     private readonly TextBlock notice = Ui.Text("", 12, Ui.Green);

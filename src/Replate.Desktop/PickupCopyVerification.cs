@@ -34,7 +34,7 @@ internal static class PickupCopyVerification
                 "Clipboard text matches displayed pickup code exactly");
             Ensure(window.SuccessMessage == "Kode berhasil disalin.", "Successful clipboard write uses shared success notification");
             var body = (StackPanel)((ScrollViewer)view.Content!).Content!;
-            var pasted = Ui.Input(); body.Children.Add(pasted); await Settle();
+            var pasted = Ui.Input("Tempel kode pengambilan"); body.Children.Add(pasted); await Settle();
             pasted.Focus(); pasted.Paste(); await Settle();
             Ensure(pasted.Text == view.PickupCodeText.Text && pasted.Text!.Length == 6, "Actual TextBox paste contains only the displayed six-character code");
             body.Children.Remove(pasted);

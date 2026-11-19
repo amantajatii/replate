@@ -18,7 +18,7 @@ internal static class UiVerification
             var position = Array.IndexOf(args, "--verify-ui");
             var output = position + 1 < args.Length ? args[position + 1] : Path.GetTempPath();
             Directory.CreateDirectory(output);
-            async Task Shot(string name) { await Settle(); Capture(window, Path.Combine(output, name + ".png")); }
+            async Task Shot(string name) { await Settle(); InputVerification.Check(window, name); Capture(window, Path.Combine(output, name + ".png")); }
             void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Ensure(window.CurrentPage is SignInView && !window.Session.IsSignedIn, "Startup shows sign-in");
             var startSignIn = (SignInView)window.CurrentPage!;
@@ -124,6 +124,7 @@ internal static class UiVerification
             Click(((OrderDetailView)window.CurrentPage!).ConfirmButton!);
             Click(((OrderDetailView)window.CurrentPage!).ReadyButton!);
             var pickup = (OrderDetailView)window.CurrentPage!;
+            await Settle(); Ensure(InputVerification.Check(window, "restaurant-order-pickup") > 0, "Pickup code field is checked");
             pickup.PickupInput!.Text = "WRONG"; Click(pickup.VerifyButton!);
             Ensure(order.Status == Replate.Domain.Enums.OrderStatus.ReadyForPickup, "Wrong pickup code");
             pickup.PickupInput.Text = order.PickupCode; Click(pickup.VerifyButton!);

@@ -10,6 +10,7 @@ colors:
   sidebar: "#F1F3EE"
   selection: "#E0E9DF"
   divider: "#DDE3DA"
+  leaf: "#4FA37E"
 typography:
   headline:
     fontFamily: "Helvetica Neue, Segoe UI, sans-serif"
@@ -119,17 +120,12 @@ components:
     backgroundColor: "transparent"
     textColor: "{colors.ink}"
     rounded: "{rounded.control}"
-    size: "32px"
+    size: "20px"
   password-toggle-hover:
-    backgroundColor: "{colors.selection}"
-    textColor: "{colors.primary}"
+    backgroundColor: "transparent"
+    textColor: "{colors.leaf}"
     rounded: "{rounded.control}"
-    size: "32px"
-  password-toggle-pressed:
-    backgroundColor: "{colors.divider}"
-    textColor: "{colors.primary}"
-    rounded: "{rounded.control}"
-    size: "32px"
+    size: "20px"
   time-field:
     backgroundColor: "{colors.surface}"
     textColor: "{colors.ink}"
@@ -168,6 +164,7 @@ Forest green is a functional accent within a pale, warm-neutral workspace. Front
 - **Pale Sage Sidebar** (`sidebar`): restaurant navigation rail.
 - **Soft Sage Selection** (`selection`): selected navigation and category filters.
 - **Sage Divider** (`divider`): row rules and shell separators.
+- **Light Leaf** (`leaf`): the hover color of the password-toggle icon only. About 3.1:1 on white, enough for an icon, not for body text.
 
 **The Functional Green Rule.** Use the accent to communicate action, selection, or useful emphasis.
 
@@ -198,17 +195,18 @@ Full-page menu/listing forms are left-aligned (640 wide), food details use (680)
 
 ### Auth surface
 
-The sign-in (Masuk) and registration (Daftar) screens fill the window with two columns: a canvas column on the left and a primary panel on the right. The panel takes about 30% of the width; its left edge follows the plate.
+The sign-in (Masuk) and registration (Daftar) screens fill the window with two columns: a canvas column on the left and a primary panel on the right. The panel takes about 28% of the width; its left edge follows the plate.
 
-- **Left column:** canvas background. The wordmark sits at the top (inset 32), aligned with the card's left edge and outside the scroll area, so it stays fully visible while the form scrolls. Below it, a vertical-only scroll area holds a single auth-card. The demo-account line and the warning share the card's width and left edge. Masuk also shows the demo-account line under the card and, on a database startup error, one compact warning above it. No other containers, banners, or helper panels sit beside the card.
+- **Left column:** canvas background. The wordmark sits at the top (inset 32) on a band filled with `canvas`, aligned with the card's left edge and outside the scroll area; the scroll area starts below that band and clips there, so scrolled content never shows under or over the wordmark. Below it, a vertical-only scroll area holds a single auth-card. The demo-account line and the warning share the card's width and left edge. Masuk also shows the demo-account line under the card and, on a database startup error, one compact warning above it. No other containers, banners, or helper panels sit beside the card.
 - **Right column:** a full-height panel filled with the primary color. The panel itself holds nothing.
 - **Plate:** `src/Replate.Desktop/Assets/auth-hero.png` (a transparent round cut-out of a plate) sits in an overlay layer above both columns that does not scroll. It is centered vertically, and the panel's left edge passes exactly through the plate's center: half of the plate lies over the canvas and half over the green panel.
-- **Placement:** the diameter is 0.6 × window height, at least (360) and never taller than the window. The panel edge (the plate center) sits at 0.70 × window width. The card starts at about 0.14 × window width (never under 48) and is 440 wide at most, ending at least (24) before the plate. If that leaves the card under (360), the left margin shrinks first (to no less than 48), then the panel edge moves right, then the plate shrinks (to no less than 320). The scroll area ends at the plate's left edge, so the plate never covers it.
+- **Placement:** the diameter is 0.56 × window height, at least (360) and never taller than the window. The panel edge (the plate center) sits at 0.72 × window width. The card starts at about 0.12 × window width (never under 48) and is 440 wide at most. The card and the plate keep a gap of 0.08 × window width; on a wide window the gap grows past that, since the card stays at 440. When the window is too small, the card narrows to (360) first, then the gap shrinks step by step to no less than (46: the scrollbar gap 16, the scrollbar 6, and 24 clear of the plate), then the left margin shrinks (to no less than 48), then the panel edge moves right, then the plate shrinks (to no less than 320). The 46 floor is reached only on narrow, tall windows (for example 1040 × 1080); the four reference sizes below keep their gaps.
 - **Card and plate never touch:** the plate box and the card box never intersect and keep a gap of at least (24).
+- **Scroll area:** the viewport hugs the card: it starts (24) left of the card and ends (16 + 6) right of it, so the scrollbar sits (16) beside the card's right edge and never over it. The 24 on the left is inner padding for the card shadow; the viewport does not clip horizontally, and an outer clip that runs to the plate's left edge keeps the shadow whole on both sides. The scrollbar stays at least (24) from the plate box. The mouse wheel also scrolls the form when the pointer is over the empty canvas beside it.
 - **Scrollbar:** the scroll area uses a thin scrollbar (6 wide): one rounded thumb in `muted`, with no track and no arrow buttons. It is hidden at rest and shows only while the form scrolls or while the pointer is over the scroll area, with no transition. Mouse wheel, touchpad, and keyboard (PageUp, PageDown, arrows) scroll as usual, and a field reached with Tab is scrolled into view. Other screens keep the native scrollbar.
 - **Photo content:** no text, slogan, logo, or overlay is placed on the plate or the panel. Both are decorative and hidden from assistive technology.
 
-Reference sizes: at (1360 × 940) the plate is 564, the card 440 starting at 190 (14%), and the panel 30% of the width; at (1920 × 1080) the plate is 648 and the card 440 starting at 269; at the minimum (1040 × 720) the plate is 432, the card 360 starting at 128 (the margin gives way first), the panel still 30%, and the owner registration form scrolls vertically. There is no horizontal scrolling at any size.
+Reference sizes: at (1360 × 940) the plate is 526, the card 440 starting at 163 (12%), the gap about 113, and the panel 28% of the width; at (1283 × 780) the plate is 437, the card 440 starting at 154, and the gap about 111; at (1920 × 1080) the plate is 605, the card 440 starting at 230, and the gap about 410 (wide on purpose); at the minimum (1040 × 720) the plate is 403, the card 360 starting at 125, the gap about 62 (the gap gives way after the card reaches 360), the panel still 28%, and the owner registration form scrolls vertically. There is no horizontal scrolling at any size.
 
 ## Elevation & Depth
 
@@ -232,11 +230,15 @@ Direct, compact action labels. Primary buttons use green with white text; second
 ### Inputs / Fields
 Visible labels sit above native TextBox, NumericUpDown, ComboBox, DatePicker, and TimePicker controls (restaurant forms); the auth surface uses the time-field instead of TimePicker. Text and numeric inputs have a minimum height (42); multiline text inputs use (88). The marketplace search field has its own height token and white background. Automation names mirror visible labels. Native controls own focus and disabled treatments.
 
+- **Vertical centering:** every single-line TextBox (including the one inside NumericUpDown and every Kata sandi field) centers its content vertically with balanced padding (10, 5.5, 6, 5.5: top equals bottom). Typed text, the placeholder, password dots, and the password-toggle share the field's vertical center. One shared rule (`Ui.UseInputs` in `Ui.cs`) applies this app-wide; individual fields do not set it. Field heights are unchanged.
+- **Multiline fields:** a TextBox that accepts returns (Deskripsi on Daftar and in the menu editor) aligns its placeholder and text to the top instead, with padding (10, 10, 6, 5.5): the top padding equals the left. The same shared rule applies it.
+- **Placeholder:** every TextBox carries an Indonesian placeholder following "Masukkan ..." (for example "Masukkan email Anda", "Masukkan kata sandi Anda", "Masukkan nama restoran", "Masukkan harga"); the search field reads "Cari menu atau restoran". Placeholder text uses `muted` at full opacity (about 5.9:1 on white), disappears once the field has content, and has no other effect. No em dashes and no exclamation marks.
+
 ### Auth controls
 These three components exist only on the auth surface. Their states are documented here because they replace the native Fluent look; they use only the color tokens above, with no blur, glow, gradient, or animation.
 
 - **role-button:** the Daftar sebagai choice (Pelanggan / Pemilik restoran). Two equal-width buttons that together span the card (12 apart), `rounded.control`, no visible border. They keep RadioButton semantics: one group, arrow keys move and select, automation names match the labels. Unselected: sidebar fill with ink text; hover: selection fill with primary text. Selected: primary fill with white text; hover: ink fill with white text. Keyboard focus shows a 2 px ink ring.
-- **password-toggle:** a 32 × 32 button inside the right edge of every Kata sandi field, always visible, even when the field is empty. Its eye and crossed-eye icons are drawn as Path geometry (no icon package). Default: transparent with an ink icon; hover: selection fill with a primary icon; pressed: divider fill with a primary icon; keyboard focus: 2 px primary ring. Pressing it switches the field between masked and plain text, and its automation name switches between "Tampilkan kata sandi" and "Sembunyikan kata sandi". Submitting the form returns every password field to masked mode; sign-in and an accepted registration also clear them.
+- **password-toggle:** a 20 × 20 button hugging its 16 icon, inside the right edge of every Kata sandi field (Masuk, and Kata sandi and Ulangi kata sandi on Daftar), always visible, even when the field is empty. Its eye and crossed-eye icons are drawn as Path geometry (no icon package). Default: an ink icon with no fill or border. Hover, only while the pointer is over the icon: the icon turns `leaf`; there is still no fill, border, box, or transition, and the icon returns to ink when the pointer leaves. Pressing changes nothing else. Keyboard focus (Tab from the field): 2 px primary ring; Enter or Space toggles it, and Enter on the toggle does not submit the form. Pressing it switches the field between masked and plain text, and its automation name switches between "Tampilkan kata sandi" and "Sembunyikan kata sandi". Submitting the form returns every password field to masked mode; sign-in and an accepted registration also clear them.
 - **time-field:** Jam buka and Jam tutup in the restaurant profile. A white pill (`rounded.full`, height 42) with the same border as native text fields, holding a native hour ComboBox (00 to 23), a ":" separator, and a native minute ComboBox (00 to 59). No AM/PM and no shadow. Picking an hour fills the minute with 00. The two fields share one row (16 apart) with visible labels above each; automation names follow the pattern "Jam buka, jam" and "Jam buka, menit". The value is a 24-hour `TimeOnly`. The hour and minute boxes share the pill width equally, so both stay inside the pill at the narrowest card (360).
 
 ### Navigation and Filters
@@ -287,4 +289,4 @@ Empty lists preserve a direct recovery path when applicable. Operational errors 
 - **Don't** pair Space Grotesk with Instrument Serif.
 - **Don't** add grain or noise overlays on gradients.
 
-Source evidence: `src/Replate.Desktop/Ui.cs` (shared primitives), `MainWindow.cs` (font, palette, shell), `MarketplaceView.cs` (filters and rows), `DashboardView.cs` (aligned data tables), `CustomerViews.cs` and `RestaurantViews.cs` (full-page forms and states), `AuthViews.cs` (auth surface, role-button, password-toggle, and time-field), and `Program.cs` (light FluentTheme). The photo asset `src/Replate.Desktop/Assets/auth-hero.png` is loaded by `AuthViews.cs`. The `elevation.card`, `rounded.card`, and `rounded.full` tokens, the auth-card, role-button, password-toggle, and time-field components, and the auth surface layout and thin scrollbar are implemented and verified by `--verify-ui` (`AuthVerification.cs`) at (1360 × 940), (1040 × 720), and (1283 × 780). Product guardrails come from `PRODUCT.md`. The sidecar contains browser-panel translations of five native patterns; its HTML/CSS focus outlines, native-control approximations, and synthesized tonal ramps are preview metadata, not additional application tokens or verified native state styles. No HTML/CSS implementation or iOS/Android behavior is claimed.
+Source evidence: `src/Replate.Desktop/Ui.cs` (shared primitives), `MainWindow.cs` (font, palette, shell), `MarketplaceView.cs` (filters and rows), `DashboardView.cs` (aligned data tables), `CustomerViews.cs` and `RestaurantViews.cs` (full-page forms and states), `AuthViews.cs` (auth surface, role-button, password-toggle, and time-field), and `Program.cs` (light FluentTheme). The photo asset `src/Replate.Desktop/Assets/auth-hero.png` is loaded by `AuthViews.cs`. The `elevation.card`, `rounded.card`, and `rounded.full` tokens, the auth-card, role-button, password-toggle, and time-field components, and the auth surface layout and thin scrollbar are implemented and verified by `--verify-ui` (`AuthVerification.cs`; input centering and placeholders by `InputVerification.cs`) at (1360 × 940), (1040 × 720), (1283 × 780), and (1920 × 1080). Product guardrails come from `PRODUCT.md`. The sidecar contains browser-panel translations of five native patterns; its HTML/CSS focus outlines, native-control approximations, and synthesized tonal ramps are preview metadata, not additional application tokens or verified native state styles. No HTML/CSS implementation or iOS/Android behavior is claimed.

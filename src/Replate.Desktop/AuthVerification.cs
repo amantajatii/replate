@@ -36,7 +36,7 @@ internal static class AuthVerification
         var bounds = surface.Bounds; var panel = surface.HeroPanel.Bounds;
         Check(surface.ColumnDefinitions.Count == 2 && Math.Abs(bounds.Width - size.Width) < 1 && Math.Abs(bounds.Height - size.Height) < 1 &&
             panel.X >= bounds.Width * AuthSurface.BoundaryShare - .5 && Math.Abs(panel.Right - bounds.Width) < 1 && Math.Abs(panel.Height - bounds.Height) < 1,
-            $"{where}: primary panel is full height on the right and starts at or after 70% ({panel.X:0.#} of {bounds.Width:0.#})");
+            $"{where}: primary panel is full height on the right and starts at or after 72% ({panel.X:0.#} of {bounds.Width:0.#})");
         Check(ColorOf(surface.HeroPanel.Background) == Color.Parse("#245B43"), $"{where}: panel uses the primary color");
         Check(surface.Hero.Source is Bitmap { PixelSize: { Width: 1080, Height: 1080 } } && surface.Hero.Stretch == Stretch.Uniform &&
             surface.Hero.Bounds.Width > 0, $"{where}: hero image loaded from {AuthSurface.HeroUri}");
@@ -46,7 +46,7 @@ internal static class AuthVerification
             $"{where}: hero is decorative for screen readers");
         Check(!surface.HeroPanel.GetVisualDescendants().Concat(surface.HeroLayer.GetVisualDescendants()).OfType<TextBlock>().Any(), $"{where}: no text over the photo");
         var plate = RectIn(surface.Hero, surface);
-        var diameter = Math.Max(AuthSurface.MinPlate, size.Height * 0.6);
+        var diameter = Math.Max(AuthSurface.MinPlate, size.Height * AuthSurface.PlateShare);
         Check(Math.Abs(plate.Width - plate.Height) < 1 && Math.Abs(plate.Width - diameter) < 1 && Math.Abs(plate.Center.Y - bounds.Height / 2) < 1 &&
             plate.Right <= bounds.Width + .5, $"{where}: plate diameter follows window height and is centered vertically ({plate.Width:0.#}, expected {diameter:0.#})");
         var onCanvas = (panel.X - plate.X) / plate.Width;
@@ -59,12 +59,18 @@ internal static class AuthVerification
         Check(card.Bounds.Width >= AuthSurface.MinCardWidth - .5 && card.Bounds.Width <= AuthSurface.CardWidth + .5,
             $"{where}: card width stays between {AuthSurface.MinCardWidth} and {AuthSurface.CardWidth} ({card.Bounds.Width:0.#})");
         var atMinCard = card.Bounds.Width <= AuthSurface.MinCardWidth + .5;
+        var gap = Gap(cardBox, plate);
+        var targetGap = bounds.Width * AuthSurface.GapShare;
+        var atMinGap = gap <= AuthSurface.ClearGap + .5;
+        var roomy = bounds.Width * AuthSurface.BoundaryShare - diameter / 2 - Math.Max(AuthSurface.MinMargin, bounds.Width * AuthSurface.CardShare) - AuthSurface.MinCardWidth >= targetGap;
         Check(cardBox.X >= AuthSurface.MinMargin - .5 && cardBox.X <= bounds.Width * AuthSurface.CardShare + .5 &&
-            (Math.Abs(cardBox.X - bounds.Width * AuthSurface.CardShare) < 1 || atMinCard),
-            $"{where}: card starts at about 14% and at least {AuthSurface.MinMargin} ({cardBox.X:0.#}, target {bounds.Width * AuthSurface.CardShare:0.#})");
-        Check(panel.X <= bounds.Width * AuthSurface.BoundaryShare + .5 || atMinCard && cardBox.X <= AuthSurface.MinMargin + .5,
-            $"{where}: panel edge moves right of 70% only when the card and margin are at their minimum ({panel.X:0.#})");
-        Check(Gap(cardBox, plate) >= AuthSurface.PlateGap - .5, $"{where}: card and plate do not intersect and stay at least 24 apart (gap {Gap(cardBox, plate):0.#})");
+            (Math.Abs(cardBox.X - bounds.Width * AuthSurface.CardShare) < 1 || atMinCard && atMinGap),
+            $"{where}: card starts at about 12% and at least {AuthSurface.MinMargin} ({cardBox.X:0.#}, target {bounds.Width * AuthSurface.CardShare:0.#})");
+        Check(panel.X <= bounds.Width * AuthSurface.BoundaryShare + .5 || atMinCard && atMinGap && cardBox.X <= AuthSurface.MinMargin + .5,
+            $"{where}: panel edge moves right of 72% only when the gap, card and margin are at their minimum ({panel.X:0.#})");
+        Check(gap >= AuthSurface.PlateGap - .5, $"{where}: card and plate do not intersect and stay at least 24 apart (gap {gap:0.#})");
+        Check(roomy ? gap >= targetGap - .5 : atMinCard && gap >= AuthSurface.PlateGap - .5,
+            $"{where}: card and plate keep a gap of 8% of the width when the window allows, otherwise the card is at its minimum first (gap {gap:0.#}, target {targetGap:0.#})");
         if (surface.Below is { } below)
         {
             var line = RectIn(below, surface);
@@ -77,8 +83,20 @@ internal static class AuthVerification
         Check(surface.Wordmark.Text == "replate." && mark.X >= 0 && mark.Y >= 0 && mark.Bottom <= scrollBox.Y + .5 && Gap(mark, plate) > 0 &&
             !surface.FormScroll.GetVisualDescendants().Contains(surface.Wordmark), $"{where}: wordmark stays fully visible above the scroll area");
         Check(Math.Abs(mark.X - cardBox.X) < 1, $"{where}: wordmark aligns with the card left edge ({mark.X:0.#}, card {cardBox.X:0.#})");
+        var header = RectIn(surface.Header, surface); var clip = RectIn(surface.FormClip, surface);
+        Check(ColorOf(surface.Header.Background) == Color.Parse("#FAFAF8") && header.Contains(mark) && header.Bottom <= clip.Y + .5 &&
+            surface.FormClip.ClipToBounds && surface.Header.GetVisualParent() is Panel host && host.Children.IndexOf(surface.Header) > host.Children.IndexOf(surface.FormClip),
+            $"{where}: wordmark sits on a clean canvas band above a clipped scroll area (band bottom {header.Bottom:0.#}, scroll top {clip.Y:0.#})");
         Check(cardBox.X >= scrollBox.X - .5 && cardBox.Right <= scrollBox.Right + .5 && scrollBox.Right <= plate.X + 1,
             $"{where}: card is not clipped and the scroll area stays clear of the plate (card {cardBox.X:0.#}-{cardBox.Right:0.#}, scroll {scrollBox.X:0.#}-{scrollBox.Right:0.#}, plate {plate.X:0.#})");
+        Check(scrollBox.X <= cardBox.X - AuthSurface.ShadowPad + .5 && clip.X <= cardBox.X - AuthSurface.ShadowPad + .5 && clip.Right >= cardBox.Right + AuthSurface.ShadowPad - .5 &&
+            surface.FormScroll.GetVisualDescendants().OfType<ScrollContentPresenter>().Single(p => p.TemplatedParent == surface.FormScroll).ClipToBounds == false,
+            $"{where}: card shadow has {AuthSurface.ShadowPad} of room on both sides (scroll {scrollBox.X:0.#}, clip {clip.X:0.#}-{clip.Right:0.#}, card {cardBox.X:0.#}-{cardBox.Right:0.#})");
+        var barBox = VerticalBar(surface) is { IsVisible: true } shown ? RectIn(shown, surface)
+            : new Rect(scrollBox.Right - AuthSurface.ScrollBarWidth, scrollBox.Y, AuthSurface.ScrollBarWidth, scrollBox.Height);
+        Check(barBox.X >= cardBox.Right - .5 && barBox.X - cardBox.Right <= 24 + .5 && Math.Abs(barBox.Right - scrollBox.Right) < 1,
+            $"{where}: scrollbar sits beside the card without covering it ({barBox.X - cardBox.Right:0.#} from the card edge)");
+        Check(Gap(barBox, plate) >= AuthSurface.PlateGap - .5, $"{where}: scrollbar stays at least {AuthSurface.PlateGap} from the plate ({Gap(barBox, plate):0.#})");
         var scroll = surface.FormScroll;
         Check(scroll.HorizontalScrollBarVisibility == Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled &&
             scroll.Extent.Width <= scroll.Viewport.Width + .5 &&
@@ -194,8 +212,13 @@ internal static class AuthVerification
                     frame.Show();
                     var surface = surfaceOf(view);
                     await CheckSurface(frame, surface, name, size);
+                    Check(InputVerification.Check(canvas, $"{name} at {size.Width:0}x{size.Height:0}") >= (name == "sign-in" ? 2 : name == "register" ? 4 : 8),
+                        $"{name} at {size.Width:0}x{size.Height:0}: every text field is checked");
                     var share = surface.HeroPanel.Bounds.Width / size.Width;
-                    Check(Math.Abs(share - .30) <= .01, $"{name} at {size.Width:0}x{size.Height:0}: panel is about 30% of the width ({share:0.###})");
+                    Check(Math.Abs(share - .28) <= .01, $"{name} at {size.Width:0}x{size.Height:0}: panel is about 28% of the width ({share:0.###})");
+                    var gap = RectIn(surface.Hero, surface).X - RectIn(surface.Card, surface).Right;
+                    Check(gap >= AuthSurface.PlateGap - .5 && (size.Width == 1040 || gap >= size.Width * AuthSurface.GapShare - .5),
+                        $"{name} at {size.Width:0}x{size.Height:0}: card and plate gap is at least {(size.Width == 1040 ? AuthSurface.PlateGap : size.Width * AuthSurface.GapShare):0.#} ({gap:0.#})");
                     var expectedCard = size.Width == 1040 ? AuthSurface.MinCardWidth : AuthSurface.CardWidth;
                     Check(Math.Abs(surface.Card.Bounds.Width - expectedCard) < 1, $"{name} at {size.Width:0}x{size.Height:0}: card is {expectedCard} wide ({surface.Card.Bounds.Width:0.#})");
                     var scroll = surface.FormScroll;
@@ -247,11 +270,26 @@ internal static class AuthVerification
         Click(toggle); await Task.Delay(100);
         Check(input.PasswordChar != default && AutomationProperties.GetName(toggle) == AuthSurface.RevealName && icon.Data == AuthSurface.EyeIcon,
             $"{screen}: toggle hides the password again");
-        var ink = Color.Parse("#23382C"); var green = Color.Parse("#245B43");
-        Check(ColorOf(toggle.Background) == Colors.Transparent && ColorOf(toggle.Foreground) == ink && ColorOf(icon.Stroke) == ink && toggle.Focusable,
+        var ink = Color.Parse("#23382C"); var green = Color.Parse("#245B43"); var leaf = Color.Parse("#4FA37E");
+        Check(ColorOf(toggle.Background) == Colors.Transparent && ColorOf(toggle.Foreground) == ink && ColorOf(icon.Stroke) == ink && toggle.Focusable && toggle.IsTabStop,
             $"{screen}: toggle defaults to an ink icon and is keyboard focusable");
-        await CheckState(toggle, ":pointerover", Color.Parse("#E0E9DF"), green, $"{screen}: password toggle");
-        await CheckState(toggle, ":pressed", Color.Parse("#DDE3DA"), green, $"{screen}: password toggle");
+        Check(toggle.Bounds.Width <= icon.Bounds.Width + 4 + .5 && toggle.Bounds.Height <= icon.Bounds.Height + 4 + .5 && toggle.Transitions is null or { Count: 0 },
+            $"{screen}: toggle hover area hugs the icon ({toggle.Bounds.Width:0.#}x{toggle.Bounds.Height:0.#}) with no transition");
+        await Pseudo(toggle, ":pointerover", true);
+        var hover = (ColorOf(toggle.Background), ColorOf(toggle.Foreground), ColorOf(icon.Stroke), ColorOf(toggle.BorderBrush));
+        await Pseudo(toggle, ":pointerover", false);
+        Check(hover == (Colors.Transparent, leaf, leaf, Colors.Transparent) && ColorOf(icon.Stroke) == ink,
+            $"{screen}: password toggle hover turns only the icon light green, without fill or border (got {hover}), and returns to ink");
+        await CheckState(toggle, ":pressed", Colors.Transparent, ink, $"{screen}: password toggle");
+        var masked = input.PasswordChar != default;
+        input.Focus(NavigationMethod.Tab); await Task.Delay(100);
+        input.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Tab, Source = input }); await Task.Delay(100);
+        Check(TopLevel.GetTopLevel(input)?.FocusManager?.GetFocusedElement() == toggle, $"{screen}: Tab from the field moves focus to the toggle");
+        toggle.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter, Source = toggle }); await Task.Delay(100);
+        var afterEnter = input.PasswordChar != default;
+        toggle.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Space, Source = toggle });
+        toggle.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyUpEvent, Key = Key.Space, Source = toggle }); await Task.Delay(100);
+        Check(masked && !afterEnter && input.PasswordChar != default, $"{screen}: Enter and Space on the toggle show and hide the password");
         await Pseudo(toggle, ":focus-visible", true);
         var ring = ColorOf(toggle.BorderBrush);
         await Pseudo(toggle, ":focus-visible", false);
