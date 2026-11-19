@@ -15,7 +15,7 @@ internal static class OrdersEmptyVerification
         void Ensure(bool ok, string message) { if (!ok) throw new InvalidOperationException(message); }
         void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         async Task Settle() => await Task.Delay(300);
-        var session = new DemoSession();
+        var session = new DemoSession().AsCustomer();
         Ensure(session.Restaurant.Orders.Count > 0 && !session.CustomerOrders.Any(), "Other customers' history does not count as current customer's history");
         var window = new MainWindow(session) { Width = 1040, Height = 720 };
         try
@@ -83,7 +83,9 @@ internal static class OrdersEmptyVerification
             }
             Click(Buttons().Single(b => b.Content as string == "Lihat pesanan"));
             Ensure(window.CurrentPage is OrderDetailView, "Order detail navigation preserved");
+            session.AsOwner();
             session.ConfirmOrder(order, 15); session.ReadyOrder(order); session.CompletePickup(order, order.PickupCode);
+            session.AsCustomer();
             window.ShowCustomerOrders(); await Settle();
             CheckEmpty("Tidak ada pesanan aktif saat ini.", "Lihat Semua Pesanan");
             Shot("orders-empty-active-history");

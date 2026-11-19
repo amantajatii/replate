@@ -14,7 +14,7 @@ internal static class FormLayoutVerification
         void Ensure(bool ok, string message) { if (!ok) throw new InvalidOperationException(message); }
         async Task Settle() => await Task.Delay(350);
         void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        var session = new DemoSession();
+        var session = new DemoSession().AsOwner();
         var window = new MainWindow(session);
         try
         {
@@ -95,7 +95,8 @@ internal static class FormLayoutVerification
                     "Production detail table is not constrained to the editor width");
                 foreach (var restaurant in new[] { false, true })
                 {
-                    if (restaurant) window.ShowRestaurantOrders(); else window.ShowCustomerOrders();
+                    if (restaurant) { session.AsOwner(); window.ShowRestaurantOrders(); }
+                    else { session.AsCustomer(); window.ShowCustomerOrders(); }
                     await Settle();
                     var filter = window.GetVisualDescendants().OfType<ComboBox>().Single();
                     Ensure(filter.Bounds.Width >= 280 && filter.Bounds.Width <= 360 && filter.FontSize >= 14,

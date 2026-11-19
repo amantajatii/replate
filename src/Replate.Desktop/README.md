@@ -13,14 +13,45 @@ dotnet restore Replate.slnx
 dotnet run --project src/Replate.Desktop
 ```
 
-Pilih **Jelajahi makanan** atau **Buka area restoran**. **Ganti area** kembali ke
-pemilihan area. Ini navigasi demonstrasi, bukan login atau pemeriksaan hak akses.
+Aplikasi dibuka di layar **Masuk**. Masuk dengan akun demo (lihat tabel di bawah)
+atau pilih **Daftar akun baru**. Layar Masuk dan Daftar memakai kolom kiri berlatar
+terang (sekitar 60% lebar) dan panel hijau penuh tinggi di kanan (sekitar 40%).
+Wordmark tetap di kiri atas, sedangkan satu kartu formulir di bawahnya dapat digulir
+vertikal. Foto piring `Assets/auth-hero.png` (tanpa teks) melintasi batas kedua kolom,
+sepertiga di atas latar terang dan dua pertiga di atas panel hijau, dan selalu
+berjarak minimal 24 dari kartu. Setiap kolom kata sandi memiliki tombol mata yang
+selalu terlihat untuk menampilkan atau menyembunyikan isi. Di Daftar, peran dipilih
+dengan dua tombol **Pelanggan** / **Pemilik restoran** (bisa juga dengan tombol panah),
+dan Jam buka serta Jam tutup dipilih dari daftar jam 00 sampai 23 dan menit 00 sampai
+59 (format 24 jam). Jika database belum tersambung, peringatan ringkas tampil di atas kartu Masuk. Pelanggan diarahkan ke marketplace, pemilik
+restoran ke dashboard restorannya. **Keluar** di navigasi pelanggan atau sidebar
+restoran mengakhiri sesi dan kembali ke layar Masuk. Halaman pelanggan hanya untuk
+pelanggan yang masuk; halaman restoran hanya untuk pemilik restoran tersebut. Peran
+yang tidak sesuai atau belum masuk diarahkan kembali ke layar Masuk.
+
+## Akun demo
+
+Autentikasi bersifat lokal tingkat prototype. Akun disimpan di `state.json` dengan
+kata sandi yang di-hash PBKDF2-HMAC-SHA256; kata sandi polos tidak disimpan. Sesi
+masuk tidak diingat antar peluncuran. Semua akun demo memakai kata sandi `replate123`.
+
+| Peran | Email | Restoran |
+| --- | --- | --- |
+| Pelanggan | `pelanggan@replate.demo` | — |
+| Pemilik restoran | `dapur-bumi@replate.demo` | Dapur Bumi |
+| Pemilik restoran | `warung-sambal-ijo@replate.demo` | Warung Sambal Ijo |
+| Pemilik restoran | `roti-pagi-kotabaru@replate.demo` | Roti Pagi Kotabaru |
+
+Restoran tanpa pemilik (misalnya hasil migrasi data versi 1) otomatis mendapat akun
+pemilik demo dengan email dari nama restoran, contoh `dapur-bumi@replate.demo`.
+Akun demo tidak digandakan dan tidak menimpa akun yang sudah ada.
 
 ## Halaman
 
 | Area | Halaman | Fungsi |
 | --- | --- | --- |
-| Awal | Pilih area | Memisahkan konteks pelanggan dan restoran |
+| Awal | Masuk | Kartu email dan kata sandi di samping foto; arah halaman mengikuti peran akun |
+| Awal | Daftar | Kartu akun pelanggan atau pemilik restoran beserta profil restoran, di samping foto |
 | Pelanggan | Marketplace | Cari, filter, lihat harga, stok, jadwal pengambilan |
 | Pelanggan | Detail makanan | Deskripsi, harga, jumlah porsi, tambah ke keranjang |
 | Pelanggan | Keranjang | Ubah jumlah, hapus item, periksa total, reservasi |
@@ -37,13 +68,19 @@ pemilihan area. Ini navigasi demonstrasi, bukan login atau pemeriksaan hak akses
 
 ## Alur demonstrasi
 
-1. Pelanggan memilih makanan, membuka keranjang, lalu **Reservasi pesanan**.
-2. Catat kode pengambilan di detail pesanan.
-3. **Ganti area** → **Buka area restoran** → **Pesanan** → **Lihat pesanan**.
+1. Di layar **Masuk**, masuk sebagai `pelanggan@replate.demo` / `replate123`.
+2. Pilih makanan, buka keranjang, lalu **Reservasi pesanan**. Catat kode
+   pengambilan di detail pesanan.
+3. **Keluar**, lalu masuk sebagai `dapur-bumi@replate.demo` / `replate123`
+   (atau pemilik restoran tempat makanan dipesan) → **Pesanan** → **Lihat pesanan**.
 4. Isi estimasi persiapan → **Konfirmasi pesanan** → **Tandai siap diambil**.
 5. Masukkan kode pelanggan → **Verifikasi dan selesaikan**.
 6. Pesanan menjadi selesai, porsi terselamatkan bertambah pada produksi menu,
    dan dashboard memperbarui pendapatan yang dipulihkan.
+
+Restoran baru: **Keluar** → **Daftar akun baru** → pilih **Pemilik restoran**, isi
+akun dan **Profil restoran** (untuk buka 24 jam, isi 00:00 sampai 23:59) → **Daftar**.
+Dashboard restoran baru masih kosong dan menawarkan **Tambah menu**.
 
 Untuk pasokan baru: **Menu** → **Tambah menu**, lalu **Produksi** → catat produksi
 serta penjualan reguler. Setelah itu buat **Penawaran surplus** dengan stok yang
@@ -66,7 +103,8 @@ belum dialokasikan. Prototipe memakai kategori makanan utama, roti & kue, vegeta
 - Berkas yang tidak dapat dibaca dipertahankan. Aplikasi menampilkan peringatan dan
   menolak perubahan agar berkas asli tidak tertimpa data baru.
 - Data lokal hanya untuk satu pengguna/satu aplikasi. Belum ada sinkronisasi antar
-  perangkat, koneksi PostgreSQL, autentikasi nyata, atau pembayaran.
+  perangkat, koneksi PostgreSQL untuk akun, atau pembayaran. Autentikasi memakai
+  akun lokal tingkat prototype, bukan autentikasi produksi.
 
 Dashboard menghitung rekomendasi dari rata-rata penjualan reguler pada periode
 terpilih ditambah buffer dua porsi, mengikuti model domain; bukan machine learning.
@@ -109,6 +147,15 @@ failure instead of terminating the desktop process.
 
 Pemeriksaan state memakai berkas sementara terisolasi: muat ulang keranjang/status,
 timestamp, stok, pickup salah/benar, pembatalan berulang, kapasitas surplus, tanggal,
-harga, menu nonaktif, kedaluwarsa, dan perlindungan berkas rusak. Pemeriksaan UI
+harga, menu nonaktif, kedaluwarsa, perlindungan berkas rusak, serta akun: pendaftaran,
+login, akun demo, isolasi antar pemilik, dan keranjang per pelanggan. Pemeriksaan UI
 membuka jendela native, menjalankan alur lintas area, menyimpan screenshot, lalu
-menutup otomatis. Kedua pemeriksaan tidak menggunakan berkas data aplikasi normal.
+menutup otomatis. Untuk layar Masuk dan Daftar, pemeriksaan UI juga memastikan pada
+1360 × 940, 1040 × 720, dan 1283 × 780: panel hijau selebar 40%, piring melintasi
+batas kolom (sekitar 1/3 dan 2/3) tanpa berpotongan dengan kartu (jarak minimal 24),
+wordmark tidak terpotong saat digulir, dan tidak ada gulir horizontal. Pemeriksaan
+juga mencakup judul tebal tanpa subjudul, tombol mata yang terlihat saat kolom kosong
+dan mengganti mode, tombol peran yang eksklusif dan bisa dipakai dengan keyboard,
+kolom jam yang menghasilkan `TimeOnly` 24 jam tanpa AM/PM, serta hover tombol.
+Langkah salin kode pengambilan memakai clipboard sistem dan gagal bila clipboard
+tidak tersedia di lingkungan pengujian. Kedua pemeriksaan tidak menggunakan berkas data aplikasi normal.

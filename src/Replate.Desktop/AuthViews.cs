@@ -1,0 +1,486 @@
+using Avalonia;
+using Avalonia.Automation;
+using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
+using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Shapes;
+using Path = Avalonia.Controls.Shapes.Path;
+using Avalonia.Controls.Templates;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Layout;
+using Avalonia.Media;
+using Avalonia.Media.Imaging;
+using Avalonia.Platform;
+using Avalonia.Styling;
+using Replate.Domain.Enums;
+using Replate.Domain.Services;
+
+namespace Replate.Desktop;
+
+internal sealed class AuthSurface : Grid
+{
+    internal const double CardWidth = 440;
+    internal const double MinCardWidth = 360;
+    internal const double MinPlate = 360;
+    internal const double PlateGap = 24;
+    internal const double PanelShare = 0.4;
+    internal const double Inset = 32;
+    internal const string RevealName = "Tampilkan kata sandi";
+    internal const string ConcealName = "Sembunyikan kata sandi";
+    internal static readonly Uri HeroUri = new("avares://Replate.Desktop/Assets/auth-hero.png");
+    internal static readonly Geometry EyeIcon = Geometry.Parse("M1,8 C3.5,3 12.5,3 15,8 C12.5,13 3.5,13 1,8 Z M8,5.5 A2.5,2.5 0 1 1 8,10.5 A2.5,2.5 0 1 1 8,5.5 Z");
+    internal static readonly Geometry EyeOffIcon = Geometry.Parse("M1,8 C3.5,3 12.5,3 15,8 C12.5,13 3.5,13 1,8 Z M8,5.5 A2.5,2.5 0 1 1 8,10.5 A2.5,2.5 0 1 1 8,5.5 Z M2,2 L14,14");
+    internal static readonly IBrush Selection = Brush.Parse("#E0E9DF");
+    internal static readonly IBrush Sidebar = Brush.Parse("#F1F3EE");
+    internal static readonly IBrush Divider = Brush.Parse("#DDE3DA");
+    private static readonly Lazy<Bitmap> HeroBitmap = new(() => { using var stream = AssetLoader.Open(HeroUri); return new Bitmap(stream); });
+    private static readonly IBrush WarningText = Brush.Parse("#7A4E00");
+    private static readonly ControlTheme PlainButton = Plain(typeof(Button));
+    private static readonly ControlTheme PlainRadio = Plain(typeof(RadioButton));
+
+    internal Border Card { get; }
+    internal Border HeroPanel { get; }
+    internal Canvas HeroLayer { get; }
+    internal Image Hero { get; }
+    internal TextBlock Wordmark { get; }
+    internal ScrollViewer FormScroll { get; }
+    internal Border? Warning { get; }
+    private readonly StackPanel column;
+
+    internal AuthSurface(Control cardContent, string? databaseError = null, Control? below = null)
+    {
+        ColumnDefinitions = ColumnDefinitions.Parse("3*,2*");
+        Card = new Border
+        {
+            Child = cardContent, Background = Brushes.White, CornerRadius = new CornerRadius(16),
+            Padding = new Thickness(32), BoxShadow = BoxShadows.Parse("0 8 24 0 #1F23382C")
+        };
+        column = Ui.Stack(16);
+        column.VerticalAlignment = VerticalAlignment.Center; column.HorizontalAlignment = HorizontalAlignment.Left;
+        if (databaseError is not null)
+        {
+            var detail = Ui.Text(databaseError, 12, WarningText);
+            detail.MaxLines = 2; detail.TextTrimming = TextTrimming.CharacterEllipsis;
+            Warning = new Border
+            {
+                Child = Ui.Stack(6, Ui.Text("Database belum tersambung. Pesanan belum dapat disimpan.", 13, WarningText, true), detail),
+                Background = Brush.Parse("#FFF4D6"), BorderBrush = Brush.Parse("#E5B94A"), BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(6), Padding = new Thickness(12)
+            };
+            ToolTip.SetTip(Warning, databaseError);
+            column.Children.Add(Warning);
+        }
+        column.Children.Add(Card);
+        if (below is not null) column.Children.Add(below);
+        Wordmark = Ui.Text("replate.", 36, Ui.Green, true);
+        Wordmark.HorizontalAlignment = HorizontalAlignment.Left; Wordmark.Margin = new Thickness(Inset, Inset, Inset, 0);
+        var content = new Border { Child = column, Padding = new Thickness(0, 24, 0, Inset) };
+        FormScroll = Ui.Scroll(content);
+        FormScroll.HorizontalAlignment = HorizontalAlignment.Left;
+        FormScroll.SizeChanged += (_, e) => content.MinHeight = e.NewSize.Height;
+        var left = new Grid { RowDefinitions = RowDefinitions.Parse("Auto,*") };
+        SetRow(FormScroll, 1);
+        left.Children.Add(Wordmark); left.Children.Add(FormScroll);
+        HeroPanel = new Border { Background = Ui.Green };
+        SetColumn(HeroPanel, 1);
+        Hero = new Image { Source = HeroBitmap.Value, Stretch = Stretch.Uniform };
+        HeroLayer = new Canvas { IsHitTestVisible = false, ClipToBounds = true, Children = { Hero } };
+        SetColumnSpan(HeroLayer, 2);
+        foreach (var decorative in new Control[] { Hero, HeroLayer, HeroPanel })
+            AutomationProperties.SetAccessibilityView(decorative, AccessibilityView.Raw);
+        Children.Add(left); Children.Add(HeroPanel); Children.Add(HeroLayer);
+        Styles.Add(Hover("auth-primary", Ui.Ink, Brushes.White));
+        Styles.Add(Hover("auth-secondary", Selection, Ui.Green));
+        AddStateStyles();
+    }
+
+    // Layout
+    private Size measuredFor;
+    protected override Size MeasureOverride(Size availableSize)
+    {
+        measuredFor = availableSize;
+        Place(availableSize);
+        return base.MeasureOverride(availableSize);
+    }
+    protected override Size ArrangeOverride(Size finalSize)
+    {
+        if (finalSize != measuredFor) MeasureOverride(finalSize);
+        return base.ArrangeOverride(finalSize);
+    }
+
+    private void Place(Size size)
+    {
+        if (!double.IsFinite(size.Width) || !double.IsFinite(size.Height)) return;
+        var leftWidth = size.Width * (1 - PanelShare);
+        var plate = Math.Min(Math.Max(MinPlate, size.Height * 0.6), Math.Min(size.Height, size.Width * PanelShare * 1.5));
+        plate = Math.Max(0, Math.Min(plate, 3 * (leftWidth - Inset - MinCardWidth - PlateGap)));
+        var plateX = leftWidth - plate / 3;
+        var space = plateX - PlateGap - Inset;
+        var cardWidth = Math.Clamp(space, MinCardWidth, CardWidth);
+        FormScroll.Width = Math.Max(0, plateX);
+        column.Width = cardWidth;
+        column.Margin = new Thickness(Inset + Math.Max(0, space - cardWidth) / 2, 0, 0, 0);
+        Hero.Width = plate; Hero.Height = plate;
+        Canvas.SetLeft(Hero, plateX); Canvas.SetTop(Hero, (size.Height - plate) / 2);
+    }
+
+    // States
+    private static ControlTheme Plain(Type type) => new(type)
+    {
+        Setters =
+        {
+            new Setter(TemplatedControl.TemplateProperty, new FuncControlTemplate<ContentControl>((control, _) => new Border
+            {
+                [!Border.BackgroundProperty] = control[!TemplatedControl.BackgroundProperty],
+                [!Border.BorderBrushProperty] = control[!TemplatedControl.BorderBrushProperty],
+                [!Border.BorderThicknessProperty] = control[!TemplatedControl.BorderThicknessProperty],
+                [!Border.CornerRadiusProperty] = control[!TemplatedControl.CornerRadiusProperty],
+                [!Border.PaddingProperty] = control[!TemplatedControl.PaddingProperty],
+                Child = new ContentPresenter
+                {
+                    Name = "PART_ContentPresenter",
+                    [!ContentPresenter.ContentProperty] = control[!ContentControl.ContentProperty],
+                    [!ContentPresenter.ForegroundProperty] = control[!TemplatedControl.ForegroundProperty],
+                    HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center
+                }
+            }))
+        }
+    };
+
+    private static Style State<T>(string kind, Func<Selector, Selector> state, IBrush? background, IBrush? foreground, IBrush? border = null) where T : TemplatedControl
+    {
+        var style = new Style(x => state(x.OfType<T>().Class(kind)));
+        if (background is not null) style.Setters.Add(new Setter(TemplatedControl.BackgroundProperty, background));
+        if (foreground is not null) style.Setters.Add(new Setter(TemplatedControl.ForegroundProperty, foreground));
+        if (border is not null) style.Setters.Add(new Setter(TemplatedControl.BorderBrushProperty, border));
+        return style;
+    }
+
+    private void AddStateStyles()
+    {
+        Styles.Add(State<Button>("password-toggle", x => x, Brushes.Transparent, Ui.Ink, Brushes.Transparent));
+        Styles.Add(State<Button>("password-toggle", x => x.Class(":pointerover"), Selection, Ui.Green));
+        Styles.Add(State<Button>("password-toggle", x => x.Class(":pressed"), Divider, Ui.Green));
+        Styles.Add(State<Button>("password-toggle", x => x.Class(":focus-visible"), null, null, Ui.Green));
+        Styles.Add(State<RadioButton>("role-button", x => x, Sidebar, Ui.Ink, Brushes.Transparent));
+        Styles.Add(State<RadioButton>("role-button", x => x.Class(":pointerover").Not(y => y.Class(":checked")), Selection, Ui.Green));
+        Styles.Add(State<RadioButton>("role-button", x => x.Class(":checked"), Ui.Green, Brushes.White));
+        Styles.Add(State<RadioButton>("role-button", x => x.Class(":checked").Class(":pointerover"), Ui.Ink, Brushes.White));
+        Styles.Add(State<RadioButton>("role-button", x => x.Class(":focus-visible"), null, null, Ui.Ink));
+    }
+
+    private static Style Hover(string kind, IBrush background, IBrush foreground) =>
+        new(x => x.OfType<Button>().Class(kind).Class(":pointerover").Not(y => y.Class(":pressed"))
+            .Template().OfType<ContentPresenter>().Name("PART_ContentPresenter"))
+        {
+            Setters = { new Setter(ContentPresenter.BackgroundProperty, background), new Setter(ContentPresenter.ForegroundProperty, foreground) }
+        };
+
+    // Controls
+    internal static TextBlock Title(string text)
+    {
+        var title = Ui.Text(text, 28);
+        title.FontWeight = FontWeight.Bold;
+        return title;
+    }
+
+    internal static Button Action(string text, Action action, bool primary)
+    {
+        var button = Ui.Button(text, action, primary);
+        button.Classes.Add(primary ? "auth-primary" : "auth-secondary");
+        button.HorizontalAlignment = HorizontalAlignment.Stretch;
+        button.HorizontalContentAlignment = HorizontalAlignment.Center;
+        return button;
+    }
+
+    internal static TextBox Password()
+    {
+        var input = Ui.Input();
+        input.TextWrapping = TextWrapping.NoWrap;
+        var icon = new Path
+        {
+            Data = EyeIcon, Width = 16, Height = 16, StrokeThickness = 1.5,
+            StrokeLineCap = PenLineCap.Round, StrokeJoin = PenLineJoin.Round
+        };
+        var toggle = new Button
+        {
+            Theme = PlainButton, Content = icon, Width = 32, Height = 32, Padding = default, Margin = new Thickness(0, 0, 4, 0),
+            CornerRadius = new CornerRadius(6), BorderThickness = new Thickness(2), VerticalAlignment = VerticalAlignment.Center,
+            Cursor = new Cursor(StandardCursorType.Hand)
+        };
+        toggle.Classes.Add("password-toggle");
+        icon[!Shape.StrokeProperty] = toggle[!TemplatedControl.ForegroundProperty];
+        toggle.Click += (_, _) => SetRevealed(input, input.PasswordChar != default);
+        input.InnerRightContent = toggle;
+        SetRevealed(input, false);
+        return input;
+    }
+
+    internal static Button RevealToggle(TextBox input) => (Button)input.InnerRightContent!;
+
+    internal static void SetRevealed(TextBox input, bool revealed)
+    {
+        input.PasswordChar = revealed ? default : '•';
+        var toggle = RevealToggle(input);
+        ((Path)toggle.Content!).Data = revealed ? EyeOffIcon : EyeIcon;
+        AutomationProperties.SetName(toggle, revealed ? ConcealName : RevealName);
+    }
+
+    internal static void ClearPassword(TextBox input)
+    {
+        input.Text = "";
+        SetRevealed(input, false);
+    }
+
+    internal static RadioButton RoleOption(string text, string group, bool isChecked = false)
+    {
+        var option = new RadioButton
+        {
+            Theme = PlainRadio, Content = text, GroupName = group, IsChecked = isChecked,
+            HorizontalAlignment = HorizontalAlignment.Stretch, Padding = new Thickness(16, 11), BorderThickness = new Thickness(2),
+            CornerRadius = new CornerRadius(6), FontSize = 13, FontWeight = FontWeight.SemiBold,
+            Cursor = new Cursor(StandardCursorType.Hand)
+        };
+        option.Classes.Add("role-button");
+        AutomationProperties.SetName(option, text);
+        return option;
+    }
+
+    internal static Grid RoleGroup(params RadioButton[] options)
+    {
+        var group = Ui.Columns(string.Join(',', options.Select(_ => "*")), options);
+        group.ColumnSpacing = 12;
+        group.AddHandler(KeyDownEvent, (_, e) =>
+        {
+            var step = e.Key switch { Key.Left or Key.Up => -1, Key.Right or Key.Down => 1, _ => 0 };
+            var current = Array.IndexOf(options, e.Source as RadioButton);
+            if (step == 0 || current < 0) return;
+            var next = options[(current + step + options.Length) % options.Length];
+            next.IsChecked = true; next.Focus(NavigationMethod.Directional);
+            e.Handled = true;
+        }, RoutingStrategies.Tunnel);
+        return group;
+    }
+
+    internal static void SubmitOnEnter(Action submit, params TextBox[] inputs)
+    {
+        foreach (var input in inputs)
+            input.AddHandler(KeyDownEvent, (_, e) =>
+            {
+                if (e.Key != Key.Enter) return;
+                e.Handled = true;
+                submit();
+            }, RoutingStrategies.Tunnel);
+    }
+}
+
+internal sealed class TimeField : Border
+{
+    internal ComboBox Hour { get; }
+    internal ComboBox Minute { get; }
+    internal event Action? ValueChanged;
+
+    internal TimeField(string label)
+    {
+        Hour = Part(24, $"{label}, jam");
+        Minute = Part(60, $"{label}, menit");
+        Background = Brushes.White; BorderThickness = new Thickness(1); CornerRadius = new CornerRadius(21);
+        MinHeight = 42; Padding = new Thickness(8, 0);
+        this.Bind(BorderBrushProperty, this.GetResourceObservable("TextControlBorderBrush"));
+        var colon = Ui.Text(":", 14, bold: true);
+        Child = Ui.Row(6, Hour, colon, Minute);
+        Hour.SelectionChanged += (_, _) =>
+        {
+            if (Hour.SelectedIndex >= 0 && Minute.SelectedIndex < 0) Minute.SelectedIndex = 0;
+            ValueChanged?.Invoke();
+        };
+        Minute.SelectionChanged += (_, _) => ValueChanged?.Invoke();
+    }
+
+    internal TimeOnly? Value
+    {
+        get => Hour.SelectedIndex >= 0 && Minute.SelectedIndex >= 0 ? new TimeOnly(Hour.SelectedIndex, Minute.SelectedIndex) : null;
+        set { Hour.SelectedIndex = value?.Hour ?? -1; Minute.SelectedIndex = value?.Minute ?? -1; }
+    }
+
+    private static ComboBox Part(int count, string name)
+    {
+        var box = new ComboBox
+        {
+            ItemsSource = Enumerable.Range(0, count).Select(i => i.ToString("00")).ToList(), PlaceholderText = "--",
+            Background = Brushes.Transparent, BorderThickness = default, CornerRadius = new CornerRadius(6),
+            MinWidth = 64, VerticalAlignment = VerticalAlignment.Center
+        };
+        AutomationProperties.SetName(box, name);
+        return box;
+    }
+}
+
+public sealed class SignInView : UserControl
+{
+    internal TextBox EmailInput { get; }
+    internal TextBox PasswordInput { get; }
+    internal Button SignInButton { get; }
+    internal Button RegisterButton { get; }
+    internal TextBlock TitleText { get; } = AuthSurface.Title("Masuk");
+    internal TextBlock ErrorText { get; } = Ui.Text("", 14, Brush.Parse("#963E28"));
+    internal AuthSurface Surface { get; }
+
+    internal SignInView(MainWindow host, DemoSession session, string? startupError)
+    {
+        ErrorText.IsVisible = false;
+        EmailInput = Ui.Input();
+        PasswordInput = AuthSurface.Password();
+        void Submit()
+        {
+            var email = EmailInput.Text ?? "";
+            var password = PasswordInput.Text ?? "";
+            AuthSurface.ClearPassword(PasswordInput);
+            host.Run(() => session.SignIn(email, password), host.ShowHome, onError: message =>
+            {
+                ErrorText.Text = message; ErrorText.IsVisible = true;
+                PasswordInput.Focus();
+            });
+        }
+        AuthSurface.SubmitOnEnter(Submit, PasswordInput);
+        SignInButton = AuthSurface.Action("Masuk", Submit, true);
+        RegisterButton = AuthSurface.Action("Daftar akun baru", host.ShowRegister, false);
+        var card = Ui.Stack(20, TitleText, ErrorText,
+            Ui.Field("Email", EmailInput), Ui.Field("Kata sandi", PasswordInput),
+            Ui.Stack(12, SignInButton, RegisterButton));
+        var demo = Ui.Text("Akun demo: pelanggan@replate.demo atau dapur-bumi@replate.demo, kata sandi replate123.", 12, Ui.Muted);
+        Surface = new AuthSurface(card, startupError, demo);
+        Content = Surface;
+        Loaded += (_, _) => EmailInput.Focus();
+    }
+}
+
+public sealed class RegisterView : UserControl
+{
+    internal RadioButton CustomerOption { get; }
+    internal RadioButton OwnerOption { get; }
+    internal Grid RoleGroup { get; }
+    internal TextBox NameInput { get; }
+    internal TextBox EmailInput { get; }
+    internal TextBox PasswordInput { get; }
+    internal TextBox ConfirmPasswordInput { get; }
+    internal TextBox RestaurantNameInput { get; }
+    internal TextBox AddressInput { get; }
+    internal TextBox PhoneInput { get; }
+    internal TextBox DescriptionInput { get; }
+    internal TimeField OpeningInput { get; }
+    internal TimeField ClosingInput { get; }
+    internal StackPanel ProfileSection { get; }
+    internal Button RegisterButton { get; }
+    internal Button BackButton { get; }
+    internal TextBlock TitleText { get; } = AuthSurface.Title("Daftar akun");
+    internal TextBlock ErrorText { get; } = Ui.Text("", 14, Brush.Parse("#963E28"));
+    internal Dictionary<string, TextBlock> FieldErrors { get; } = new();
+    internal AuthSurface Surface { get; }
+
+    internal RegisterView(MainWindow host, DemoSession session)
+    {
+        ErrorText.IsVisible = false;
+        CustomerOption = AuthSurface.RoleOption("Pelanggan", "register-role", true);
+        OwnerOption = AuthSurface.RoleOption("Pemilik restoran", "register-role");
+        RoleGroup = AuthSurface.RoleGroup(CustomerOption, OwnerOption);
+        AutomationProperties.SetName(RoleGroup, "Daftar sebagai");
+        NameInput = Ui.Input(); EmailInput = Ui.Input();
+        PasswordInput = AuthSurface.Password(); ConfirmPasswordInput = AuthSurface.Password();
+        RestaurantNameInput = Ui.Input(); AddressInput = Ui.Input(); PhoneInput = Ui.Input();
+        DescriptionInput = Ui.Input("", true);
+        OpeningInput = new TimeField("Jam buka");
+        ClosingInput = new TimeField("Jam tutup");
+        var inputs = new Dictionary<string, Control>
+        {
+            ["name"] = NameInput, ["email"] = EmailInput, ["password"] = PasswordInput, ["confirmPassword"] = ConfirmPasswordInput,
+            ["restaurantName"] = RestaurantNameInput, ["address"] = AddressInput, ["phone"] = PhoneInput,
+            ["description"] = DescriptionInput, ["openingTime"] = OpeningInput, ["closingTime"] = ClosingInput
+        };
+        var outlines = new Dictionary<string, Border>();
+        var red = Brush.Parse("#B3261E");
+        var attempted = false;
+        Control Field(string key, string label)
+        {
+            inputs[key].HorizontalAlignment = HorizontalAlignment.Stretch;
+            var error = Ui.FieldError(); error.IsVisible = false;
+            FieldErrors[key] = error;
+            var outline = new Border { Child = inputs[key], CornerRadius = new CornerRadius(inputs[key] is TimeField ? 22 : 6),
+                BorderThickness = new Thickness(1), BorderBrush = Brushes.Transparent };
+            outlines[key] = outline;
+            AutomationProperties.SetName(inputs[key], label);
+            return Ui.Stack(8, Ui.Text(label, 14, bold: true), outline, error);
+        }
+        bool IsOwner() => OwnerOption.IsChecked == true;
+        RestaurantProfile Profile() => new(RestaurantNameInput.Text ?? "", AddressInput.Text ?? "", PhoneInput.Text ?? "",
+            OpeningInput.Value, ClosingInput.Value, DescriptionInput.Text ?? "");
+        Dictionary<string, string> Errors()
+        {
+            var password = PasswordInput.Text ?? "";
+            var errors = session.ValidateRegistration(IsOwner() ? UserRole.RestaurantOwner : UserRole.Customer,
+                NameInput.Text ?? "", EmailInput.Text ?? "", password, IsOwner() ? Profile() : null);
+            var confirm = ConfirmPasswordInput.Text ?? "";
+            if (confirm.Length == 0) { if (password.Length > 0) errors["confirmPassword"] = "Ulangi kata sandi wajib diisi."; }
+            else if (confirm != password) errors["confirmPassword"] = "Kata sandi tidak sama.";
+            return errors;
+        }
+        void Display(Dictionary<string, string> errors)
+        {
+            foreach (var pair in inputs)
+            {
+                var invalid = errors.TryGetValue(pair.Key, out var message);
+                FieldErrors[pair.Key].Text = message ?? "";
+                FieldErrors[pair.Key].IsVisible = invalid;
+                outlines[pair.Key].BorderBrush = invalid ? red : Brushes.Transparent;
+                AutomationProperties.SetHelpText(pair.Value, message ?? "");
+            }
+        }
+        void Revalidate() { if (attempted) Display(Errors()); }
+        void Submit()
+        {
+            attempted = true;
+            ErrorText.IsVisible = false;
+            AuthSurface.SetRevealed(PasswordInput, false); AuthSurface.SetRevealed(ConfirmPasswordInput, false);
+            var errors = Errors(); Display(errors);
+            if (errors.Count > 0)
+            {
+                var first = inputs.First(p => errors.ContainsKey(p.Key)).Value;
+                first.BringIntoView(); (first is TimeField time ? time.Hour : first).Focus();
+                return;
+            }
+            var owner = IsOwner();
+            var email = EmailInput.Text ?? "";
+            var password = PasswordInput.Text ?? "";
+            var profile = owner ? Profile() : null;
+            AuthSurface.ClearPassword(PasswordInput); AuthSurface.ClearPassword(ConfirmPasswordInput);
+            host.Run(() =>
+            {
+                session.Register(owner ? UserRole.RestaurantOwner : UserRole.Customer, NameInput.Text ?? "", email, password, profile);
+                session.SignIn(email, password);
+            }, host.ShowHome, "Akun berhasil dibuat.", message => { ErrorText.Text = message; ErrorText.IsVisible = true; ErrorText.BringIntoView(); });
+        }
+        AuthSurface.SubmitOnEnter(Submit, NameInput, EmailInput, PasswordInput, ConfirmPasswordInput, RestaurantNameInput, AddressInput, PhoneInput);
+        RegisterButton = AuthSurface.Action("Daftar", Submit, true);
+        BackButton = AuthSurface.Action("Kembali ke masuk", host.ShowSignIn, false);
+        var hours = Ui.Columns("*,*", Field("openingTime", "Jam buka"), Field("closingTime", "Jam tutup"));
+        hours.ColumnSpacing = 16;
+        ProfileSection = Ui.Stack(20, Ui.Text("Profil restoran", 20, bold: true),
+            Field("restaurantName", "Nama restoran"), Field("address", "Alamat"), Field("phone", "Telepon"),
+            Field("description", "Deskripsi"), hours,
+            Ui.SupportingText("Untuk buka 24 jam, isi 00:00 sampai 23:59."));
+        ProfileSection.IsVisible = false;
+        var card = Ui.Stack(20, TitleText,
+            ErrorText, Ui.Stack(8, Ui.Text("Daftar sebagai", 14, bold: true), RoleGroup),
+            Field("name", "Nama"), Field("email", "Email"), Field("password", "Kata sandi"), Field("confirmPassword", "Ulangi kata sandi"),
+            ProfileSection, Ui.Stack(12, RegisterButton, BackButton));
+        OwnerOption.IsCheckedChanged += (_, _) => { ProfileSection.IsVisible = IsOwner(); Revalidate(); };
+        foreach (var pair in inputs)
+            pair.Value.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty) Revalidate(); };
+        OpeningInput.ValueChanged += Revalidate;
+        ClosingInput.ValueChanged += Revalidate;
+        Surface = new AuthSurface(card);
+        Content = Surface;
+        Loaded += (_, _) => NameInput.Focus();
+    }
+}

@@ -17,7 +17,7 @@ internal static class DashboardVerification
         void Ensure(bool ok, string message) { if (!ok) throw new InvalidOperationException(message); }
         async Task Settle() => await Task.Delay(350);
         var culture = CultureInfo.GetCultureInfo("id-ID");
-        var session = new DemoSession(); // Only isolated in-memory demonstration data.
+        var session = new DemoSession().AsOwner(); // Only isolated in-memory demonstration data.
         // Pending revenue must never enter the recovered-revenue card.
         session.Restaurant.Orders.Add(new Replate.Domain.Entities.Order { TotalPrice = 999999999, OrderedAt = DateTime.UtcNow });
         var window = new MainWindow(session) { Width = 1600, Height = 940 };
@@ -41,8 +41,9 @@ internal static class DashboardVerification
                     rescued.ToString("N0", culture) + " porsi", DemoSession.Rupiah(revenue) };
                 Ensure(Values(view).SequenceEqual(expected), "All four cards follow selected period and completed revenue only");
                 var supporting = view.SummaryCards.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToList();
-                Ensure(supporting.Contains((produced == 0 ? 0 : (decimal)surplus / produced * 100).ToString("0.0", culture) + "% dari total produksi") &&
-                    supporting.Contains((surplus == 0 ? 0 : (decimal)rescued / surplus * 100).ToString("0.0", culture) + "% dari surplus"), "Percentages retained with zero-safe calculations");
+                Ensure(supporting.Contains(produced == 0 ? "Belum ada produksi pada periode ini" : ((decimal)surplus / produced * 100).ToString("0.0", culture) + "% dari total produksi") &&
+                    supporting.Contains(surplus == 0 ? "Belum ada surplus pada periode ini" : ((decimal)rescued / surplus * 100).ToString("0.0", culture) + "% dari surplus"),
+                    "Percentages retained; zero denominators show a message instead of a percentage");
                 Ensure(view.GetVisualDescendants().OfType<TextBlock>().Count(t => t.Text == "Total Produksi") == 1 &&
                     view.GetVisualDescendants().OfType<TextBlock>().Count(t => t.Text == "Pendapatan Dipulihkan") == 1, "Summary is not duplicated");
                 Ensure(view.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == "Surplus per menu") &&

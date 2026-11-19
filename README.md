@@ -41,7 +41,9 @@ mengonfirmasi pesanan, serta memverifikasi kode pengambilan. Dashboard menampilk
 analisis surplus dan rekomendasi produksi berdasarkan model domain yang ada.
 
 Data awal merupakan **contoh lokal**, dengan perubahan tersimpan otomatis di JSON.
-Belum terhubung ke PostgreSQL, autentikasi nyata, atau pembayaran. Lihat
+Akun memakai autentikasi lokal tingkat prototype: kata sandi di-hash dengan PBKDF2
+dan disimpan di JSON lokal, bukan autentikasi produksi. Belum terhubung ke
+PostgreSQL untuk akun atau pembayaran. Lihat
 [panduan, alur demonstrasi, dan screenshot](./src/Replate.Desktop/README.md).
 
 # REPLATE TEAM

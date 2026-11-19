@@ -20,8 +20,34 @@ internal static class UiVerification
             Directory.CreateDirectory(output);
             async Task Shot(string name) { await Settle(); Capture(window, Path.Combine(output, name + ".png")); }
             void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            await Shot("entry");
-            window.ShowMarketplace(); await Shot("marketplace");
+            Ensure(window.CurrentPage is SignInView && !window.Session.IsSignedIn, "Startup shows sign-in");
+            var startSignIn = (SignInView)window.CurrentPage!;
+            await AuthVerification.CheckSurface(window, startSignIn.Surface, "Masuk");
+            Ensure(window.FocusManager?.GetFocusedElement() == startSignIn.EmailInput, "Startup focus is Email");
+            AuthVerification.CheckTitle(startSignIn.TitleText, "Masuk", "Masuk");
+            await AuthVerification.CheckReveal(startSignIn.PasswordInput, "Masuk");
+            await Shot("sign-in");
+            Click(startSignIn.RegisterButton); await Settle();
+            var startRegister = window.CurrentPage as RegisterView ?? throw new InvalidOperationException("Daftar akun baru opens registration");
+            await AuthVerification.CheckSurface(window, startRegister.Surface, "Daftar");
+            startRegister.OwnerOption.IsChecked = true;
+            await AuthVerification.CheckSurface(window, startRegister.Surface, "Daftar pemilik");
+            await AuthVerification.CheckTimeFields(startRegister);
+            await AuthVerification.CheckRoles(startRegister);
+            startRegister.OwnerOption.IsChecked = true;
+            await Shot("register-owner");
+            Click(startRegister.BackButton); await Settle();
+            Ensure(window.CurrentPage is SignInView, "Kembali ke masuk returns to sign-in");
+            async Task SignInWithForm(string email)
+            {
+                var signIn = (SignInView)window.CurrentPage!;
+                signIn.EmailInput.Text = email; signIn.PasswordInput.Text = DemoAccounts.Password;
+                Click(signIn.SignInButton); await Settle();
+            }
+            Button ShellButton(string text) => window.GetVisualDescendants().OfType<Button>().Single(b => b.Content as string == text);
+            await SignInWithForm(DemoAccounts.CustomerEmail);
+            Ensure(window.Session.CurrentUser?.Email == DemoAccounts.CustomerEmail && window.CurrentPage is MarketplaceView, "Customer sign-in opens marketplace");
+            await Shot("marketplace");
             var market = window.Marketplace;
             Ensure(market.VisibleCount == 10, "Initial listings from all restaurants");
             market.SearchBox.Text = "croissant"; await Settle(); Ensure(market.VisibleCount == 1, "Search");
@@ -43,7 +69,12 @@ internal static class UiVerification
             await Shot("reservation");
             var order = window.Session.LastOrder!;
             window.ShowCustomerOrders(); await Shot("customer-orders");
-            window.ShowDashboard(); await Shot("dashboard");
+            Click(ShellButton("Keluar")); await Settle();
+            Ensure(window.CurrentPage is SignInView && !window.Session.IsSignedIn, "Keluar returns to sign-in");
+            await SignInWithForm(DemoAccounts.OwnerEmail("Dapur Bumi"));
+            Ensure(window.Session.CurrentUser is Replate.Domain.Entities.RestaurantOwner && window.Session.Restaurant.Name == "Dapur Bumi" &&
+                window.CurrentPage is DashboardView, "Owner sign-in opens Dapur Bumi dashboard");
+            await Shot("dashboard");
             window.ShowMenus(); await Shot("menus");
             window.ShowMenuEditor(); await Shot("menu-editor");
             var editor = (MenuEditorView)window.CurrentPage!;
@@ -99,6 +130,7 @@ internal static class UiVerification
             Ensure(order.Status == Replate.Domain.Enums.OrderStatus.Completed, "Cross-role pickup flow");
             await Shot("pickup-completed");
             var cancellationListing = window.Session.Listings[1];
+            window.Session.AsCustomer();
             window.Session.AddToCart(cancellationListing, 1);
             var cancelledOrder = window.Session.Checkout();
             var reservedStock = cancellationListing.Quantity;
@@ -124,6 +156,7 @@ internal static class UiVerification
             Ensure(window.SuccessMessage == "Pesanan berhasil dibatalkan.", "Cancellation notification survives navigation");
             await Task.Delay(4200);
             Ensure(window.SuccessMessage is null, "Cancellation notification expires");
+            window.Session.AsOwner();
             window.ShowMenus(); await Settle();
             Ensure(window.GetVisualDescendants().OfType<Button>().Any(b => b.Content as string == "Hapus"), "Menu delete action exists");
             var deletion = MenuDeletionDialog.Show(window, window.Session, savedMenu); await Settle();
@@ -162,7 +195,9 @@ internal static class UiVerification
             await Shot("menu-deletion-rejected");
             dialog.Close(); await deletion;
             window.Width = 1040; window.Height = 720;
+            window.Session.AsCustomer();
             window.ShowMarketplace(); await Shot("marketplace-compact");
+            window.Session.AsOwner();
             window.ShowDashboard(); await Shot("dashboard-compact");
             window.ShowListingEditor(); await Shot("listing-editor-compact");
             window.ShowProduction(); await Shot("production-compact");
@@ -173,6 +208,8 @@ internal static class UiVerification
             await FormLayoutVerification.Run(output);
             await PickupCopyVerification.Run(output);
             await OrdersEmptyVerification.Run(output);
+            await AuthVerification.Run(output);
+            await AuthVerification.CheckSizes(window, output);
             Console.WriteLine($"All Replate desktop UI checks passed. Screenshots: {output}"); desktop.Shutdown();
         }
         catch (Exception exception) { Console.Error.WriteLine(exception); desktop.Shutdown(1); }
