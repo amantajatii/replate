@@ -23,6 +23,19 @@ app; no comp or concept seed: this is a specified extension, not new identity wo
 Desktop 1360x940; compact desktop 1040x720; native scrolling when needed. Inputs have
 visible labels and semantic automation names. Empty/error states preserve recovery.
 
+TEXT INPUTS (every screen): one shared app-level rule (`Ui.UseInputs`) gives every
+single-line TextBox, including the one inside NumericUpDown, VerticalContentAlignment
+Center and padding 10, 5.5, 6, 5.5 (top equals bottom), so typed text, placeholder,
+password dots and the password-toggle share the field's vertical center (within 1 px).
+Multiline TextBoxes (AcceptsReturn, e.g. Deskripsi) use VerticalContentAlignment Top
+and padding 10, 10, 6, 5.5 (top equals left); text and placeholder start at the top
+padding (within 1 px). Field heights stay 42 (multiline 88, marketplace search 44). Every TextBox has an Indonesian
+PlaceholderText, "Masukkan ..." where it fits (search: "Cari menu atau restoran"), no
+em dash and no exclamation mark. Placeholder color is `muted` (#59675D) at full
+opacity (the Fluent 0.5 placeholder opacity is reset to 1); it disappears once the
+field has content, with no other effect. `--verify-ui` (InputVerification) checks every
+visible TextBox on each captured screen and on the auth surface at all four sizes.
+
 Quality bar: quiet, useful desktop UI. No glyph icons or marketing hero. Tables align
 numeric columns; focus and disabled states use native affordances. Preserve domain
 rules, action outcomes, local data visibility and realistic persistence boundaries.
@@ -61,10 +74,15 @@ AUTH SURFACE (Masuk and Daftar, implemented in `AuthViews.cs` as `AuthSurface`):
   (#245B43) panel, full height. The first column width is set in pixels from the
   plate position (`AuthSurface.Layout`); the panel is about 28% of the width.
 - Left column: canvas background. The wordmark replate. sits at the top (inset 32),
-  left-aligned with the card, outside the scroll area, so it is never clipped while
-  scrolling. Below it a
-  ScrollViewer scrolls vertically only (the owner registration form is taller than
-  720); it ends where the plate begins.
+  left-aligned with the card, on a `canvas` band drawn above the scroll area. Below it
+  a clip Border (ClipToBounds, from x 0 to plate left) holds the ScrollViewer, which
+  scrolls vertically only (the owner registration form is taller than 720), so no
+  scrolled content shows under the wordmark. The ScrollViewer starts 24 left of the
+  card (inner padding for the shadow) and is 24 + card + 16 + 6 wide: the 6-wide
+  scrollbar sits 16 beside the card's right edge. Its ScrollContentPresenter does not
+  clip, so the card shadow is clipped only by the clip Border (at least 24 clear on
+  both sides). The scrollbar stays at least 24 from the plate box. Wheel input over
+  the empty canvas beside the form also scrolls it.
 - Plate: `Assets/auth-hero.png` (1080x1080, transparent round cut-out) is loaded
   through `avares://Replate.Desktop/Assets/auth-hero.png` into a Canvas overlay that
   spans both columns, does not scroll and is not hit-testable. Centered vertically.
@@ -75,7 +93,8 @@ AUTH SURFACE (Masuk and Daftar, implemented in `AuthViews.cs` as `AuthSurface`):
   0.72 x width; plate left = B - D/2; card left L = max(48, 0.12 x width); target
   gap G = 0.08 x width; card = min(440, plate left - G - L), minimum 360, and the
   gap takes whatever the 440 card leaves (wide on large windows). If the card would
-  be under 360, G shrinks first (minimum 24), then L (minimum 48), then B moves
+  be under 360, G shrinks first (minimum 46 = scrollbar gap 16 + scrollbar 6 + 24;
+  reached only on narrow tall windows such as 1040x1080), then L (minimum 48), then B moves
   right, then D shrinks (minimum 320). The scroll area ends at plate left. The wordmark, the warning and the demo-account
   line share L, and the warning and demo line share the card width.
 - Card: white surface, `rounded.card` (16), `elevation.card` shadow
@@ -89,10 +108,12 @@ AUTH SURFACE (Masuk and Daftar, implemented in `AuthViews.cs` as `AuthSurface`):
   spans it below. No Google sign-in, Ingat saya, or Lupa kata sandi.
 - Titles Masuk and Daftar akun: 28, bold (`auth-title`).
 - Kata sandi fields (Masuk, Kata sandi and Ulangi kata sandi on Daftar): a custom
-  32x32 password-toggle button inside the field, always visible, including when the
-  field is empty. Eye and crossed-eye icons are Path geometry. Default ink icon;
-  hover selection fill with primary icon; pressed divider fill; keyboard focus 2 px
-  primary ring. Pressing it switches PasswordChar; its automation name switches
+  20x20 password-toggle button (16 icon, same 32 footprint via margin) inside the
+  field, always visible, including when the field is empty. Eye and crossed-eye icons
+  are Path geometry. Default ink icon, transparent, no border; hover (pointer over the
+  icon only) turns the icon `leaf` (#4FA37E) with no fill, border or transition, and
+  it returns to ink on leave; no pressed fill. Keyboard focus (Tab from the field) 2 px
+  primary ring; Enter or Space toggles, and Enter on the toggle does not submit. Pressing it switches PasswordChar; its automation name switches
   between "Tampilkan kata sandi" and "Sembunyikan kata sandi". The native Fluent
   `revealPasswordButton` is not used.
 - Daftar sebagai: two RadioButtons in one group, styled as role-buttons of equal
@@ -122,4 +143,6 @@ AUTH SURFACE (Masuk and Daftar, implemented in `AuthViews.cs` as `AuthSurface`):
   buttons change to selection background with primary text. Pressed, focus and
   disabled states of those two remain native Fluent. No blur, glow, gradients or
   animation.
-- Verified at 1360x940, 1040x720, 1283x780 and 1920x1080 by `--verify-ui` (AuthVerification).
+- Verified at 1360x940, 1040x720, 1283x780 and 1920x1080 by `--verify-ui` (AuthVerification):
+  scrollbar within 24 of the card's right edge and not over it, scrollbar at least 24
+  from the plate, shadow room, clean wordmark band, toggle hover color and keyboard.

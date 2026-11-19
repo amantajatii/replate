@@ -33,6 +33,9 @@ internal sealed class AuthSurface : Grid
     internal const double MinMargin = 48;
     internal const double Inset = 32;
     internal const double ScrollBarWidth = 6;
+    internal const double ScrollGap = 16;
+    internal const double ShadowPad = 24;
+    internal const double ClearGap = PlateGap + ScrollBarWidth + ScrollGap;
     internal const string ScrollingClass = "auth-scrolling";
     internal const string RevealName = "Tampilkan kata sandi";
     internal const string ConcealName = "Sembunyikan kata sandi";
@@ -41,7 +44,8 @@ internal sealed class AuthSurface : Grid
     internal static readonly Geometry EyeOffIcon = Geometry.Parse("M1,8 C3.5,3 12.5,3 15,8 C12.5,13 3.5,13 1,8 Z M8,5.5 A2.5,2.5 0 1 1 8,10.5 A2.5,2.5 0 1 1 8,5.5 Z M2,2 L14,14");
     internal static readonly IBrush Selection = Brush.Parse("#E0E9DF");
     internal static readonly IBrush Sidebar = Brush.Parse("#F1F3EE");
-    internal static readonly IBrush Divider = Brush.Parse("#DDE3DA");
+    internal static readonly IBrush Leaf = Brush.Parse("#4FA37E");
+    internal static readonly IBrush CanvasFill = Brush.Parse("#FAFAF8");
     private static readonly Lazy<Bitmap> HeroBitmap = new(() => { using var stream = AssetLoader.Open(HeroUri); return new Bitmap(stream); });
     private static readonly IBrush WarningText = Brush.Parse("#7A4E00");
     private static readonly ControlTheme PlainButton = Plain(typeof(Button));
@@ -81,6 +85,8 @@ internal sealed class AuthSurface : Grid
     internal Image Hero { get; }
     internal TextBlock Wordmark { get; }
     internal ScrollViewer FormScroll { get; }
+    internal Border FormClip { get; }
+    internal Border Header { get; }
     internal Border? Warning { get; }
     internal Control? Below { get; }
     private readonly StackPanel column;
@@ -113,14 +119,22 @@ internal sealed class AuthSurface : Grid
         if (below is not null) column.Children.Add(below);
         Wordmark = Ui.Text("replate.", 36, Ui.Green, true);
         Wordmark.HorizontalAlignment = HorizontalAlignment.Left; Wordmark.Margin = new Thickness(Inset, Inset, Inset, 0);
-        var content = new Border { Child = column, Padding = new Thickness(0, 24, 0, Inset) };
+        var content = new Border { Child = column, Padding = new Thickness(ShadowPad, 24, 0, Inset) };
         FormScroll = Ui.Scroll(content);
         FormScroll.HorizontalAlignment = HorizontalAlignment.Left;
         ThinScroll(FormScroll);
         FormScroll.SizeChanged += (_, e) => content.MinHeight = e.NewSize.Height;
+        FormClip = new Border { Child = FormScroll, ClipToBounds = true, Background = Brushes.Transparent, HorizontalAlignment = HorizontalAlignment.Left };
+        FormClip.PointerWheelChanged += (_, e) =>
+        {
+            if (e.Handled || FormScroll.Extent.Height <= FormScroll.Viewport.Height) return;
+            var y = Math.Clamp(FormScroll.Offset.Y - e.Delta.Y * 50, 0, FormScroll.Extent.Height - FormScroll.Viewport.Height);
+            FormScroll.Offset = new Vector(0, y); e.Handled = true;
+        };
+        Header = new Border { Child = Wordmark, Background = CanvasFill };
         var left = new Grid { RowDefinitions = RowDefinitions.Parse("Auto,*") };
-        SetRow(FormScroll, 1);
-        left.Children.Add(Wordmark); left.Children.Add(FormScroll);
+        SetRow(FormClip, 1);
+        left.Children.Add(FormClip); left.Children.Add(Header);
         HeroPanel = new Border { Background = Ui.Green };
         SetColumn(HeroPanel, 1);
         Hero = new Image { Source = HeroBitmap.Value, Stretch = Stretch.Uniform };
@@ -148,6 +162,7 @@ internal sealed class AuthSurface : Grid
         {
             foreach (var name in new[] { "PART_VerticalScrollBar", "PART_HorizontalScrollBar" })
                 if (e.NameScope.Find<ScrollBar>(name) is { } bar) bar.Theme = ThinScrollBar;
+            if (e.NameScope.Find<ScrollContentPresenter>("PART_ContentPresenter") is { } presenter) presenter.ClipToBounds = false;
         };
         var hide = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(800) };
         hide.Tick += (_, _) => { hide.Stop(); scroll.Classes.Remove(ScrollingClass); };
@@ -170,11 +185,11 @@ internal sealed class AuthSurface : Grid
         var plate = Math.Min(Math.Max(MinPlate, size.Height * PlateShare), Math.Min(size.Height, size.Width * 2 * (1 - BoundaryShare)));
         var boundary = size.Width * BoundaryShare;
         var left = Math.Max(MinMargin, size.Width * CardShare);
-        var gap = Math.Max(PlateGap, Math.Min(size.Width * GapShare, boundary - plate / 2 - left - MinCardWidth));
+        var gap = Math.Max(ClearGap, Math.Min(size.Width * GapShare, boundary - plate / 2 - left - MinCardWidth));
         if (boundary - plate / 2 - left - gap < MinCardWidth)
         {
-            left = Math.Max(MinMargin, boundary - plate / 2 - MinCardWidth - PlateGap);
-            var need = left + MinCardWidth + PlateGap;
+            left = Math.Max(MinMargin, boundary - plate / 2 - MinCardWidth - ClearGap);
+            var need = left + MinCardWidth + ClearGap;
             if (need > boundary - plate / 2)
             {
                 if (need + plate > size.Width) plate = Math.Max(SmallestPlate, size.Width - need);
@@ -204,9 +219,10 @@ internal sealed class AuthSurface : Grid
         var (boundary, plate, cardWidth, left) = Layout(size);
         var plateX = boundary - plate / 2;
         if (ColumnDefinitions[0].Width != new GridLength(boundary)) ColumnDefinitions[0].Width = new GridLength(boundary);
-        FormScroll.Width = Math.Max(0, plateX);
+        FormClip.Width = Math.Max(0, plateX);
+        FormScroll.Width = ShadowPad + cardWidth + ScrollGap + ScrollBarWidth;
+        FormScroll.Margin = new Thickness(left - ShadowPad, 0, 0, 0);
         column.Width = cardWidth;
-        column.Margin = new Thickness(left, 0, 0, 0);
         Wordmark.Margin = new Thickness(left, Inset, 0, 0);
         Hero.Width = plate; Hero.Height = plate;
         Canvas.SetLeft(Hero, plateX); Canvas.SetTop(Hero, (size.Height - plate) / 2);
@@ -247,8 +263,7 @@ internal sealed class AuthSurface : Grid
     private void AddStateStyles()
     {
         Styles.Add(State<Button>("password-toggle", x => x, Brushes.Transparent, Ui.Ink, Brushes.Transparent));
-        Styles.Add(State<Button>("password-toggle", x => x.Class(":pointerover"), Selection, Ui.Green));
-        Styles.Add(State<Button>("password-toggle", x => x.Class(":pressed"), Divider, Ui.Green));
+        Styles.Add(State<Button>("password-toggle", x => x.Class(":pointerover"), Brushes.Transparent, Leaf));
         Styles.Add(State<Button>("password-toggle", x => x.Class(":focus-visible"), null, null, Ui.Green));
         Styles.Add(State<RadioButton>("role-button", x => x, Sidebar, Ui.Ink, Brushes.Transparent));
         Styles.Add(State<RadioButton>("role-button", x => x.Class(":pointerover").Not(y => y.Class(":checked")), Selection, Ui.Green));
@@ -281,9 +296,9 @@ internal sealed class AuthSurface : Grid
         return button;
     }
 
-    internal static TextBox Password()
+    internal static TextBox Password(string placeholder)
     {
-        var input = Ui.Input();
+        var input = Ui.Input(placeholder);
         input.TextWrapping = TextWrapping.NoWrap;
         var icon = new Path
         {
@@ -292,7 +307,7 @@ internal sealed class AuthSurface : Grid
         };
         var toggle = new Button
         {
-            Theme = PlainButton, Content = icon, Width = 32, Height = 32, Padding = default, Margin = new Thickness(0, 0, 4, 0),
+            Theme = PlainButton, Content = icon, Width = 20, Height = 20, Padding = default, Margin = new Thickness(6, 6, 10, 6),
             CornerRadius = new CornerRadius(6), BorderThickness = new Thickness(2), VerticalAlignment = VerticalAlignment.Center,
             Cursor = new Cursor(StandardCursorType.Hand)
         };
@@ -355,7 +370,7 @@ internal sealed class AuthSurface : Grid
         foreach (var input in inputs)
             input.AddHandler(KeyDownEvent, (_, e) =>
             {
-                if (e.Key != Key.Enter) return;
+                if (e.Key != Key.Enter || e.Source is Button) return;
                 e.Handled = true;
                 submit();
             }, RoutingStrategies.Tunnel);
@@ -420,8 +435,8 @@ public sealed class SignInView : UserControl
     internal SignInView(MainWindow host, DemoSession session, string? startupError)
     {
         ErrorText.IsVisible = false;
-        EmailInput = Ui.Input();
-        PasswordInput = AuthSurface.Password();
+        EmailInput = Ui.Input("Masukkan email Anda");
+        PasswordInput = AuthSurface.Password("Masukkan kata sandi Anda");
         void Submit()
         {
             var email = EmailInput.Text ?? "";
@@ -476,10 +491,11 @@ public sealed class RegisterView : UserControl
         OwnerOption = AuthSurface.RoleOption("Pemilik restoran", "register-role");
         RoleGroup = AuthSurface.RoleGroup(CustomerOption, OwnerOption);
         AutomationProperties.SetName(RoleGroup, "Daftar sebagai");
-        NameInput = Ui.Input(); EmailInput = Ui.Input();
-        PasswordInput = AuthSurface.Password(); ConfirmPasswordInput = AuthSurface.Password();
-        RestaurantNameInput = Ui.Input(); AddressInput = Ui.Input(); PhoneInput = Ui.Input();
-        DescriptionInput = Ui.Input("", true);
+        NameInput = Ui.Input("Masukkan nama Anda"); EmailInput = Ui.Input("Masukkan email Anda");
+        PasswordInput = AuthSurface.Password("Masukkan kata sandi Anda"); ConfirmPasswordInput = AuthSurface.Password("Masukkan ulang kata sandi Anda");
+        RestaurantNameInput = Ui.Input("Masukkan nama restoran"); AddressInput = Ui.Input("Masukkan alamat restoran");
+        PhoneInput = Ui.Input("Masukkan nomor telepon");
+        DescriptionInput = Ui.Input("Masukkan deskripsi restoran", "", true);
         OpeningInput = new TimeField("Jam buka");
         ClosingInput = new TimeField("Jam tutup");
         var inputs = new Dictionary<string, Control>

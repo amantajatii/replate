@@ -12,7 +12,7 @@ public sealed class FoodDetailView : UserControl
 {
     internal FoodDetailView(MainWindow host, DemoSession session, SurplusListing listing)
     {
-        var quantity = Ui.Number(1, listing.Quantity); quantity.Minimum = 1;
+        var quantity = Ui.Number("Masukkan jumlah porsi", 1, listing.Quantity); quantity.Minimum = 1;
         var add = Ui.Button("Tambah ke keranjang", () => host.Run(() => session.AddToCart(listing, (int)(quantity.Value ?? 1)), host.ShowCart), true);
         add.IsEnabled = listing.IsAvailable(DateTime.UtcNow) && listing.Menu.IsActive;
         var facts = Ui.Stack(16,
@@ -227,7 +227,7 @@ public sealed class OrderDetailView : UserControl
         }
         if (restaurant && order.Status == OrderStatus.Reserved)
         {
-            var minutes = Ui.Number(15, 240); minutes.Minimum = 1;
+            var minutes = Ui.Number("Masukkan estimasi menit", 15, 240); minutes.Minimum = 1;
             actions.Children.Add(Ui.Field("Estimasi persiapan (menit)", minutes));
             ConfirmButton = Ui.Button("Konfirmasi pesanan", () => host.Run(() => session.ConfirmOrder(order, (int)(minutes.Value ?? 15)), () => host.ShowOrder(order, true)), true);
             actions.Children.Add(ConfirmButton);
@@ -239,7 +239,7 @@ public sealed class OrderDetailView : UserControl
         }
         if (restaurant && order.Status == OrderStatus.ReadyForPickup)
         {
-            PickupInput = Ui.Input(); PickupInput.MaxLength = 6;
+            PickupInput = Ui.Input("Masukkan kode pengambilan"); PickupInput.MaxLength = 6;
             actions.Children.Add(Ui.Field("Kode pengambilan dari pelanggan", PickupInput));
             VerifyButton = Ui.Button("Verifikasi dan selesaikan", () => host.Run(() => session.CompletePickup(order, PickupInput.Text ?? ""), () => host.ShowOrder(order, true)), true);
             actions.Children.Add(VerifyButton);

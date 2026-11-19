@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Styling;
 
 namespace Replate.Desktop;
 
@@ -60,13 +61,52 @@ internal static class Ui
         input.HorizontalAlignment = input is DatePicker or TimePicker ? HorizontalAlignment.Left : HorizontalAlignment.Stretch;
         return Stack(8, Text(label, 14, bold: true), input);
     }
-    public static TextBox Input(string value = "", bool multiline = false) => new()
+    public static readonly Thickness InputPadding = new(10, 5.5, 6, 5.5);
+    public static readonly Thickness MultilinePadding = new(10, 10, 6, 5.5);
+    public static void UseInputs(Application app)
     {
-        Text = value, AcceptsReturn = multiline, MinHeight = multiline ? 88 : 42,
+        app.Styles.Add(InputStyles());
+        Avalonia.Controls.Primitives.TemplatedControl.TemplateAppliedEvent.AddClassHandler<TextBox>((_, e) =>
+        {
+            if (e.NameScope.Find<TextBlock>("PART_Placeholder") is { } placeholder) placeholder.Opacity = 1;
+        });
+    }
+    private static Styles InputStyles() => new()
+    {
+        new Style(x => x.OfType<TextBox>())
+        {
+            Setters =
+            {
+                new Setter(TextBox.VerticalContentAlignmentProperty, VerticalAlignment.Center),
+                new Setter(TextBox.PaddingProperty, InputPadding),
+                new Setter(TextBox.PlaceholderForegroundProperty, Muted)
+            }
+        },
+        new Style(x => x.OfType<TextBox>().PropertyEquals(TextBox.AcceptsReturnProperty, true))
+        {
+            Setters =
+            {
+                new Setter(TextBox.VerticalContentAlignmentProperty, VerticalAlignment.Top),
+                new Setter(TextBox.PaddingProperty, MultilinePadding)
+            }
+        },
+        new Style(x => x.OfType<NumericUpDown>())
+        {
+            Setters =
+            {
+                new Setter(NumericUpDown.VerticalContentAlignmentProperty, VerticalAlignment.Center),
+                new Setter(NumericUpDown.PaddingProperty, InputPadding),
+                new Setter(NumericUpDown.PlaceholderForegroundProperty, Muted)
+            }
+        }
+    };
+    public static TextBox Input(string placeholder, string value = "", bool multiline = false) => new()
+    {
+        PlaceholderText = placeholder, Text = value, AcceptsReturn = multiline, MinHeight = multiline ? 88 : 42,
         TextWrapping = TextWrapping.Wrap, CornerRadius = new CornerRadius(6), MaxLength = multiline ? 500 : 80
     };
-    public static NumericUpDown Number(decimal value = 0, decimal max = 1000000, decimal increment = 1) => new()
-    { Value = value, Minimum = 0, Maximum = max, Increment = increment, FormatString = increment < 1 ? "0.000" : "0", MinHeight = 42,
+    public static NumericUpDown Number(string placeholder, decimal value = 0, decimal max = 1000000, decimal increment = 1) => new()
+    { PlaceholderText = placeholder, Value = value, Minimum = 0, Maximum = max, Increment = increment, FormatString = increment < 1 ? "0.000" : "0", MinHeight = 42,
         ParsingNumberStyle = increment < 1 ? System.Globalization.NumberStyles.Number : System.Globalization.NumberStyles.Integer };
     public static Border TableRow(string columns, bool header, params Control[] cells)
     {
