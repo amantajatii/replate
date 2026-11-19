@@ -13,6 +13,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Styling;
+using Avalonia.Threading;
 using Replate.Domain.Enums;
 using Replate.Domain.Services;
 
@@ -23,9 +24,14 @@ internal sealed class AuthSurface : Grid
     internal const double CardWidth = 440;
     internal const double MinCardWidth = 360;
     internal const double MinPlate = 360;
+    internal const double SmallestPlate = 320;
     internal const double PlateGap = 24;
-    internal const double PanelShare = 0.4;
+    internal const double BoundaryShare = 0.70;
+    internal const double CardShare = 0.14;
+    internal const double MinMargin = 48;
     internal const double Inset = 32;
+    internal const double ScrollBarWidth = 6;
+    internal const string ScrollingClass = "auth-scrolling";
     internal const string RevealName = "Tampilkan kata sandi";
     internal const string ConcealName = "Sembunyikan kata sandi";
     internal static readonly Uri HeroUri = new("avares://Replate.Desktop/Assets/auth-hero.png");
@@ -38,6 +44,34 @@ internal sealed class AuthSurface : Grid
     private static readonly IBrush WarningText = Brush.Parse("#7A4E00");
     private static readonly ControlTheme PlainButton = Plain(typeof(Button));
     private static readonly ControlTheme PlainRadio = Plain(typeof(RadioButton));
+    private static readonly ControlTheme ThinThumb = new(typeof(Thumb))
+    {
+        Setters =
+        {
+            new Setter(TemplatedControl.BackgroundProperty, Ui.Muted),
+            new Setter(TemplatedControl.TemplateProperty, new FuncControlTemplate<Thumb>((thumb, _) => new Border
+            {
+                [!Border.BackgroundProperty] = thumb[!TemplatedControl.BackgroundProperty], CornerRadius = new CornerRadius(ScrollBarWidth / 2)
+            }))
+        }
+    };
+    internal static readonly ControlTheme ThinScrollBar = new(typeof(ScrollBar))
+    {
+        Setters =
+        {
+            new Setter(TemplatedControl.BackgroundProperty, Brushes.Transparent),
+            new Setter(Layoutable.WidthProperty, ScrollBarWidth),
+            new Setter(TemplatedControl.TemplateProperty, new FuncControlTemplate<ScrollBar>((bar, _) => new Track
+            {
+                [!Track.MinimumProperty] = bar[!RangeBase.MinimumProperty],
+                [!Track.MaximumProperty] = bar[!RangeBase.MaximumProperty],
+                [!!Track.ValueProperty] = bar[!!RangeBase.ValueProperty],
+                [!Track.ViewportSizeProperty] = bar[!ScrollBar.ViewportSizeProperty],
+                [!Track.OrientationProperty] = bar[!ScrollBar.OrientationProperty],
+                IsDirectionReversed = true, Thumb = new Thumb { Theme = ThinThumb }
+            }))
+        }
+    };
 
     internal Border Card { get; }
     internal Border HeroPanel { get; }
@@ -46,6 +80,7 @@ internal sealed class AuthSurface : Grid
     internal TextBlock Wordmark { get; }
     internal ScrollViewer FormScroll { get; }
     internal Border? Warning { get; }
+    internal Control? Below { get; }
     private readonly StackPanel column;
 
     internal AuthSurface(Control cardContent, string? databaseError = null, Control? below = null)
@@ -72,12 +107,14 @@ internal sealed class AuthSurface : Grid
             column.Children.Add(Warning);
         }
         column.Children.Add(Card);
+        Below = below;
         if (below is not null) column.Children.Add(below);
         Wordmark = Ui.Text("replate.", 36, Ui.Green, true);
         Wordmark.HorizontalAlignment = HorizontalAlignment.Left; Wordmark.Margin = new Thickness(Inset, Inset, Inset, 0);
         var content = new Border { Child = column, Padding = new Thickness(0, 24, 0, Inset) };
         FormScroll = Ui.Scroll(content);
         FormScroll.HorizontalAlignment = HorizontalAlignment.Left;
+        ThinScroll(FormScroll);
         FormScroll.SizeChanged += (_, e) => content.MinHeight = e.NewSize.Height;
         var left = new Grid { RowDefinitions = RowDefinitions.Parse("Auto,*") };
         SetRow(FormScroll, 1);
@@ -92,10 +129,56 @@ internal sealed class AuthSurface : Grid
         Children.Add(left); Children.Add(HeroPanel); Children.Add(HeroLayer);
         Styles.Add(Hover("auth-primary", Ui.Ink, Brushes.White));
         Styles.Add(Hover("auth-secondary", Selection, Ui.Green));
+        Styles.Add(ScrollBarOpacity(x => x, 0));
+        Styles.Add(ScrollBarOpacity(x => x.Class(":pointerover"), 1));
+        Styles.Add(ScrollBarOpacity(x => x.Class(ScrollingClass), 1));
         AddStateStyles();
     }
 
+    // Scrolling
+    private static void ThinScroll(ScrollViewer scroll)
+    {
+        scroll.VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
+        scroll.AllowAutoHide = true;
+        ScrollViewer.SetBringIntoViewOnFocusChange(scroll, true);
+        scroll.Classes.Add("auth-scroll");
+        scroll.TemplateApplied += (_, e) =>
+        {
+            foreach (var name in new[] { "PART_VerticalScrollBar", "PART_HorizontalScrollBar" })
+                if (e.NameScope.Find<ScrollBar>(name) is { } bar) bar.Theme = ThinScrollBar;
+        };
+        var hide = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(800) };
+        hide.Tick += (_, _) => { hide.Stop(); scroll.Classes.Remove(ScrollingClass); };
+        scroll.ScrollChanged += (_, e) =>
+        {
+            if (e.OffsetDelta == default) return;
+            scroll.Classes.Add(ScrollingClass); hide.Stop(); hide.Start();
+        };
+    }
+
+    private static Style ScrollBarOpacity(Func<Selector, Selector> state, double opacity) =>
+        new(x => state(x.OfType<ScrollViewer>().Class("auth-scroll")).Template().OfType<ScrollBar>())
+        {
+            Setters = { new Setter(OpacityProperty, opacity) }
+        };
+
     // Layout
+    internal static (double Boundary, double Plate, double Card, double Left) Layout(Size size)
+    {
+        var plate = Math.Min(Math.Max(MinPlate, size.Height * 0.6), Math.Min(size.Height, size.Width * 2 * (1 - BoundaryShare)));
+        var boundary = size.Width * BoundaryShare;
+        var room = boundary - plate / 2 - PlateGap;
+        var left = Math.Max(MinMargin, Math.Min(size.Width * CardShare, room - MinCardWidth));
+        if (room - left < MinCardWidth)
+        {
+            var need = left + MinCardWidth + PlateGap;
+            if (need + plate > size.Width) plate = Math.Max(SmallestPlate, size.Width - need);
+            boundary = need + plate / 2;
+        }
+        var card = Math.Max(0, Math.Min(CardWidth, boundary - plate / 2 - PlateGap - left));
+        return (boundary, plate, card, left);
+    }
+
     private Size measuredFor;
     protected override Size MeasureOverride(Size availableSize)
     {
@@ -112,15 +195,13 @@ internal sealed class AuthSurface : Grid
     private void Place(Size size)
     {
         if (!double.IsFinite(size.Width) || !double.IsFinite(size.Height)) return;
-        var leftWidth = size.Width * (1 - PanelShare);
-        var plate = Math.Min(Math.Max(MinPlate, size.Height * 0.6), Math.Min(size.Height, size.Width * PanelShare * 1.5));
-        plate = Math.Max(0, Math.Min(plate, 3 * (leftWidth - Inset - MinCardWidth - PlateGap)));
-        var plateX = leftWidth - plate / 3;
-        var space = plateX - PlateGap - Inset;
-        var cardWidth = Math.Clamp(space, MinCardWidth, CardWidth);
+        var (boundary, plate, cardWidth, left) = Layout(size);
+        var plateX = boundary - plate / 2;
+        if (ColumnDefinitions[0].Width != new GridLength(boundary)) ColumnDefinitions[0].Width = new GridLength(boundary);
         FormScroll.Width = Math.Max(0, plateX);
         column.Width = cardWidth;
-        column.Margin = new Thickness(Inset + Math.Max(0, space - cardWidth) / 2, 0, 0, 0);
+        column.Margin = new Thickness(left, 0, 0, 0);
+        Wordmark.Margin = new Thickness(left, Inset, 0, 0);
         Hero.Width = plate; Hero.Height = plate;
         Canvas.SetLeft(Hero, plateX); Canvas.SetTop(Hero, (size.Height - plate) / 2);
     }
@@ -286,10 +367,13 @@ internal sealed class TimeField : Border
         Hour = Part(24, $"{label}, jam");
         Minute = Part(60, $"{label}, menit");
         Background = Brushes.White; BorderThickness = new Thickness(1); CornerRadius = new CornerRadius(21);
-        MinHeight = 42; Padding = new Thickness(8, 0);
+        MinHeight = 42; Padding = new Thickness(6, 0);
         this.Bind(BorderBrushProperty, this.GetResourceObservable("TextControlBorderBrush"));
         var colon = Ui.Text(":", 14, bold: true);
-        Child = Ui.Row(6, Hour, colon, Minute);
+        colon.VerticalAlignment = VerticalAlignment.Center;
+        var parts = Ui.Columns("*,Auto,*", Hour, colon, Minute);
+        parts.ColumnSpacing = 6;
+        Child = parts;
         Hour.SelectionChanged += (_, _) =>
         {
             if (Hour.SelectedIndex >= 0 && Minute.SelectedIndex < 0) Minute.SelectedIndex = 0;
@@ -310,7 +394,7 @@ internal sealed class TimeField : Border
         {
             ItemsSource = Enumerable.Range(0, count).Select(i => i.ToString("00")).ToList(), PlaceholderText = "--",
             Background = Brushes.Transparent, BorderThickness = default, CornerRadius = new CornerRadius(6),
-            MinWidth = 64, VerticalAlignment = VerticalAlignment.Center
+            MinWidth = 0, Padding = new Thickness(8, 5, 0, 7), HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Center
         };
         AutomationProperties.SetName(box, name);
         return box;

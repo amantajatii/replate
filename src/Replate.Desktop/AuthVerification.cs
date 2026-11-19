@@ -35,8 +35,8 @@ internal static class AuthVerification
         var where = $"{screen} at {size.Width:0}x{size.Height:0}";
         var bounds = surface.Bounds; var panel = surface.HeroPanel.Bounds;
         Check(surface.ColumnDefinitions.Count == 2 && Math.Abs(bounds.Width - size.Width) < 1 && Math.Abs(bounds.Height - size.Height) < 1 &&
-            Math.Abs(panel.Width - bounds.Width * AuthSurface.PanelShare) < 1 && Math.Abs(panel.Right - bounds.Width) < 1 && Math.Abs(panel.Height - bounds.Height) < 1,
-            $"{where}: primary panel is 40% wide, full height, on the right ({panel.Width:0.#} of {bounds.Width:0.#})");
+            panel.X >= bounds.Width * AuthSurface.BoundaryShare - .5 && Math.Abs(panel.Right - bounds.Width) < 1 && Math.Abs(panel.Height - bounds.Height) < 1,
+            $"{where}: primary panel is full height on the right and starts at or after 70% ({panel.X:0.#} of {bounds.Width:0.#})");
         Check(ColorOf(surface.HeroPanel.Background) == Color.Parse("#245B43"), $"{where}: panel uses the primary color");
         Check(surface.Hero.Source is Bitmap { PixelSize: { Width: 1080, Height: 1080 } } && surface.Hero.Stretch == Stretch.Uniform &&
             surface.Hero.Bounds.Width > 0, $"{where}: hero image loaded from {AuthSurface.HeroUri}");
@@ -50,20 +50,35 @@ internal static class AuthVerification
         Check(Math.Abs(plate.Width - plate.Height) < 1 && Math.Abs(plate.Width - diameter) < 1 && Math.Abs(plate.Center.Y - bounds.Height / 2) < 1 &&
             plate.Right <= bounds.Width + .5, $"{where}: plate diameter follows window height and is centered vertically ({plate.Width:0.#}, expected {diameter:0.#})");
         var onCanvas = (panel.X - plate.X) / plate.Width;
-        Check(Math.Abs(onCanvas - 1d / 3) < .02, $"{where}: plate crosses the column edge, one third on canvas and two thirds on the panel ({onCanvas:0.###})");
+        Check(Math.Abs(onCanvas - .5) <= .02, $"{where}: panel edge sits at the plate center, half on canvas and half on the panel ({onCanvas:0.###})");
         var card = surface.Card;
         Check(ColorOf(card.Background) == Colors.White && card.CornerRadius == new CornerRadius(16) &&
             card.Padding == new Thickness(32) && card.BorderThickness == default && card.BoxShadow == BoxShadows.Parse("0 8 24 0 #1F23382C"),
             $"{where}: card is white, rounded, shadowed, padded and borderless");
         var cardBox = RectIn(card, surface);
-        Check(card.Bounds.Width >= AuthSurface.MinCardWidth - .5 && card.Bounds.Width <= AuthSurface.CardWidth + .5 && cardBox.X >= AuthSurface.Inset - .5,
+        Check(card.Bounds.Width >= AuthSurface.MinCardWidth - .5 && card.Bounds.Width <= AuthSurface.CardWidth + .5,
             $"{where}: card width stays between {AuthSurface.MinCardWidth} and {AuthSurface.CardWidth} ({card.Bounds.Width:0.#})");
+        var atMinCard = card.Bounds.Width <= AuthSurface.MinCardWidth + .5;
+        Check(cardBox.X >= AuthSurface.MinMargin - .5 && cardBox.X <= bounds.Width * AuthSurface.CardShare + .5 &&
+            (Math.Abs(cardBox.X - bounds.Width * AuthSurface.CardShare) < 1 || atMinCard),
+            $"{where}: card starts at about 14% and at least {AuthSurface.MinMargin} ({cardBox.X:0.#}, target {bounds.Width * AuthSurface.CardShare:0.#})");
+        Check(panel.X <= bounds.Width * AuthSurface.BoundaryShare + .5 || atMinCard && cardBox.X <= AuthSurface.MinMargin + .5,
+            $"{where}: panel edge moves right of 70% only when the card and margin are at their minimum ({panel.X:0.#})");
         Check(Gap(cardBox, plate) >= AuthSurface.PlateGap - .5, $"{where}: card and plate do not intersect and stay at least 24 apart (gap {Gap(cardBox, plate):0.#})");
+        if (surface.Below is { } below)
+        {
+            var line = RectIn(below, surface);
+            Check(Math.Abs(line.X - cardBox.X) < 1 && Math.Abs(line.Width - cardBox.Width) < 1 && line.Y >= cardBox.Bottom,
+                $"{where}: demo account line follows the card width and left edge ({line.X:0.#}+{line.Width:0.#}, card {cardBox.X:0.#}+{cardBox.Width:0.#})");
+        }
         var buttons = card.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("auth-primary")).ToList();
         Check(buttons.Count == 1 && Math.Abs(buttons[0].Bounds.Width - (card.Bounds.Width - 64)) < 1, $"{where}: primary button spans the card");
         var mark = RectIn(surface.Wordmark, surface); var scrollBox = RectIn(surface.FormScroll, surface);
         Check(surface.Wordmark.Text == "replate." && mark.X >= 0 && mark.Y >= 0 && mark.Bottom <= scrollBox.Y + .5 && Gap(mark, plate) > 0 &&
             !surface.FormScroll.GetVisualDescendants().Contains(surface.Wordmark), $"{where}: wordmark stays fully visible above the scroll area");
+        Check(Math.Abs(mark.X - cardBox.X) < 1, $"{where}: wordmark aligns with the card left edge ({mark.X:0.#}, card {cardBox.X:0.#})");
+        Check(cardBox.X >= scrollBox.X - .5 && cardBox.Right <= scrollBox.Right + .5 && scrollBox.Right <= plate.X + 1,
+            $"{where}: card is not clipped and the scroll area stays clear of the plate (card {cardBox.X:0.#}-{cardBox.Right:0.#}, scroll {scrollBox.X:0.#}-{scrollBox.Right:0.#}, plate {plate.X:0.#})");
         var scroll = surface.FormScroll;
         Check(scroll.HorizontalScrollBarVisibility == Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled &&
             scroll.Extent.Width <= scroll.Viewport.Width + .5 &&
@@ -71,6 +86,71 @@ internal static class AuthVerification
                 .All(s => s.HorizontalScrollBarVisibility == Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled),
             $"{where}: no horizontal scrolling (extent {scroll.Extent.Width:0.#}, viewport {scroll.Viewport.Width:0.#})");
         Check(!window.GetVisualDescendants().OfType<TextBlock>().Any(t => t.IsVisible && t.Text?.Contains((char)0x2014) == true), $"{where}: no em dash in UI text");
+        await CheckScrollBars(surface, where);
+    }
+
+    private static List<ScrollBar> FormBars(AuthSurface surface) =>
+        surface.FormScroll.GetVisualDescendants().OfType<ScrollBar>().Where(b => b.TemplatedParent == surface.FormScroll).ToList();
+
+    private static ScrollBar VerticalBar(AuthSurface surface) =>
+        FormBars(surface).Single(b => b.Orientation == Avalonia.Layout.Orientation.Vertical);
+
+    private static async Task CheckScrollBars(AuthSurface surface, string where)
+    {
+        var scroll = surface.FormScroll;
+        var bars = FormBars(surface);
+        Check(bars.Count > 0 && bars.All(b => b.Theme == AuthSurface.ThinScrollBar), $"{where}: form scroll uses the thin scrollbar");
+        foreach (var bar in bars.Where(b => b.GetVisualChildren().Any()))
+        {
+            var parts = bar.GetVisualDescendants().ToList();
+            Check(!parts.OfType<RepeatButton>().Any() && !parts.OfType<Button>().Any(), $"{where}: scrollbar has no arrow buttons");
+            Check(ColorOf(bar.Background) == Colors.Transparent && parts.OfType<Thumb>().Count() == 1 &&
+                parts.OfType<Border>().All(b => b.TemplatedParent is Thumb), $"{where}: {bar.Orientation} scrollbar has no track, only a thumb");
+        }
+        var vertical = VerticalBar(surface);
+        if (vertical.IsVisible)
+        {
+            var thumb = vertical.GetVisualDescendants().OfType<Thumb>().Single();
+            var face = thumb.GetVisualDescendants().OfType<Border>().Single();
+            Check(vertical.Bounds.Width >= 4 && vertical.Bounds.Width <= 6 && face.CornerRadius.TopLeft >= vertical.Bounds.Width / 2 - .01 &&
+                ColorOf(thumb.Background) == Color.Parse("#59675D"), $"{where}: scrollbar is {vertical.Bounds.Width:0.#} wide with a rounded muted thumb");
+        }
+        Check(surface.GetVisualDescendants().OfType<ScrollBar>().Where(b => b.IsEffectivelyVisible && b.Opacity > 0)
+            .All(b => !b.GetVisualDescendants().OfType<RepeatButton>().Any()), $"{where}: no scrollbar with a track or arrows is shown");
+        Check(vertical.IsVisible == scroll.Extent.Height > scroll.Viewport.Height + .5, $"{where}: scrollbar exists only when the form overflows");
+        await Pseudo(scroll, ":pointerover", false);
+        Check(vertical.Opacity == 0 || scroll.Classes.Contains(AuthSurface.ScrollingClass), $"{where}: scrollbar is hidden at rest");
+        await Pseudo(scroll, ":pointerover", true);
+        var hovered = vertical.Opacity;
+        await Pseudo(scroll, ":pointerover", false);
+        Check(hovered == 1 && vertical.Opacity == 0, $"{where}: scrollbar shows on hover");
+    }
+
+    internal static async Task CheckTabIntoView(AuthSurface surface, Control first, Control last, string where)
+    {
+        var scroll = surface.FormScroll;
+        var root = TopLevel.GetTopLevel(surface) ?? throw new InvalidOperationException($"{where}: surface has no window");
+        scroll.Offset = default; await Task.Delay(200);
+        first.Focus(NavigationMethod.Tab); await Task.Delay(100);
+        var hidden = last.TranslatePoint(new Point(0, last.Bounds.Height), scroll)!.Value.Y > scroll.Viewport.Height + .5;
+        var visited = 0;
+        for (var i = 0; i < 60; i++)
+        {
+            var focused = root.FocusManager?.GetFocusedElement() as Control ?? throw new InvalidOperationException($"{where}: focus lost while tabbing");
+            if (scroll.GetVisualDescendants().Contains(focused))
+            {
+                var box = new Rect(focused.TranslatePoint(default, scroll)!.Value, focused.Bounds.Size);
+                Check(box.Y >= -.5 && box.Bottom <= scroll.Viewport.Height + .5,
+                    $"{where}: Tab scrolls {AutomationProperties.GetName(focused)} ({focused.GetType().Name}) into view (top {box.Y:0.#}, bottom {box.Bottom:0.#}, viewport {scroll.Viewport.Height:0.#})");
+                visited++;
+            }
+            if (focused == last) break;
+            focused.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Tab, Source = focused });
+            await Task.Delay(120);
+        }
+        Check(root.FocusManager?.GetFocusedElement() == last && visited > 2 && (!hidden || scroll.Offset.Y > 0),
+            $"{where}: Tab reaches {last.GetType().Name} at the bottom of the form and scrolls the form ({visited} stops)");
+        scroll.Offset = default; await Task.Delay(200);
     }
 
     internal static async Task CheckScrolled(AuthSurface surface, string where, Action? capture = null)
@@ -82,8 +162,13 @@ internal static class AuthVerification
         Check(scroll.Offset.Y > 0 && scroll.Offset.X == 0, $"{where}: left column scrolls vertically only");
         Check(RectIn(surface.Wordmark, surface) == mark, $"{where}: wordmark does not move or clip while scrolling");
         Check(Math.Abs(plate.Center.Y - surface.Bounds.Height / 2) < 1 && Gap(card, plate) >= AuthSurface.PlateGap - .5, $"{where}: plate stays fixed and clear of the scrolled card");
+        var bar = VerticalBar(surface);
+        var thumb = RectIn(bar.GetVisualDescendants().OfType<Thumb>().Single(), bar);
+        Check(scroll.Classes.Contains(AuthSurface.ScrollingClass) && bar.Opacity == 1 && bar.IsVisible && thumb.Bottom >= bar.Bounds.Height - 1 && thumb.Height > 8,
+            $"{where}: scrollbar shows while scrolling with the thumb at the bottom (thumb {thumb.Y:0.#}-{thumb.Bottom:0.#} of {bar.Bounds.Height:0.#})");
         capture?.Invoke();
-        scroll.Offset = default; await Task.Delay(300);
+        scroll.Offset = default; await Task.Delay(1200);
+        Check(!scroll.Classes.Contains(AuthSurface.ScrollingClass) && bar.Opacity == 0, $"{where}: scrollbar hides again after scrolling stops");
     }
 
     internal static async Task CheckSizes(MainWindow host, string output)
@@ -94,7 +179,7 @@ internal static class AuthVerification
             ("register", () => new RegisterView(host, host.Session), v => ((RegisterView)v).Surface),
             ("register-owner", () => { var v = new RegisterView(host, host.Session); v.OwnerOption.IsChecked = true; return v; }, v => ((RegisterView)v).Surface)
         };
-        foreach (var size in new[] { new Size(1360, 940), new Size(1040, 720), new Size(1283, 780) })
+        foreach (var size in new[] { new Size(1360, 940), new Size(1040, 720), new Size(1283, 780), new Size(1920, 1080) })
             foreach (var (name, make, surfaceOf) in screens)
             {
                 var view = make();
@@ -109,6 +194,10 @@ internal static class AuthVerification
                     frame.Show();
                     var surface = surfaceOf(view);
                     await CheckSurface(frame, surface, name, size);
+                    var share = surface.HeroPanel.Bounds.Width / size.Width;
+                    Check(Math.Abs(share - .30) <= .01, $"{name} at {size.Width:0}x{size.Height:0}: panel is about 30% of the width ({share:0.###})");
+                    var expectedCard = size.Width == 1040 ? AuthSurface.MinCardWidth : AuthSurface.CardWidth;
+                    Check(Math.Abs(surface.Card.Bounds.Width - expectedCard) < 1, $"{name} at {size.Width:0}x{size.Height:0}: card is {expectedCard} wide ({surface.Card.Bounds.Width:0.#})");
                     var scroll = surface.FormScroll;
                     Check(name != "register-owner" || scroll.Extent.Height > scroll.Viewport.Height || size.Height > 720,
                         $"{name} at {size.Width:0}x{size.Height:0}: long owner form scrolls vertically");
@@ -118,12 +207,14 @@ internal static class AuthVerification
                         bitmap.Render(canvas); bitmap.Save(Path.Combine(output, $"auth-{name}-{size.Width:0}x{size.Height:0}{suffix}.png"), PngBitmapEncoderOptions.Default);
                     }
                     if (scroll.Extent.Height > scroll.Viewport.Height) await CheckScrolled(surface, $"{name} at {size.Width:0}x{size.Height:0}", () => Capture("-scrolled"));
+                    if (view is RegisterView tabbed && scroll.Extent.Height > scroll.Viewport.Height)
+                        await CheckTabIntoView(surface, tabbed.NameInput, tabbed.BackButton, $"{name} at {size.Width:0}x{size.Height:0}");
                     Capture("");
                 }
                 finally { frame.Close(); }
             }
         host.Activate();
-        Console.WriteLine("All Replate auth surface checks passed (sign-in, registration, owner registration at 1360x940, 1040x720 and 1283x780).");
+        Console.WriteLine("All Replate auth surface checks passed (sign-in, registration, owner registration at 1360x940, 1040x720, 1283x780 and 1920x1080).");
     }
 
     private static async Task Pseudo(StyledElement element, string pseudo, bool on)
@@ -230,6 +321,12 @@ internal static class AuthVerification
                 field.BoxShadow == default && field.Effect is null && field.GetVisualDescendants().All(v => v.Effect is null),
                 $"{label}: white pill with the text field border and no shadow or effect");
             Check(!field.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text is { } s && (s.Contains("AM") || s.Contains("PM"))), $"{label}: no AM/PM text");
+            var pill = RectIn(field, register);
+            foreach (var part in new[] { field.Hour, field.Minute }.SelectMany(c => c.GetVisualDescendants().OfType<Control>().Prepend(c)).Where(c => c is ComboBox or Viewbox or TextBlock or ContentPresenter && c.IsVisible && c.Bounds.Width > 0 && !c.GetVisualAncestors().OfType<Viewbox>().Any()))
+            {
+                var box = RectIn(part, register);
+                Check(box.X >= pill.X - .5 && box.Right <= pill.Right + .5, $"{label}: hour and minute stay inside the pill ({part.GetType().Name} {box.X:0.#}-{box.Right:0.#}, pill {pill.X:0.#}-{pill.Right:0.#})");
+            }
             field.Value = null;
             field.Hour.SelectedIndex = 7; await Task.Delay(50);
             Check(field.Value == new TimeOnly(7, 0), $"{label}: picking an hour fills minute 00");
@@ -411,6 +508,7 @@ internal static class AuthVerification
             var formScroll = register.Surface.FormScroll;
             Ensure(formScroll.Extent.Height > formScroll.Viewport.Height, "Owner registration form scrolls vertically at 1040x720");
             await CheckScrolled(register.Surface, "Daftar pemilik at 1040x720");
+            await CheckTabIntoView(register.Surface, register.NameInput, register.BackButton, "Daftar pemilik at 1040x720");
             Shot("auth-register-owner-errors");
             register.CustomerOption.IsChecked = true; await Settle();
             Ensure(!register.ProfileSection.IsVisible && !register.FieldErrors["restaurantName"].IsVisible, "Switching back hides profile errors");

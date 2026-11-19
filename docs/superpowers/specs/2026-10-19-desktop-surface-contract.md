@@ -57,25 +57,32 @@ ROUTES AND ROLES:
   empty state and a next step (Tambah menu, Buat penawaran).
 
 AUTH SURFACE (Masuk and Daftar, implemented in `AuthViews.cs` as `AuthSurface`):
-- A Grid with star columns 3* and 2* fills the page: the left column is 60% of the
-  width, the right primary (#245B43) panel 40%, full height.
-- Left column: canvas background. The wordmark replate. sits at the top left (inset
-  32) outside the scroll area, so it is never clipped while scrolling. Below it a
+- A two-column Grid fills the page: the left canvas column and the right primary
+  (#245B43) panel, full height. The first column width is set in pixels from the
+  plate position (`AuthSurface.Layout`); the panel is about 30% of the width.
+- Left column: canvas background. The wordmark replate. sits at the top (inset 32),
+  left-aligned with the card, outside the scroll area, so it is never clipped while
+  scrolling. Below it a
   ScrollViewer scrolls vertically only (the owner registration form is taller than
   720); it ends where the plate begins.
 - Plate: `Assets/auth-hero.png` (1080x1080, transparent round cut-out) is loaded
   through `avares://Replate.Desktop/Assets/auth-hero.png` into a Canvas overlay that
-  spans both columns, does not scroll and is not hit-testable. Diameter is
-  max(360, 0.6 x window height), centered vertically, left edge at
-  (left column width - diameter / 3): one third over canvas, two thirds over the
-  panel. No text over the photo; panel, overlay and image are hidden from assistive
-  technology (AccessibilityView Raw).
+  spans both columns, does not scroll and is not hit-testable. Centered vertically.
+  The panel's left edge passes through the plate center: half over canvas, half
+  over the panel (tolerance 0.02 of the diameter). No text over the photo; panel,
+  overlay and image are hidden from assistive technology (AccessibilityView Raw).
+- Placement: D = clamp(0.6 x height, 360, min(height, 0.6 x width)); boundary B =
+  0.70 x width; plate left = B - D/2; card left L = max(48, 0.14 x width); card =
+  min(440, plate left - 24 - L), minimum 360. If the card would be under 360, L
+  shrinks first (minimum 48), then B moves right, then D shrinks (minimum 320). The
+  scroll area ends at plate left. The wordmark, the warning and the demo-account
+  line share L, and the warning and demo line share the card width.
 - Card: white surface, `rounded.card` (16), `elevation.card` shadow
-  (`0 8 24 0 #1F23382C`), padding 32, fields 20 apart, no border. It is centered in
-  the space between inset 32 and the plate minus 24. Width 440, narrowed down to 360
-  when that space is short; below that the plate shrinks. Hard rule: the plate box
-  never intersects the card box and the gap is at least 24. At 1360x940 the card is
-  440 and the plate 564; at 1040x720 the card is 424 and the plate 432. The primary
+  (`0 8 24 0 #1F23382C`), padding 32, fields 20 apart, no border. Hard rule: the
+  plate box never intersects the card box and the gap is at least 24. At 1360x940
+  the plate is 564, the card 440 at 190 and the panel 30%; at 1920x1080 the plate is
+  648 and the card 440 at 269; at 1040x720 the plate is 432, the card 360 at 128 and
+  the panel 30%. The primary
   action spans the card; the secondary action (Daftar akun baru / Kembali ke masuk)
   spans it below. No Google sign-in, Ingat saya, or Lupa kata sandi.
 - Titles Masuk and Daftar akun: 28, bold (`auth-title`).
@@ -97,6 +104,14 @@ AUTH SURFACE (Masuk and Daftar, implemented in `AuthViews.cs` as `AuthSurface`):
   Automation names "Jam buka", "Jam buka, jam", "Jam buka, menit" (same for Jam
   tutup). The value stays a `TimeOnly`; validation keys stay openingTime /
   closingTime. The helper line "Untuk buka 24 jam, isi 00:00 sampai 23:59." stays.
+  Hour and minute share the pill width and stay inside it at card width 360.
+- Scrollbar (form scroll area of Masuk and Daftar only): a custom ScrollBar theme,
+  6 wide, holding only a Track with one rounded `muted` Thumb; no track fill and no
+  arrow RepeatButtons. Opacity 0 at rest, 1 while the ScrollViewer is pointer-over
+  or during scrolling (class `auth-scrolling`, cleared 800 ms after the last
+  offset change), with no transition. Wheel, touchpad, PageUp/PageDown and arrows
+  scroll natively; `BringIntoViewOnFocusChange` keeps the field reached with Tab in
+  view. Other screens keep the native Fluent scrollbar.
 - Database warning (startup error only, Masuk): one compact block above the card at
   card width, existing warning colors, short message "Database belum tersambung.
   Pesanan belum dapat disimpan." with the error detail trimmed to two lines and the
@@ -105,4 +120,4 @@ AUTH SURFACE (Masuk and Daftar, implemented in `AuthViews.cs` as `AuthSurface`):
   buttons change to selection background with primary text. Pressed, focus and
   disabled states of those two remain native Fluent. No blur, glow, gradients or
   animation.
-- Verified at 1360x940, 1040x720 and 1283x780 by `--verify-ui` (AuthVerification).
+- Verified at 1360x940, 1040x720, 1283x780 and 1920x1080 by `--verify-ui` (AuthVerification).

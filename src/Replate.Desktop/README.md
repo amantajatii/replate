@@ -15,11 +15,16 @@ dotnet run --project src/Replate.Desktop
 
 Aplikasi dibuka di layar **Masuk**. Masuk dengan akun demo (lihat tabel di bawah)
 atau pilih **Daftar akun baru**. Layar Masuk dan Daftar memakai kolom kiri berlatar
-terang (sekitar 60% lebar) dan panel hijau penuh tinggi di kanan (sekitar 40%).
-Wordmark tetap di kiri atas, sedangkan satu kartu formulir di bawahnya dapat digulir
-vertikal. Foto piring `Assets/auth-hero.png` (tanpa teks) melintasi batas kedua kolom,
-sepertiga di atas latar terang dan dua pertiga di atas panel hijau, dan selalu
-berjarak minimal 24 dari kartu. Setiap kolom kata sandi memiliki tombol mata yang
+terang dan panel hijau penuh tinggi di kanan. Batas kiri panel hijau tepat melewati
+titik tengah foto piring `Assets/auth-hero.png` (tanpa teks): setengah piring di atas
+latar terang dan setengah di atas panel hijau. Batas itu berada di sekitar 70% lebar
+jendela, sehingga panel hijau sekitar 30% lebar. Kartu formulir mulai di sekitar 14%
+lebar jendela (minimal 48) dan piring selalu berjarak minimal 24 dari kartu. Wordmark
+tetap di atas, sejajar dengan tepi kiri kartu, sedangkan satu kartu formulir di
+bawahnya dapat digulir vertikal; baris akun demo mengikuti lebar dan tepi kiri kartu. Area gulir memakai scrollbar tipis tanpa
+track dan tanpa tombol panah yang hanya tampil saat menggulir atau saat kursor berada
+di atasnya; gulir tetap bekerja dengan roda mouse, touchpad, dan keyboard, dan kolom
+yang dicapai dengan Tab otomatis tergulir ke tampilan. Setiap kolom kata sandi memiliki tombol mata yang
 selalu terlihat untuk menampilkan atau menyembunyikan isi. Di Daftar, peran dipilih
 dengan dua tombol **Pelanggan** / **Pemilik restoran** (bisa juga dengan tombol panah),
 dan Jam buka serta Jam tutup dipilih dari daftar jam 00 sampai 23 dan menit 00 sampai
@@ -151,9 +156,13 @@ harga, menu nonaktif, kedaluwarsa, perlindungan berkas rusak, serta akun: pendaf
 login, akun demo, isolasi antar pemilik, dan keranjang per pelanggan. Pemeriksaan UI
 membuka jendela native, menjalankan alur lintas area, menyimpan screenshot, lalu
 menutup otomatis. Untuk layar Masuk dan Daftar, pemeriksaan UI juga memastikan pada
-1360 × 940, 1040 × 720, dan 1283 × 780: panel hijau selebar 40%, piring melintasi
-batas kolom (sekitar 1/3 dan 2/3) tanpa berpotongan dengan kartu (jarak minimal 24),
-wordmark tidak terpotong saat digulir, dan tidak ada gulir horizontal. Pemeriksaan
+1360 × 940, 1040 × 720, 1283 × 780, dan 1920 × 1080: batas panel hijau berada di
+tengah piring (setengah di atas latar terang, toleransi 0,02 diameter) dan di sekitar
+70% lebar (panel sekitar 30%), tepi kiri kartu di sekitar 14% lebar dan minimal 48,
+piring tidak berpotongan dengan kartu (jarak minimal 24), kartu tidak terpotong,
+wordmark dan baris akun demo sejajar tepi kiri kartu, wordmark tidak terpotong saat
+digulir, tidak ada gulir horizontal, tidak ada scrollbar bertrack atau berpanah yang
+tampil, dan setiap kolom yang difokuskan dengan Tab tergulir ke tampilan. Pemeriksaan
 juga mencakup judul tebal tanpa subjudul, tombol mata yang terlihat saat kolom kosong
 dan mengganti mode, tombol peran yang eksklusif dan bisa dipakai dengan keyboard,
 kolom jam yang menghasilkan `TimeOnly` 24 jam tanpa AM/PM, serta hover tombol.
