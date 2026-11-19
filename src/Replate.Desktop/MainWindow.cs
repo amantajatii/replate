@@ -2,6 +2,8 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Replate.Domain.Entities;
+using Menu = Replate.Domain.Entities.Menu;
 
 namespace Replate.Desktop;
 
@@ -41,62 +43,102 @@ public sealed class MainWindow : Window
         Content = shell;
         successTimer.Tick += (_, _) => { successTimer.Stop(); successBanner.IsVisible = false; };
         Closed += (_, _) => successTimer.Stop();
-        ShowEntry();
+        ShowHome();
     }
 
-    internal void ShowEntry()
+    // Accounts
+    internal void ShowSignIn() => ShowPublic(new SignInView(this, Session, startupError));
+    internal void ShowRegister() => ShowPublic(new RegisterView(this, Session));
+
+    internal void ShowHome()
     {
-        cartLink = null;
-        var body = Ui.Stack(24, Ui.Text("replate.", 36, Ui.Green, true),
-            startupError is null ? new Border() : new Border
-            {
-                Child = Ui.Text("Database belum tersambung. Aplikasi tetap terbuka, tetapi pesanan tidak dapat disimpan sampai PostgreSQL diperbaiki.\n\n" + startupError, 14, Brush.Parse("#7A4E00")),
-                Background = Brush.Parse("#FFF4D6"), BorderBrush = Brush.Parse("#E5B94A"), BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(6), Padding = new Thickness(14)
-            },
-            Ui.Text("Pilih area Replate", 28, bold: true),
-            Ui.Text("Jelajahi makanan surplus sebagai pelanggan atau kelola operasional restoran.", 16, Ui.Muted),
-            Ui.Divider(),
-            Ui.Stack(10, Ui.Text("Pelanggan", 20, bold: true),
-                Ui.Text("Cari makanan, buat reservasi, dan pantau waktu pengambilan.", 14, Ui.Muted),
-                Ui.Button("Jelajahi makanan", EnterCustomerArea, true)),
-            Ui.Divider(),
-            Ui.Stack(10, Ui.Text("Pemilik restoran", 20, bold: true),
-                Ui.Text($"Kelola menu, penawaran, produksi, dan pesanan di {Session.Restaurant.Name}.", 14, Ui.Muted),
-                Ui.Button("Buka area restoran", EnterRestaurantArea)),
-            Ui.Text("Pilihan area untuk demonstrasi lokal. Masuk otomatis dengan akun demo.", 12, Ui.Muted));
-        body.MaxWidth = 600; body.HorizontalAlignment = HorizontalAlignment.Center;
-        body.VerticalAlignment = VerticalAlignment.Center; body.Margin = new Thickness(40);
-        pageHost.Content = Ui.Scroll(body);
+        if (Session.CurrentUser is RestaurantOwner) ShowDashboard();
+        else if (Session.CurrentUser is Customer) ShowMarketplace();
+        else ShowSignIn();
     }
 
-    internal void EnterCustomerArea() =>
-        Run(() => Session.SignIn(DemoAccounts.CustomerEmail, DemoAccounts.Password), ShowMarketplace);
+    internal void SignOut()
+    {
+        Session.SignOut();
+        successTimer.Stop(); successBanner.IsVisible = false;
+        ShowSignIn();
+    }
 
-    internal void EnterRestaurantArea() =>
-        Run(() => Session.SignIn(DemoAccounts.OwnerEmail("Dapur Bumi"), DemoAccounts.Password), ShowDashboard);
+    private void ShowPublic(Control page)
+    {
+        CurrentPage = page;
+        cartLink = null; alert = null;
+        pageHost.Content = page;
+    }
 
+    private bool Allowed(bool restaurant, bool owned = true)
+    {
+        var allowed = owned && (restaurant ? Session.CurrentUser is RestaurantOwner owner && Session.Restaurant.OwnerId == owner.Id
+            : Session.CurrentUser is Customer);
+        if (!allowed) { if (Session.IsSignedIn) Session.SignOut(); ShowSignIn(); }
+        return allowed;
+    }
+
+    private bool OwnsRestaurant(Guid restaurantId) => Session.Restaurant.Id == restaurantId;
+
+    // Customer area
     internal void ShowMarketplace()
     {
+        if (!Allowed(false)) return;
         Marketplace = new MarketplaceView(this, Session);
         Render(false, Marketplace, "Jelajah");
         Marketplace.Refresh();
     }
-    internal void ShowFood(Replate.Domain.Entities.SurplusListing listing) =>
-        Render(false, new FoodDetailView(this, Session, listing), "Jelajah");
-    internal void ShowCart() => Render(false, new CartView(this, Session), "Keranjang");
-    internal void ShowCustomerOrders() => Render(false, new OrdersView(this, Session, false), "Pesanan saya");
-    internal void ShowOrder(Replate.Domain.Entities.Order order, bool restaurant) =>
-        Render(restaurant, new OrderDetailView(this, Session, order, restaurant), restaurant ? "Pesanan" : "Pesanan saya");
-    internal void ShowDashboard() => Render(true, new DashboardView(Session), "Dashboard");
-    internal void ShowMenus() => Render(true, new MenusView(this, Session), "Menu");
-    internal void ShowMenuEditor(Replate.Domain.Entities.Menu? menu = null) =>
-        Render(true, new MenuEditorView(this, Session, menu), "Menu");
-    internal void ShowListings() => Render(true, new ListingsView(this, Session), "Penawaran surplus");
-    internal void ShowListingEditor(Replate.Domain.Entities.SurplusListing? listing = null) =>
-        Render(true, new ListingEditorView(this, Session, listing), "Penawaran surplus");
-    internal void ShowProduction() => Render(true, new ProductionView(this, Session), "Produksi");
-    internal void ShowRestaurantOrders() => Render(true, new OrdersView(this, Session, true), "Pesanan");
+    internal void ShowFood(SurplusListing listing)
+    {
+        if (Allowed(false)) Render(false, new FoodDetailView(this, Session, listing), "Jelajah");
+    }
+    internal void ShowCart()
+    {
+        if (Allowed(false)) Render(false, new CartView(this, Session), "Keranjang");
+    }
+    internal void ShowCustomerOrders()
+    {
+        if (Allowed(false)) Render(false, new OrdersView(this, Session, false), "Pesanan saya");
+    }
+    internal void ShowOrder(Order order, bool restaurant)
+    {
+        var owned = restaurant ? OwnsRestaurant(order.RestaurantId) : Session.CurrentUser?.Id == order.CustomerId;
+        if (Allowed(restaurant, owned))
+            Render(restaurant, new OrderDetailView(this, Session, order, restaurant), restaurant ? "Pesanan" : "Pesanan saya");
+    }
+
+    // Restaurant area
+    internal void ShowDashboard()
+    {
+        if (Allowed(true)) Render(true, new DashboardView(this, Session), "Dashboard");
+    }
+    internal void ShowMenus()
+    {
+        if (Allowed(true)) Render(true, new MenusView(this, Session), "Menu");
+    }
+    internal void ShowMenuEditor(Menu? menu = null)
+    {
+        if (Allowed(true, menu is null || OwnsRestaurant(menu.RestaurantId)))
+            Render(true, new MenuEditorView(this, Session, menu), "Menu");
+    }
+    internal void ShowListings()
+    {
+        if (Allowed(true)) Render(true, new ListingsView(this, Session), "Penawaran surplus");
+    }
+    internal void ShowListingEditor(SurplusListing? listing = null)
+    {
+        if (Allowed(true, listing is null || OwnsRestaurant(listing.Menu.RestaurantId)))
+            Render(true, new ListingEditorView(this, Session, listing), "Penawaran surplus");
+    }
+    internal void ShowProduction()
+    {
+        if (Allowed(true)) Render(true, new ProductionView(this, Session), "Produksi");
+    }
+    internal void ShowRestaurantOrders()
+    {
+        if (Allowed(true)) Render(true, new OrdersView(this, Session, true), "Pesanan");
+    }
 
     internal void UpdateCartCount()
     {
@@ -168,8 +210,8 @@ public sealed class MainWindow : Window
         {
             cartLink = Nav("Keranjang", ShowCart); UpdateCartCount();
             var links = Ui.Row(12, logo, Nav("Jelajah", ShowMarketplace), Nav("Pesanan saya", ShowCustomerOrders), cartLink);
-            var switchArea = Ui.Button("Ganti area", ShowEntry);
-            var top = new Border { Child = Ui.Columns("*,Auto", links, switchArea),
+            var signOut = Ui.Button("Keluar", SignOut);
+            var top = new Border { Child = Ui.Columns("*,Auto", links, signOut),
                 Padding = new Thickness(32, 16), Background = Brushes.White,
                 BorderBrush = Brush.Parse("#DDE3DA"), BorderThickness = new Thickness(0, 0, 0, 1) };
             var root = new DockPanel(); DockPanel.SetDock(top, Dock.Top); root.Children.Add(top); root.Children.Add(area);
@@ -181,7 +223,7 @@ public sealed class MainWindow : Window
             var nav = Ui.Stack(8, logo, Nav("Dashboard", ShowDashboard), Nav("Menu", ShowMenus),
                 Nav("Penawaran surplus", ShowListings), Nav("Produksi", ShowProduction), Nav("Pesanan", ShowRestaurantOrders));
             foreach (var button in nav.Children.OfType<Button>()) button.HorizontalAlignment = HorizontalAlignment.Stretch;
-            var footer = Ui.Stack(12, Ui.Text(Session.Restaurant.Name, 14, bold: true), Ui.Button("Ganti area", ShowEntry));
+            var footer = Ui.Stack(12, Ui.Text(Session.Restaurant.Name, 14, bold: true), Ui.Button("Keluar", SignOut));
             var dock = new DockPanel { Margin = new Thickness(20, 28, 20, 24) };
             DockPanel.SetDock(footer, Dock.Bottom); dock.Children.Add(footer); dock.Children.Add(nav);
             pageHost.Content = Ui.Columns("208,*", new Border { Child = dock, Background = Brush.Parse("#F1F3EE"),

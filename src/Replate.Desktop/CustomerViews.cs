@@ -95,7 +95,14 @@ public sealed class OrdersView : UserControl
                 2 => o.Status == OrderStatus.Completed, 3 => o.Status == OrderStatus.Cancelled, _ => true }).ToList();
             if (orders.Count == 0)
             {
-                if (restaurant) list.Children.Add(Ui.Text("Tidak ada pesanan pada filter ini.", 16, Ui.Muted));
+                if (restaurant && allOrders.Count == 0)
+                {
+                    var create = Ui.Button("Buat penawaran", () => host.ShowListingEditor(), true);
+                    create.HorizontalAlignment = HorizontalAlignment.Left;
+                    list.Children.Add(Ui.Stack(12, Ui.Text("Belum ada pesanan", 20, bold: true),
+                        Ui.Text("Pesanan muncul setelah pelanggan memesan penawaran surplus restoran ini.", 14, Ui.Muted), create));
+                }
+                else if (restaurant) list.Children.Add(Ui.Text("Tidak ada pesanan pada filter ini.", 16, Ui.Muted));
                 else
                 {
                     var noHistory = allOrders.Count == 0;

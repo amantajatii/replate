@@ -20,10 +20,17 @@ internal static class UiVerification
             Directory.CreateDirectory(output);
             async Task Shot(string name) { await Settle(); Capture(window, Path.Combine(output, name + ".png")); }
             void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            await Shot("entry");
-            Button EntryButton(string text) => window.GetVisualDescendants().OfType<Button>().Single(b => b.Content as string == text);
-            Click(EntryButton("Jelajahi makanan"));
-            Ensure(window.Session.CurrentUser?.Email == DemoAccounts.CustomerEmail && window.CurrentPage is MarketplaceView, "Customer entry signs in demo customer");
+            Ensure(window.CurrentPage is SignInView && !window.Session.IsSignedIn, "Startup shows sign-in");
+            await Shot("sign-in");
+            async Task SignInWithForm(string email)
+            {
+                var signIn = (SignInView)window.CurrentPage!;
+                signIn.EmailInput.Text = email; signIn.PasswordInput.Text = DemoAccounts.Password;
+                Click(signIn.SignInButton); await Settle();
+            }
+            Button ShellButton(string text) => window.GetVisualDescendants().OfType<Button>().Single(b => b.Content as string == text);
+            await SignInWithForm(DemoAccounts.CustomerEmail);
+            Ensure(window.Session.CurrentUser?.Email == DemoAccounts.CustomerEmail && window.CurrentPage is MarketplaceView, "Customer sign-in opens marketplace");
             await Shot("marketplace");
             var market = window.Marketplace;
             Ensure(market.VisibleCount == 10, "Initial listings from all restaurants");
@@ -46,10 +53,11 @@ internal static class UiVerification
             await Shot("reservation");
             var order = window.Session.LastOrder!;
             window.ShowCustomerOrders(); await Shot("customer-orders");
-            window.ShowEntry(); await Settle();
-            Click(EntryButton("Buka area restoran"));
+            Click(ShellButton("Keluar")); await Settle();
+            Ensure(window.CurrentPage is SignInView && !window.Session.IsSignedIn, "Keluar returns to sign-in");
+            await SignInWithForm(DemoAccounts.OwnerEmail("Dapur Bumi"));
             Ensure(window.Session.CurrentUser is Replate.Domain.Entities.RestaurantOwner && window.Session.Restaurant.Name == "Dapur Bumi" &&
-                window.CurrentPage is DashboardView, "Restaurant entry signs in Dapur Bumi demo owner");
+                window.CurrentPage is DashboardView, "Owner sign-in opens Dapur Bumi dashboard");
             await Shot("dashboard");
             window.ShowMenus(); await Shot("menus");
             window.ShowMenuEditor(); await Shot("menu-editor");
@@ -171,7 +179,9 @@ internal static class UiVerification
             await Shot("menu-deletion-rejected");
             dialog.Close(); await deletion;
             window.Width = 1040; window.Height = 720;
+            window.Session.AsCustomer();
             window.ShowMarketplace(); await Shot("marketplace-compact");
+            window.Session.AsOwner();
             window.ShowDashboard(); await Shot("dashboard-compact");
             window.ShowListingEditor(); await Shot("listing-editor-compact");
             window.ShowProduction(); await Shot("production-compact");
@@ -182,6 +192,7 @@ internal static class UiVerification
             await FormLayoutVerification.Run(output);
             await PickupCopyVerification.Run(output);
             await OrdersEmptyVerification.Run(output);
+            await AuthVerification.Run(output);
             Console.WriteLine($"All Replate desktop UI checks passed. Screenshots: {output}"); desktop.Shutdown();
         }
         catch (Exception exception) { Console.Error.WriteLine(exception); desktop.Shutdown(1); }

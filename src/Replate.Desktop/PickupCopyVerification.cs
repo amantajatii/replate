@@ -75,12 +75,12 @@ internal static class PickupCopyVerification
                 t.Text == "Kode belum berhasil disalin. Silakan coba lagi."), "Retry succeeds and clears failure feedback");
             window.WindowState = WindowState.Maximized; await Task.Delay(650);
             await CheckVisible("maximized");
+            session.AsOwner();
             window.ShowOrder(order, true);
             Ensure(((OrderDetailView)window.CurrentPage!).CopyCodeButton is null, "Copy button never appears in restaurant area");
-            session.AsOwner();
             foreach (var transition in new Action[] { () => session.ConfirmOrder(order, 15), () => session.ReadyOrder(order), () => session.CompletePickup(order, order.PickupCode) })
             {
-                transition(); window.ShowOrder(order, false);
+                session.AsOwner(); transition(); session.AsCustomer(); window.ShowOrder(order, false);
                 Ensure(((OrderDetailView)window.CurrentPage!).CopyCodeButton is not null, "Existing code visibility preserved through order transitions");
             }
             var savedCode = order.PickupCode;

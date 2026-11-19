@@ -13,11 +13,12 @@ dotnet restore Replate.slnx
 dotnet run --project src/Replate.Desktop
 ```
 
-Pilih **Jelajahi makanan** atau **Buka area restoran**. **Ganti area** kembali ke
-pemilihan area. Sebelum layar login tersedia, kedua tombol masuk otomatis dengan
-akun demo: pelanggan demo untuk area pelanggan dan pemilik Dapur Bumi untuk area
-restoran. Operasi keranjang dan reservasi hanya untuk pelanggan yang masuk;
-operasi area restoran hanya untuk pemilik restoran tersebut.
+Aplikasi dibuka di layar **Masuk**. Masuk dengan akun demo (lihat tabel di bawah)
+atau pilih **Daftar akun baru**. Pelanggan diarahkan ke marketplace, pemilik
+restoran ke dashboard restorannya. **Keluar** di navigasi pelanggan atau sidebar
+restoran mengakhiri sesi dan kembali ke layar Masuk. Halaman pelanggan hanya untuk
+pelanggan yang masuk; halaman restoran hanya untuk pemilik restoran tersebut. Peran
+yang tidak sesuai atau belum masuk diarahkan kembali ke layar Masuk.
 
 ## Akun demo
 
@@ -40,7 +41,8 @@ Akun demo tidak digandakan dan tidak menimpa akun yang sudah ada.
 
 | Area | Halaman | Fungsi |
 | --- | --- | --- |
-| Awal | Pilih area | Memisahkan konteks pelanggan dan restoran |
+| Awal | Masuk | Email dan kata sandi; arah halaman mengikuti peran akun |
+| Awal | Daftar | Akun pelanggan atau pemilik restoran beserta profil restoran |
 | Pelanggan | Marketplace | Cari, filter, lihat harga, stok, jadwal pengambilan |
 | Pelanggan | Detail makanan | Deskripsi, harga, jumlah porsi, tambah ke keranjang |
 | Pelanggan | Keranjang | Ubah jumlah, hapus item, periksa total, reservasi |
@@ -57,13 +59,19 @@ Akun demo tidak digandakan dan tidak menimpa akun yang sudah ada.
 
 ## Alur demonstrasi
 
-1. Pelanggan memilih makanan, membuka keranjang, lalu **Reservasi pesanan**.
-2. Catat kode pengambilan di detail pesanan.
-3. **Ganti area** → **Buka area restoran** → **Pesanan** → **Lihat pesanan**.
+1. Di layar **Masuk**, masuk sebagai `pelanggan@replate.demo` / `replate123`.
+2. Pilih makanan, buka keranjang, lalu **Reservasi pesanan**. Catat kode
+   pengambilan di detail pesanan.
+3. **Keluar**, lalu masuk sebagai `dapur-bumi@replate.demo` / `replate123`
+   (atau pemilik restoran tempat makanan dipesan) → **Pesanan** → **Lihat pesanan**.
 4. Isi estimasi persiapan → **Konfirmasi pesanan** → **Tandai siap diambil**.
 5. Masukkan kode pelanggan → **Verifikasi dan selesaikan**.
 6. Pesanan menjadi selesai, porsi terselamatkan bertambah pada produksi menu,
    dan dashboard memperbarui pendapatan yang dipulihkan.
+
+Restoran baru: **Keluar** → **Daftar akun baru** → pilih **Pemilik restoran**, isi
+akun dan **Profil restoran** (untuk buka 24 jam, isi 00:00 sampai 23:59) → **Daftar**.
+Dashboard restoran baru masih kosong dan menawarkan **Tambah menu**.
 
 Untuk pasokan baru: **Menu** → **Tambah menu**, lalu **Produksi** → catat produksi
 serta penjualan reguler. Setelah itu buat **Penawaran surplus** dengan stok yang
