@@ -1,18 +1,11 @@
 ﻿param(
-    [string]$DatabaseHost,
-    [string]$DatabaseUser,
+    [string]$DatabaseHost = 'aws-1-ap-northeast-1.pooler.supabase.com',
+    [string]$DatabaseUser = 'postgres.rnrrdcgcatislnkpyzhr',
     [int]$DatabasePort = 5432,
-    [string]$RootCertificate
+    [string]$RootCertificate = (Join-Path $PSScriptRoot 'prod-ca-2021.crt')
 )
 
 $ErrorActionPreference = 'Stop'
-
-if ([string]::IsNullOrWhiteSpace($DatabaseHost)) {
-    $DatabaseHost = Read-Host 'Host Session pooler dari Supabase'
-}
-if ([string]::IsNullOrWhiteSpace($DatabaseUser)) {
-    $DatabaseUser = Read-Host 'Username Session pooler dari Supabase'
-}
 
 $DatabaseHost = $DatabaseHost.Trim()
 $DatabaseUser = $DatabaseUser.Trim()
