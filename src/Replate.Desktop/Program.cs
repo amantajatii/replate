@@ -9,7 +9,7 @@ namespace Replate.Desktop;
 internal static class Program
 {
     [STAThread]
-    public static async Task Main(string[] args)
+    public static void Main(string[] args)
     {
         if (args.Contains("--verify-state")) { StateVerification.Run(); MultiRestaurantVerification.Run(); AccountVerification.Run(); return; }
 
@@ -18,7 +18,7 @@ internal static class Program
         {
             try
             {
-                await new DatabaseService().InitializeAsync();
+                new DatabaseService().InitializeAsync().GetAwaiter().GetResult();
             }
             catch (Exception e) when (e is InvalidOperationException or ArgumentException)
             {

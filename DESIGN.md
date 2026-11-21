@@ -13,6 +13,9 @@ colors:
   divider: "#DDE3DA"
   leaf: "#4FA37E"
   scrim: "rgba(35, 56, 44, 0.40)"
+  danger: "#B3261E"
+  danger-tint: "#FBE4E1"
+  danger-pressed: "#F6D3CE"
 typography:
   headline:
     fontFamily: "Helvetica Neue, Segoe UI, sans-serif"
@@ -42,6 +45,14 @@ typography:
     fontFamily: "Helvetica Neue, Segoe UI, sans-serif"
     fontSize: "12px"
     fontWeight: 400
+  pickup-code:
+    fontFamily: "Cascadia Mono, Consolas, Menlo, monospace"
+    fontSize: "36px"
+    fontWeight: 700
+  pickup-code-compact:
+    fontFamily: "Cascadia Mono, Consolas, Menlo, monospace"
+    fontSize: "18px"
+    fontWeight: 700
 rounded:
   control: "6px"
   card: "16px"
@@ -75,6 +86,13 @@ elevation:
     spread: "0px"
     color: "rgba(36, 91, 67, 0.30)"
     avaloniaBoxShadow: "0 4 12 0 #4D245B43"
+  button-danger-hover:
+    offsetX: "0px"
+    offsetY: "4px"
+    blur: "12px"
+    spread: "0px"
+    color: "rgba(179, 38, 30, 0.30)"
+    avaloniaBoxShadow: "0 4 12 0 #4DB3261E"
 motion:
   collection-card-hover:
     scale: 1.03
@@ -83,7 +101,7 @@ motion:
     easing: "ease-out (Avalonia CubicEaseOut)"
     properties: "background, foreground, render transform, shadow"
   primary-button-hover:
-    scale: "1.03 (compact primary buttons only; full-width primary buttons do not scale)"
+    scale: "1.03 (compact primary buttons and the compact danger button only; full-width primary buttons do not scale)"
     origin: "center"
     duration: "120ms"
     easing: "ease-out (Avalonia CubicEaseOut)"
@@ -111,6 +129,20 @@ components:
     backgroundColor: "{colors.divider}"
     textColor: "{colors.primary}"
     shadow: "{elevation.button-primary-hover}"
+  button-danger:
+    backgroundColor: "{colors.danger}"
+    textColor: "{colors.surface}"
+    rounded: "{rounded.control}"
+    padding: "11px 16px"
+  button-danger-hover:
+    backgroundColor: "{colors.danger-tint}"
+    textColor: "{colors.danger}"
+    shadow: "{elevation.button-danger-hover}"
+    motion: "{motion.primary-button-hover}"
+  button-danger-pressed:
+    backgroundColor: "{colors.danger-pressed}"
+    textColor: "{colors.danger}"
+    shadow: "{elevation.button-danger-hover}"
   button-secondary:
     backgroundColor: "{colors.surface}"
     textColor: "{colors.ink}"
@@ -325,6 +357,33 @@ components:
     textColor: "{colors.ink}"
     rounded: "{rounded.full}"
     height: "42px"
+  order-filter:
+    backgroundColor: "transparent"
+    textColor: "{colors.muted}"
+    rounded: "{rounded.full}"
+    height: "36px"
+    padding: "0px 16px"
+  order-filter-hover:
+    backgroundColor: "{colors.sidebar}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.full}"
+    height: "36px"
+  order-filter-selected:
+    backgroundColor: "{colors.selection}"
+    textColor: "{colors.primary}"
+    typography: "14px semibold"
+    rounded: "{rounded.full}"
+    height: "36px"
+  order-card:
+    backgroundColor: "{colors.surface}"
+    rounded: "{rounded.card}"
+    shadow: "{elevation.card}"
+    padding: "20px"
+  order-detail-card:
+    backgroundColor: "{colors.surface}"
+    rounded: "{rounded.card}"
+    shadow: "{elevation.card}"
+    padding: "24px"
 ---
 
 # Design System: Replate Desktop
@@ -361,6 +420,11 @@ Forest green is a functional accent within a pale, warm-neutral workspace. Front
 - **Sage Divider** (`divider`): row rules and shell separators; also the pressed fill of the Jelajah collection cards and primary buttons, one step under the `selection` hover (`primary` text about 6.1:1).
 - **Light Leaf** (`leaf`): the hover color of the password-toggle icon only. About 3.1:1 on white, enough for an icon, not for body text.
 - **Ink Scrim** (`scrim`): `ink` at 40% alpha (Avalonia `#6623382C`), the flat dimmed layer behind the food dialog and the checkout confirmation only. No blur.
+
+### Danger
+- **Danger Red** (`danger`): the fill of the danger button (white text about 6.5:1) and its text and icon color on hover and press. Used only for actions that cancel or destroy something.
+- **Danger Tint** (`danger-tint`): the danger button hover fill (`danger` text about 5.4:1).
+- **Danger Pressed** (`danger-pressed`): the danger button pressed fill, one step under `danger-tint` (`danger` text about 4.7:1).
 
 The customer top bar and the Jelajah collection cards are the places `primary` is a surface rather than an accent: white text and icons on it reach about 7.9:1.
 
@@ -408,17 +472,19 @@ Reference sizes: at (1360 × 940) the plate is 526, the card 440 starting at 163
 
 ## Elevation & Depth
 
-Custom application surfaces stay flat. Tonal backgrounds, whitespace, and thin dividers separate shell, rows, and content. The only exception is the card, which may carry one soft shadow: `elevation.card`, or, on the green Jelajah collection cards only, `elevation.card-primary` (and `elevation.card-primary-hover` on hover and press). The one non-card shadow is `elevation.button-primary-hover`, on primary buttons while hovered or pressed. There are no other shadow tokens and two motion tokens, `motion.collection-card-hover` and `motion.primary-button-hover`.
+Custom application surfaces stay flat. Tonal backgrounds, whitespace, and thin dividers separate shell, rows, and content. The only exception is the card, which may carry one soft shadow: `elevation.card`, or, on the green Jelajah collection cards only, `elevation.card-primary` (and `elevation.card-primary-hover` on hover and press). The non-card shadows are `elevation.button-primary-hover`, on primary buttons while hovered or pressed, and `elevation.button-danger-hover`, the same shadow tinted with `danger`, on the danger button. There are no other shadow tokens and two motion tokens, `motion.collection-card-hover` and `motion.primary-button-hover`.
 
 **The One Shadow Rule.** `elevation.card` is offset (0, 8), blur (24), spread (0), in ink (`#23382C`) at about 12% alpha. In Avalonia this is the `BoxShadow` string `0 8 24 0 #1F23382C` (Avalonia colors are `#AARRGGBB`, and `1F` is 31 of 255, about 12%). The CSS equivalent is `0px 8px 24px 0px rgba(35, 56, 44, 0.12)`. Do not stack shadows, tint them with the primary color, or apply them to rows or the shell; the only button shadow is the primary button hover shadow below.
 
 **The primary shadow exception.** A white card's ink shadow disappears under a green fill, so the `primary` collection cards use a shadow tinted with `primary` (`#245B43`) instead: `elevation.card-primary` is offset (0, 6), blur (18), spread (0), at about 30% alpha (Avalonia `0 6 18 0 #4D245B43`, CSS `0px 6px 18px 0px rgba(36, 91, 67, 0.30)`); on hover and press it deepens to `elevation.card-primary-hover`, offset (0, 10), blur (24), about 35% alpha (Avalonia `0 10 24 0 #59245B43`, CSS `0px 10px 24px 0px rgba(36, 91, 67, 0.35)`). Both stay a single soft shadow with no border, glow, or blur filter. No other surface uses them.
 
-**The primary button shadow.** Primary buttons are flat at rest. On hover and press they carry `elevation.button-primary-hover`, the same `primary` tint at about 30% alpha but smaller: offset (0, 4), blur (12), spread (0) (Avalonia `0 4 12 0 #4D245B43`, CSS `0px 4px 12px 0px rgba(36, 91, 67, 0.30)`). It is the only shadow a button may carry, and only rounded-rectangle primary buttons carry it; round buttons, icon buttons, and secondary buttons stay flat.
+**The primary button shadow.** Primary buttons are flat at rest. On hover and press they carry `elevation.button-primary-hover`, the same `primary` tint at about 30% alpha but smaller: offset (0, 4), blur (12), spread (0) (Avalonia `0 4 12 0 #4D245B43`, CSS `0px 4px 12px 0px rgba(36, 91, 67, 0.30)`). It is the only shadow a primary button may carry, and only rounded-rectangle primary buttons carry it; round buttons, icon buttons, and secondary buttons stay flat.
 
-The current build applies `elevation.card` to the auth-card, the profile menu, the Jelajah listing cards (also on collection and search result pages), the Keranjang item cards, the food dialog, and the checkout confirmation, and `elevation.card-primary` to the Jelajah collection cards only. The Jelajah banner has no shadow. The top bar stays flat with no rule and no shadow: its green fill separates it from the canvas. If a separator is ever needed, it is `elevation.card`, never a line.
+**The danger button shadow.** The danger button carries `elevation.button-danger-hover` on hover and press: offset (0, 4), blur (12), spread (0), `danger` (`#B3261E`) at about 30% alpha (Avalonia `0 4 12 0 #4DB3261E`, CSS `0px 4px 12px 0px rgba(179, 38, 30, 0.30)`). It is flat at rest and follows the button's corner radius.
 
-**The one motion exception.** New animations and transitions are not allowed. The single exception is the hover motion of the Jelajah collection cards (`motion.collection-card-hover`) and, extended from it, of the compact primary buttons (`motion.primary-button-hover`): scale 1.03 from the center plus the fill, text, icon, and shadow change, all over 120 ms ease-out, and back the same way. Full-width primary buttons share the color and shadow change over the same 120 ms but never scale. Reduced-motion system settings are not read (Avalonia exposes no portable setting), so the transition always runs; it is short and never moves layout. The restaurant dashboard metric cards keep their earlier 180 ms hover transition, which predates this rule; nothing else animates.
+The current build applies `elevation.card` to the auth-card, the profile menu, the Jelajah listing cards (also on collection and search result pages), the Keranjang item cards, the Pesanan saya order cards and the order detail cards, the food dialog, and the checkout confirmation, and `elevation.card-primary` to the Jelajah collection cards only. The Jelajah banner has no shadow. The top bar stays flat with no rule and no shadow: its green fill separates it from the canvas. If a separator is ever needed, it is `elevation.card`, never a line.
+
+**The one motion exception.** New animations and transitions are not allowed. The single exception is the hover motion of the Jelajah collection cards (`motion.collection-card-hover`) and, extended from it, of the compact primary buttons and the compact danger button (`motion.primary-button-hover`): scale 1.03 from the center plus the fill, text, icon, and shadow change, all over 120 ms ease-out, and back the same way. Full-width primary buttons share the color and shadow change over the same 120 ms but never scale. Reduced-motion system settings are not read (Avalonia exposes no portable setting), so the transition always runs; it is short and never moves layout. The restaurant dashboard metric cards keep their earlier 180 ms hover transition, which predates this rule; nothing else animates.
 
 Native Avalonia Fluent controls retain their theme behavior; this document does not override native popups or interaction states. The exceptions are the thin scrollbar of the auth scroll area, described under Auth surface, and keyboard focus on customer routes, described under Focus.
 
@@ -443,6 +509,14 @@ Direct, compact action labels. Primary buttons use green with white text; second
 
 **Hover follows the shape.** Every hover, press, and rest fill is painted on the button's `PART_ContentPresenter` (or the face Border of a custom template) with the same `CornerRadius` as the button, never on a rectangle behind it, so no tint shows outside a rounded or round shape. The shared button theme sets `ClipToBounds` to false: Fluent clips a button to its rectangular layout box, which cut the hover shadow (and the focus ring) into a square. A round button is a circle by construction: `Ui.Round` sets Width = Height and `CornerRadius` to half the size (never a `9999` placeholder). Shadow and scale belong only to rounded-rectangle buttons (compact primary buttons scale 1.03 and carry `elevation.button-primary-hover`; full-width primary buttons carry the shadow without scale); their shadow follows the same corner radius and every container leaves room for it (the listing card padding 20, the dialog bar padding 16, the 24 list inset on Keranjang, the checkout confirmation padding 24). Round buttons and small icon buttons (stepper plus and minus, the dialog close button, the Keranjang trash button, the top bar magnifier, cart, and profile circle) never carry a hover shadow or scale; they only change color inside their shape.
 - **Icon buttons** (`Ui.Round(..., icon: true)`, class `icon`): transparent at rest with an `ink` icon (the trash icon rests `muted`); hover fills the circle with `selection` and turns the icon `primary`; press uses `divider`. Used by the dialog close button and the Keranjang trash button.
+
+**Danger button.** One shared variant (`Ui.DangerButton`, classes `danger` and `compact`, registered with the primary style for the whole app) for actions that cancel an order. It has the compact primary shape (`rounded.control`, padding 11 by 16, semibold 13) and, like the primary button, sets fill and text on `PART_ContentPresenter` in every state:
+- **Normal:** `danger` fill, white text and icon (about 6.5:1), flat, scale 1.
+- **Hover:** `danger-tint` fill, `danger` text and icon (about 5.4:1), `elevation.button-danger-hover`, scale 1.03 from the center, ZIndex 1, over the 120 ms ease-out `motion.primary-button-hover`.
+- **Pressed:** `danger-pressed` fill, one step under hover, `danger` text (about 4.7:1), the same shadow and no extra one.
+- **Disabled:** the existing primary disabled treatment; no hover, press, shadow, or scale.
+- **Shape and focus:** hover follows the shape (fill and shadow stay inside the rounded rectangle and no container clips them); the shared `:focus-visible` ring is unchanged and stays on top.
+- **Used by:** "Batalkan pesanan" on the customer order detail and on the restaurant owner's order detail (the same shared button). The "Ya, batalkan pesanan" confirmation and every Hapus action keep their own style.
 
 Secondary buttons keep their FluentTheme hover, focus, pressed, and disabled behavior, except on the auth surface, where the secondary button hovers to a selection fill with primary text, and the auth controls below document their own states.
 
@@ -479,7 +553,7 @@ The brand is shown only as a bitmap logo; there is no text wordmark. `Assets/log
 "Jelajahi Menu" heads the listing on Jelajah, between the collection cards and the first listing card: 32, bold (`auth-title` weight), `ink`, matching the largest banner greeting, left-aligned with the content edge, one line. It is always shown, also when the list is empty. The add-to-cart notice sits right-aligned on the same row. There is no result counter.
 
 ### Navigation and Filters
-Selected routes share pale sage fill and forest-green text; inactive items use muted text. Jelajah has no filters: the collection cards below are links to their own pages, not a chip shape or a selection. Customer navigation is the top bar below and has no route tabs; restaurant navigation is the vertical rail.
+Selected routes share pale sage fill and forest-green text; inactive items use muted text. The only customer filter is the status filter on Pesanan saya (see Pesanan saya). Jelajah has no filters: the collection cards below are links to their own pages, not a chip shape or a selection. Customer navigation is the top bar below and has no route tabs; restaurant navigation is the vertical rail.
 
 ### Top Bar
 The customer shell (`CustomerTopBar.cs`) is one persistent bar on every customer page: `primary` fill, height (72), side padding (32). No bottom rule, no shadow, and no border. Text and icons on it are white (about 7.9:1). It holds three groups in an `Auto, *, Auto` grid:
@@ -506,7 +580,7 @@ Five equal cards in one row, (24) under the banner and (24) above the section ti
 ### Collection Page
 One reused view (`CollectionView.cs`) for the five collections and for search results, under the same top bar and in the same content column as Jelajah (at most 1200, inset 32), with no banner. From top to bottom:
 
-- **Back link:** "Kembali ke Jelajah" with a 16 left arrow (Path on a 16 grid, stroke 1.75, round caps), 8 from the 14 semibold `primary` text and vertically centered with it, transparent in every state, at least 32 high; the shared text link (`text-link`): hover only changes the arrow and text to `primary-hover`, pressed returns them to `primary`, with no fill, border, shadow, scale, or underline; padding 8 by 6 with the arrow on the content edge; the shared `primary` focus ring. It opens Jelajah.
+- **Back link:** "Kembali ke Jelajah" (or another label passed to `CollectionView.CreateBackLink`, such as "Kembali ke Pesanan saya") with a 16 left arrow (Path on a 16 grid, stroke 1.75, round caps), 8 from the 14 semibold `primary` text and vertically centered with it, transparent in every state, at least 32 high; the shared text link (`text-link`): hover only changes the arrow and text to `primary-hover`, pressed returns them to `primary`, with no fill, border, shadow, scale, or underline; padding 8 by 6 with the arrow on the content edge; the shared `primary` focus ring. It opens Jelajah.
 - **Title:** 32, bold, `ink`, one line, the same size as "Jelajahi Menu". A collection uses its card label exactly; search results read "Hasil untuk {kata}" with the keyword as typed (outer spaces trimmed), cut with an ellipsis when too long. The add-to-cart notice sits right-aligned on the same row.
 - **Intro:** on a collection page with listings, one sentence sits (8) under the title, 16 in `muted`, wrapping; the first card follows (16) under it. Search results and empty states have no intro. Termurah: "Temukan berbagai makanan lezat, pas, dan ramah di kantong!"; Segera berakhir: "Nikmati hidangan favorit sebelum terlambat!"; Makanan utama: "Temukan hidangan mengenyangkan untuk menemani harimu!"; Roti & kue: "Maniskan harimu dengan roti dan kue lezat yang menggugah selera!"; Buah & sayur: "Nikmati pilihan hidangan sehat yang lezat, segar, dan penuh kebaikan!".
 - **Listings:** the same listing cards as Jelajah, (16) apart, with the same Tambah behavior (the food dialog) and notice. Termurah lists every available listing by rescue price ascending, Segera berakhir by pickup end ascending, and Makanan utama, Roti & kue, and Buah & sayur keep their category in the default order.
@@ -549,12 +623,36 @@ The customer cart page (`CartView.cs`), under the same top bar and in the same c
 
 No animation other than the shared primary button hover; no blur, glow, or gradient. No em dashes in its text.
 
+### Pesanan saya
+The customer orders page (`OrdersView`, customer part in `CustomerOrdersView.cs`), under the same top bar and in the same content column as Keranjang (at most 1200, centered, inset 32, top 24). From top to bottom, (16) apart (`Ui.Spacing.Related`): the shared "Kembali ke Jelajah" text link (`CollectionView.CreateBackLink`), the title "Pesanan saya" (32, bold, `ink`, the size of "Keranjang" and "Jelajahi Menu"), the status filter, and the list. Only the list scrolls (vertical only), with the Keranjang 24 inset so card shadows are not cut; it ends (32) under the last card. The restaurant orders page keeps its own table and dropdown.
+
+**Status filter** (`order-filter`): one row of four pill buttons, 8 apart: Semua, Aktif, Selesai, Dibatalkan; pick one, Semua by default. Each pill is 36 high with `CornerRadius` 18 (half its height), padding 0 by 16, 14 text, no border. At rest: transparent with `muted` text; hover: `sidebar` fill with `ink` text; pressed: `divider` fill. Selected (`order-filter-selected`): `selection` fill with semibold `primary` text, also on hover; pressed `divider`. Every fill is painted on the pill itself (hover follows the shape): no box outside the pill, no shadow, no scale, no transition. The shared `:focus-visible` ring follows the pill. The groups map the existing `OrderStatus` values: Aktif is Reserved (Menunggu Konfirmasi), Confirmed (Diproses), and ReadyForPickup (Siap Diambil); Selesai is Completed; Dibatalkan is Cancelled; Semua shows all five. The filter row is hidden while the customer has no orders at all.
+
+**Order card** (`order-card`: `surface`, `rounded.card`, `elevation.card`, padding 20, no border, (16) apart), one per order, newest first. Every restaurant ordered at checkout is its own order, so it is its own card. Content, (16) apart:
+- **Top:** the restaurant name (18, bold, `ink`) on the left; the existing status badge (`OrderStatusBadge`, its tint and Indonesian label) on the right. Under them (4), in 13 `muted`: "Dipesan dd MMM yyyy, HH:mm · Pengambilan dd MMM, HH:mm–HH:mm" (the pickup window runs from the earliest item start to the latest item end).
+- **Items:** up to three rows, 8 apart: the menu name (14) on the left and "{jumlah} x" (14) right-aligned; with more items a 13 `muted` line reads "+{N} menu lainnya".
+- **Pickup code:** only on Aktif orders: "Kode ambil" (12, `muted`) above the code (`pickup-code-compact`: 18, bold, fixed-width font, `ink`). There is no copy button on the card; copying lives on the detail page.
+- **Footer:** a thin rule (`divider`, 1); under it, on the left, "Total" (12, `muted`) above the order total (22, bold, `primary`, Rupiah format); on the right, vertically centered, the secondary button "Lihat detail" (named "Lihat detail pesanan dari {restoran}"), which opens the detail page of that order.
+
+**Empty states:** both are centered under the header with a 72 line receipt icon (Path, stroke 2, `primary`) and a 22 semibold `ink` title. With no orders at all: "Belum ada pesanan", "Pesananmu akan muncul di sini setelah kamu memesan." (15, `muted`), and the compact primary "Jelajahi menu" (opens Jelajah); the filter row is hidden. When the chosen filter has no orders: "Tidak ada pesanan di sini" and the secondary "Lihat semua pesanan", which selects Semua again.
+
+Checkout is unchanged: ordering the last restaurant in the cart still opens the detail page of the new order with "Pesanan berhasil dibuat.", and the new orders sit at the top of Pesanan saya. At (1040 × 720) and (1920 × 1080) nothing scrolls sideways or is cut off. No animation; no blur, glow, or gradient. No em dashes in its text.
+
+### Detail pesanan
+The customer order detail (`OrderDetailView`, customer part in `CustomerOrdersView.cs`), in the same content column (at most 1200, inset 32, top 24, 32 below), scrolling vertically as one page. From top to bottom, (16) apart: the shared text link "Kembali ke Pesanan saya" (opens Pesanan saya); the title "Detail pesanan" (32, bold, `ink`) with the status badge (16) beside it, vertically centered; (8) under it the existing status sentence (14, `muted`); then two columns, (24) apart, about 60% and 40% of the column (`3*,2*`). The minimum window (1040) already fits both, so the layout never stacks and never scrolls sideways. All cards are `order-detail-card` (`surface`, `rounded.card`, `elevation.card`, padding 24, no border), (16) apart.
+
+- **Left, Item pesanan:** "Item pesanan" (18, bold); one row per item, 12 apart: the menu name (14 semibold) above "{jumlah} x {harga satuan}" (13, `muted`), with the item subtotal (14 semibold) right-aligned; a thin `divider` rule; then, as in the Keranjang footer, "Total" (12, `muted`) above the order total (28, bold, `primary`), left-aligned.
+- **Right, Kode ambil:** "Kode ambil" (14 semibold, `muted`); the code (`pickup-code`: 36, bold, fixed-width font, `primary`) with the existing copy button 12 beside it; and "Tunjukkan kode ini di restoran." (14, `muted`). The copy button is the shared icon button (`Ui.Round(..., icon: true)`: a 44 circle, transparent, the 18 `primary` copy icon, `selection` circle on hover, no shadow or scale) with the same tooltip and name ("Salin kode pengambilan"), the same copy behavior, and the same "Kode berhasil disalin." or "Kode belum berhasil disalin. Silakan coba lagi." notification. Its rule is unchanged: it shows only when the order is not cancelled and the code is not empty. Selesai and Dibatalkan orders still show the code; a cancelled order has no copy button and no sentence.
+- **Right, restaurant:** the restaurant name (18, bold) and address (13, `muted`), then label and value pairs (12 `muted` label above 14 `ink` value): Pengambilan, Dipesan, and Nomor pesanan.
+- **Cancellation:** on Aktif orders the danger button "Batalkan pesanan" (see Buttons) sits under the restaurant card, with the unchanged confirmation window.
+
+No animation other than the shared primary and danger button hover; no blur, glow, or gradient. No em dashes in its text.
 
 ### Lists and Tables
 Shared operational rows use minimum heights (40 header / 64 body), while compact dashboard tables use (36 / 48). All use the divider token. Avoid wrapping each datum in a separate card.
 
 ### Cards
-Implemented on the auth surface, the profile menu, Jelajah (collection cards and listing cards), collection and search result pages (listing cards), Keranjang (item cards), and the food dialog and checkout confirmation cards. A card is a white surface (`surface`) with `rounded.card` corners (the Jelajah collection cards are the one exception: a `primary` fill and the `elevation.card-primary` shadow, see Collection Card) and the `elevation.card` shadow. It has no border of any kind: no colored border, no accent stripe, and no thin outline. Separation comes from the shadow and the canvas around it. Use a card to hold one coherent unit of work, not to wrap each datum. Table and list row dividers are unchanged and stay as described under Lists and Tables.
+Implemented on the auth surface, the profile menu, Jelajah (collection cards and listing cards), collection and search result pages (listing cards), Keranjang (item cards), Pesanan saya (order cards), the order detail page (items, pickup code, and restaurant cards), and the food dialog and checkout confirmation cards. A card is a white surface (`surface`) with `rounded.card` corners (the Jelajah collection cards are the one exception: a `primary` fill and the `elevation.card-primary` shadow, see Collection Card) and the `elevation.card` shadow. It has no border of any kind: no colored border, no accent stripe, and no thin outline. Separation comes from the shadow and the canvas around it. Use a card to hold one coherent unit of work, not to wrap each datum. Table and list row dividers are unchanged and stay as described under Lists and Tables.
 
 ### Auth Card
 The auth-card is the card used on the auth surface. It holds the sign-in or registration form: the bold auth title, visible field labels, inputs, inline errors, the primary action, and the link to switch between Masuk and Daftar. It uses the card treatment with padding (32) and a width of (440), narrowing to no less than (360) to keep its gap from the plate. It is the only card on the auth surface.
