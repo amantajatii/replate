@@ -144,7 +144,6 @@ internal sealed class AuthSurface : Grid
         foreach (var decorative in new Control[] { Hero, HeroLayer, HeroPanel })
             AutomationProperties.SetAccessibilityView(decorative, AccessibilityView.Raw);
         Children.Add(left); Children.Add(HeroPanel); Children.Add(HeroLayer);
-        Styles.Add(Hover("auth-primary", Ui.Ink, Brushes.White));
         Styles.Add(Hover("auth-secondary", Selection, Ui.Green));
         Styles.Add(ScrollBarOpacity(x => x, 0));
         Styles.Add(ScrollBarOpacity(x => x.Class(":pointerover"), 1));
@@ -290,9 +289,8 @@ internal sealed class AuthSurface : Grid
 
     internal static Button Action(string text, Action action, bool primary)
     {
-        var button = Ui.Button(text, action, primary);
+        var button = Ui.FullWidth(Ui.Button(text, action, primary));
         button.Classes.Add(primary ? "auth-primary" : "auth-secondary");
-        button.HorizontalAlignment = HorizontalAlignment.Stretch;
         button.HorizontalContentAlignment = HorizontalAlignment.Center;
         return button;
     }

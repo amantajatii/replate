@@ -1,5 +1,8 @@
 using Avalonia;
+using Avalonia.Animation;
+using Avalonia.Animation.Easings;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Shapes;
 using Path = Avalonia.Controls.Shapes.Path;
@@ -14,7 +17,11 @@ namespace Replate.Desktop;
 internal static class MarketplaceVerification
 {
     private static readonly Color Primary = Color.Parse("#245B43");
+    private static readonly Color Ink = Color.Parse("#23382C");
+    private static readonly Color CanvasColor = Color.Parse("#FAFAF8");
+    private static readonly Color OnPrimary = Colors.White;
     private static readonly Color Selection = Color.Parse("#E0E9DF");
+    private static readonly Color Divider = Color.Parse("#DDE3DA");
 
     internal static async Task Run(MainWindow window)
     {
@@ -40,23 +47,28 @@ internal static class MarketplaceVerification
         foreach (var (label, card) in view.CollectionCards)
         {
             var icon = card.GetVisualDescendants().OfType<Path>().Single();
-            var frame = card.GetVisualDescendants().OfType<Border>().First();
-            Ensure(icon.StrokeThickness == 1.75 && icon.StrokeLineCap == PenLineCap.Round && ColorOf(icon.Stroke) == Primary, $"{label}: primary line icon");
-            Ensure(card.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == label), $"{label}: label under the icon");
-            Ensure(frame.CornerRadius == new CornerRadius(16) && frame.BoxShadow.ToString() == MarketplaceView.CardShadow.ToString() &&
-                ColorOf(card.Background) == Colors.White && ColorOf(card.BorderBrush) == Colors.Transparent && !card.ClipToBounds, $"{label}: white card with the card shadow and no border");
+            var frame = Face(card);
+            var text = card.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == label);
+            Ensure(icon.StrokeThickness == 1.75 && icon.StrokeLineCap == PenLineCap.Round && icon.Width == 24 && ColorOf(icon.Stroke) == OnPrimary &&
+                TopBarVerification.Contrast(OnPrimary, Primary) >= 3, $"{label}: white 24 line icon ({TopBarVerification.Contrast(OnPrimary, Primary):0.0}:1)");
+            Ensure(text.FontSize == 14 && ColorOf(text.Foreground) == OnPrimary && ColorOf(card.Foreground) == OnPrimary && TopBarVerification.Contrast(OnPrimary, Primary) >= 4.5,
+                $"{label}: white 14 label under the icon ({TopBarVerification.Contrast(OnPrimary, Primary):0.0}:1)");
+            var shadow = frame.BoxShadow;
+            Ensure(frame.CornerRadius == new CornerRadius(16) && shadow.ToString() == MarketplaceView.PrimaryCardShadow.ToString() && shadow.Count == 1 &&
+                IsPrimaryTint(shadow[0].Color) && shadow[0].OffsetY == 6 && shadow[0].Blur == 18 && Math.Abs(shadow[0].Color.A / 255d - .30) < .01 && card.Height == 96 &&
+                ColorOf(card.Background) == Primary && ColorOf(frame.Background) == Primary && ColorOf(card.BorderBrush) == Colors.Transparent && !card.ClipToBounds,
+                $"{label}: primary card with the primary-tinted card shadow ({shadow}) and no border");
             Ensure(card.Focusable && KeyboardNavigation.GetIsTabStop(card), $"{label}: reachable with Tab");
             var ring = TopBarVerification.FocusRing(card);
             Ensure(card.FocusAdorner == Ui.NoFocusAdorner && ColorOf(ring.BorderBrush) == Colors.Transparent, $"{label}: no default focus adorner");
             await Pseudo(card, ":focus-visible", true);
-            Ensure(ColorOf(ring.BorderBrush) == Primary && ring.BorderThickness == new Thickness(Ui.FocusRingWidth) && ColorOf(card.BorderBrush) == Colors.Transparent,
-                $"{label}: keyboard focus shows a 2 px primary ring");
+            Ensure(ColorOf(ring.BorderBrush) == Primary && ring.BorderThickness == new Thickness(Ui.FocusRingWidth) && ColorOf(card.BorderBrush) == Colors.Transparent &&
+                ring.Margin == new Thickness(-(Ui.FocusRingWidth + Ui.FocusRingOffset)) && TopBarVerification.Contrast(Primary, CanvasColor) >= 3,
+                $"{label}: keyboard focus shows a 2 px primary ring outside the card on the canvas ({TopBarVerification.Contrast(Primary, CanvasColor):0.0}:1)");
             await Pseudo(card, ":focus-visible", false);
         }
-        var first = view.CollectionCards[MarketplaceView.Cheapest];
-        await Pseudo(first, ":pointerover", true);
-        Ensure(ColorOf(first.Background) == Selection, "Filter card hover uses the selection fill");
-        await Pseudo(first, ":pointerover", false);
+        await CheckHover(view, MarketplaceView.Cheapest, "Jelajah");
+        await CheckHover(view, MarketplaceView.CollectionNames[^1], "Jelajah");
 
         var all = view.VisibleCount;
         Ensure(view.VisibleListings.SequenceEqual(ListingQuery.Available(session)) && view.CollectionCards.Values.All(c => !c.Classes.Contains("active")),
@@ -96,11 +108,15 @@ internal static class MarketplaceVerification
         {
             var sample = new MarketplaceView(window, session);
             var host = new Border { Child = sample, Width = size.Width, Height = size.Height - CustomerTopBar.BarHeight };
+            host.Styles.Add(Ui.FocusStyles());
             var frame = new Window { Width = 1040, Height = 720, Content = new Canvas { Children = { host } } };
             try
             {
                 frame.Show(); sample.Refresh(); await Settle();
                 CheckLayout(sample, $"{size.Width:0}x{size.Height:0}", size.Width);
+                if (size.Width != 1360)
+                    foreach (var card in new[] { MarketplaceView.Cheapest, MarketplaceView.CollectionNames[^1] })
+                        await CheckHover(sample, card, $"{size.Width:0}x{size.Height:0}");
             }
             finally { frame.Close(); }
         }
@@ -181,9 +197,78 @@ internal static class MarketplaceVerification
             $"{label}: banner edges match the listing cards");
         var cards = view.CollectionCards.Values.Select(c => Rect(c, view)).ToList();
         Ensure(cards.All(c => Math.Abs(c.Y - cards[0].Y) < .5 && Math.Abs(c.Width - cards[0].Width) < 1), $"{label}: five equal collection cards in one row");
+        var cardWidth = (row.Width - 4 * Ui.Spacing.Related) / 5;
+        Ensure(view.CollectionRow.ColumnSpacing == Ui.Spacing.Related && cards.All(c => Math.Abs(c.Height - 96) < .5 && Math.Abs(c.Width - cardWidth) < 1) &&
+            cards.Zip(cards.Skip(1)).All(p => Math.Abs(p.Second.X - p.First.Right - Ui.Spacing.Related) < 1),
+            $"{label}: collection cards keep height 96, width {cardWidth:0.#} and the 16 gap ({cards[0].Width:0.#}x{cards[0].Height:0.#})");
         Ensure(cards.Zip(cards.Skip(1)).All(p => p.First.Right <= p.Second.X + .5) && cards[^1].Right <= content.Right + .5, $"{label}: collection cards do not overlap or wrap");
         Ensure(view.ListingsPanel.Children.All(c => Rect(c, view).Right <= content.Right + .5), $"{label}: listing cards fit the content width");
     }
+
+    private static async Task CheckHover(MarketplaceView view, string name, string label)
+    {
+        var card = view.CollectionCards[name];
+        var face = Face(card);
+        var icon = card.GetVisualDescendants().OfType<Path>().Single();
+        var text = card.GetVisualDescendants().OfType<TextBlock>().Single();
+        var others = view.CollectionCards.Values.Where(c => c != card).ToList();
+        var before = others.Select(c => Rect(c, view)).ToList();
+        var bounds = card.Bounds;
+        var duration = MarketplaceView.HoverDuration;
+        Ensure(duration == TimeSpan.FromMilliseconds(120) && card.Transitions is { Count: 3 } transitions &&
+            transitions.OfType<BrushTransition>().Select(t => t.Property).ToHashSet().SetEquals([TemplatedControl.BackgroundProperty, TemplatedControl.ForegroundProperty]) &&
+            transitions.OfType<TransformOperationsTransition>().Single().Property == Visual.RenderTransformProperty &&
+            face.Transitions is { Count: 1 } faceTransitions && faceTransitions.OfType<BoxShadowsTransition>().Single().Property == Border.BoxShadowProperty &&
+            transitions.Concat(faceTransitions).All(t => t is TransitionBase { Easing: CubicEaseOut } b && b.Duration == duration) &&
+            card.RenderTransformOrigin == RelativePoint.Center, $"{label} {name}: color, scale and shadow use one 120 ms ease-out transition from the center");
+
+        await Hold(card, ":pointerover", true);
+        var fill = ColorOf(card.Background);
+        Ensure(fill == Selection && fill != Primary && ColorOf(face.Background) == Selection && ColorOf(text.Foreground) == Primary && ColorOf(icon.Stroke) == Primary &&
+            TopBarVerification.Contrast(Primary, fill) >= 4.5,
+            $"{label} {name}: hover uses the selection fill with primary icon and label ({TopBarVerification.Contrast(Primary, fill):0.0}:1)");
+        var matrix = card.RenderTransform!.Value;
+        Ensure(Math.Abs(matrix.M11 - MarketplaceView.HoverScale) <= .005 && Math.Abs(matrix.M22 - MarketplaceView.HoverScale) <= .005 &&
+            Math.Abs(MarketplaceView.HoverScale - 1.03) <= .005, $"{label} {name}: hover scales to 1.03 ({matrix.M11:0.###})");
+        Ensure(card.Bounds == bounds && others.Select(c => Rect(c, view)).Zip(before).All(p => p.First == p.Second),
+            $"{label} {name}: hover leaves the position and size of every other card unchanged");
+        Ensure(card.ZIndex > 0 && others.All(c => c.ZIndex < card.ZIndex), $"{label} {name}: the hovered card sits above its neighbours");
+        var hover = face.BoxShadow;
+        Ensure(hover.ToString() == MarketplaceView.PrimaryCardHoverShadow.ToString() && hover.Count == 1 && IsPrimaryTint(hover[0].Color) &&
+            hover[0].OffsetY == 10 && hover[0].Blur == 24 && Math.Abs(hover[0].Color.A / 255d - .35) < .01 &&
+            hover[0].Color.A > MarketplaceView.PrimaryCardShadow[0].Color.A, $"{label} {name}: hover deepens the primary-tinted shadow ({hover})");
+        var scaled = Scaled(card, view.Scroll);
+        var viewport = new Rect(view.Scroll.Viewport);
+        var clips = card.GetVisualAncestors().TakeWhile(a => a != view.Scroll && a is not ScrollContentPresenter).Where(a => a.ClipToBounds).ToList();
+        Ensure(scaled.Width > bounds.Width && viewport.Contains(scaled) && viewport.Contains(scaled.Inflate(new Thickness(hover[0].Blur, 0))) && clips.Count == 0,
+            $"{label} {name}: the hovered card and its shadow are not clipped ({scaled.X:0.#} to {scaled.Right:0.#} within {viewport.Width:0})");
+        Ensure(others.All(o => !Scaled(o, view.Scroll).Intersects(scaled)), $"{label} {name}: the hovered card does not cover its neighbours");
+        Ensure(view.Scroll.Extent.Width <= view.Scroll.Viewport.Width + .5, $"{label} {name}: no horizontal scrolling while hovered");
+        var ring = TopBarVerification.FocusRing(card);
+        await Pseudo(card, ":focus-visible", true);
+        Ensure(ColorOf(ring.BorderBrush) == Primary && ring.IsVisible && ring.GetVisualAncestors().Contains(card) &&
+            ring.Parent is Panel panel && panel.Children.IndexOf(ring) > panel.Children.IndexOf(face), $"{label} {name}: the focus ring stays on top while hovered");
+        await Pseudo(card, ":focus-visible", false);
+        await Hold(card, ":pressed", true);
+        var pressed = ColorOf(card.Background);
+        Ensure(pressed == Divider && pressed != Selection && pressed != Primary && ColorOf(text.Foreground) == Primary && ColorOf(icon.Stroke) == Primary &&
+            TopBarVerification.Contrast(Primary, pressed) >= 4.5, $"{label} {name}: press uses the divider fill, one step under hover ({TopBarVerification.Contrast(Primary, pressed):0.0}:1)");
+        await Hold(card, ":pressed", false);
+        await Hold(card, ":pointerover", false);
+        Ensure(ColorOf(card.Background) == Primary && ColorOf(text.Foreground) == OnPrimary && ColorOf(icon.Stroke) == OnPrimary &&
+            Math.Abs(card.RenderTransform!.Value.M11 - 1) <= .005 && card.ZIndex == 0 && face.BoxShadow.ToString() == MarketplaceView.PrimaryCardShadow.ToString(),
+            $"{label} {name}: leaving returns to primary, white, scale 1 and the resting shadow");
+    }
+
+    private static Rect Scaled(Visual visual, Visual root) =>
+        visual.TransformToVisual(root) is { } matrix ? new Rect(visual.Bounds.Size).TransformToAABB(matrix) : throw new InvalidOperationException("Element is outside Jelajah");
+
+    private static Border Face(Button card) => card.GetVisualDescendants().OfType<Border>().Single(b => b.Name == MarketplaceView.CardFacePart);
+
+    private static bool IsPrimaryTint(Color color) => color.R == Primary.R && color.G == Primary.G && color.B == Primary.B && color.A < 255;
+
+    private static async Task Hold(StyledElement element, string pseudo, bool on)
+    { ((IPseudoClasses)element.Classes).Set(pseudo, on); await Task.Delay(MarketplaceView.HoverDuration * 3); }
 
     private static void CheckRhythm(Control window, CustomerTopBar topBar, MarketplaceView view, string label)
     {
