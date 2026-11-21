@@ -59,7 +59,7 @@ internal static class FoodDialogVerification
         Ensure(ColorOf(dialog.Bar.Background) == Selection && ColorOf(dialog.AddButton.Background) == Primary && ColorOf(dialog.AddButton.Foreground) == Colors.White &&
             dialog.AddButton.Content as string == FoodDialog.AddLabel, "Selection bar with the primary Tambah ke keranjang button");
         foreach (var stepper in new[] { dialog.MinusButton, dialog.PlusButton })
-            Ensure(stepper.CornerRadius == new CornerRadius(9999) && stepper.Width == stepper.Height && stepper.Content is PathIcon, "Round stepper buttons");
+            Ensure(stepper.CornerRadius == new CornerRadius(FoodDialog.StepperSize / 2) && stepper.Width == stepper.Height && stepper.Content is PathIcon, "Round stepper buttons");
         Ensure(ColorOf(dialog.PlusButton.Background) == Primary && ColorOf(dialog.PlusButton.Foreground) == Colors.White &&
             ColorOf(dialog.MinusButton.Background) == Divider && ColorOf(dialog.MinusButton.Foreground) == Muted,
             "Enabled steppers are primary, disabled ones use the divider fill with a muted icon");

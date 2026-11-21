@@ -134,17 +134,31 @@ PRIMARY BUTTONS (whole app, shared style `Ui.UsePrimaryButtons` in `Ui.cs`):
   text (about 6.4:1), shadow `elevation.button-primary-hover` (`0 4 12 0 #4D245B43`).
   Pressed: `divider` fill, `primary` text (about 6.1:1), same shadow. Disabled: unchanged,
   no hover or press effect.
-- Compact buttons (Tambah, Tambah ke keranjang, stepper, page actions, the owner's Tambah
+- Compact buttons (Tambah, Tambah ke keranjang, page actions, the owner's Tambah
   menu and Buat penawaran) scale to 1.03 from the center as a render transform on hover,
   ZIndex 1, without moving layout or being clipped. Full-width buttons do not scale. The
   Fluent press shrink is off for primary buttons. Fill, text, shadow and scale share
   120 ms ease-out. The `:focus-visible` ring is unchanged and stays on top.
 - The restaurant owner screens use the same `Ui.Button` primary style, so their primary
   buttons change the same way. Secondary buttons are unchanged.
+- Hover follows the shape: fills live on `PART_ContentPresenter` with the button's
+  `CornerRadius`, and the shared button theme sets `ClipToBounds` false so the hover
+  shadow and focus ring are not cut to the square layout box. `Ui.Round(button, size)`
+  makes Width = Height and `CornerRadius` = size / 2 and drops `compact`.
+- Round buttons (stepper plus and minus, class `round`) and icon buttons (dialog close,
+  Keranjang trash, class `icon`) have no hover shadow and no scale: hover is a
+  `selection` circle with a `primary` icon, press a `divider` circle. Only
+  rounded-rectangle primary buttons carry the hover shadow (and, compact only, scale).
 - Verified at 1040x720 and 1920x1080 by `--verify-ui` (UiVerification): normal, hover,
   pressed and disabled colors with contrast at least 4.5, the hover shadow, compact scale
   1.03 (within 0.005), no scale on full-width buttons, unchanged neighbour layout, no
-  clipping and no horizontal scrolling.
+  clipping and no horizontal scrolling. A pixel check (`UiVerification.HoverShape`) forces
+  `:pointerover` on Tambah, Tambah ke keranjang, the dialog plus, minus and close, and the
+  Keranjang plus, minus and trash, renders the window with `RenderTargetBitmap`, and
+  requires the corners of each bounding box to match the surface behind the button
+  (rendered with the button hidden), the inside to show the hover fill, round buttons
+  to be square with half-size radius, no shadow or scale on round and icon buttons,
+  and the compact shadow to show below the button inside every clipping container.
 
 JELAJAH (customer marketplace, `MarketplaceView.cs` and `MarketplaceBanner.cs`):
 - One vertical ScrollViewer under the top bar, no horizontal scrolling. Content is at
@@ -230,6 +244,48 @@ FOOD DIALOG (customer only, `FoodDialog.cs`, opened by `MainWindow.ShowFoodDialo
   scrim close without adding; no state write on open/close; focus trap and return
   (pointer and keyboard); collection and search pages; centered and not cut off at
   1040x720 and 1920x1080.
+
+KERANJANG (customer only, `CartView.cs`, opened by `MainWindow.ShowCart` with the
+customer role guard):
+- Same top bar; in the Jelajah content column (at most 1200, centered, inset 32, edges
+  aligned with Jelajah). Rhythm from `Ui.Spacing`: 24 from the top bar, then 16 between
+  the "Kembali ke Jelajah" link (the collection page link, `CollectionView.CreateBackLink`),
+  the header ("Keranjang", 32 bold ink; "Pesanan dari {restoran}" 14 muted, 8 under it,
+  only with items) and the content.
+- Two columns, 24 apart: item cards on the left (rest of the width, vertical scroll
+  only, 24 inner inset so shadows are not cut), the summary card on the right (340, top
+  aligned with the first card, not scrolled, so it stays put while the list scrolls).
+  Both columns stay side by side at 1040x720; no horizontal scroll.
+- Item card (white, radius 16, card shadow, no border, padding 20, 16 apart): photo or
+  placeholder (72), name (18 semibold), "Restoran · Kategori", "Pengambilan
+  HH:mm–HH:mm", "Rp… / porsi"; the shared `QuantityStepper` (same component as the food
+  dialog; minimum 1, maximum the listing's remaining stock, plus disabled at the limit);
+  subtotal (18 bold); a 36 trash icon button (24 Path, stroke 1.75, transparent and
+  muted at rest, a selection circle with a primary icon on hover, no box, shadow or
+  scale, name and tooltip "Hapus {menu}", shared focus ring).
+  Quantity changes go through `DemoSession.ChangeQuantity` and update the subtotal, the
+  summary and the badge in place; Hapus calls `ChangeQuantity(id, 0)` and rebuilds.
+- Unavailable item (expired, sold out, inactive menu): the card stays, the unit price
+  line reads "Penawaran tidak tersedia. Hapus untuk melanjutkan.", the stepper is
+  disabled, Hapus stays active.
+- Summary card (white, radius 16, card shadow, padding 24): "Ringkasan pesanan";
+  "Jumlah item" (N porsi); "Restoran"; divider; "Total" (24 bold primary, Rupiah);
+  "Ambil langsung di restoran. Reservasi tidak melibatkan pembayaran."; full-width
+  primary "Pesan sekarang". Disabled when `Cart.ValidateCart()` fails or a menu is
+  inactive, with a 12 muted reason under it: "Hapus penawaran yang tidak tersedia untuk
+  melanjutkan." for unavailable items, otherwise "Periksa jumlah pesanan untuk
+  melanjutkan.". It calls the existing `CheckoutAsync` through `MainWindow.RunAsync`
+  with the same success and failure messages and opens the new order.
+- Empty cart: back link and title only, then centered: 72 primary line cart icon,
+  "Keranjangmu masih kosong", "Mulai jelajahi menu dan selamatkan makanan hari ini." and
+  the primary "Jelajahi menu" button (opens Jelajah). No summary card.
+- Verified by `--verify-ui` (CartVerification): header, back link and rhythm; item card
+  content and style; summary count, restaurant and total; plus and minus update the
+  subtotal, total and badge; plus disabled at the stock limit; Hapus; unavailable item
+  disables Pesan sekarang with the reason; invalid quantity reason; empty state and its
+  button; edges aligned with Jelajah, no overlap and no horizontal scroll at 1040x720 and
+  1920x1080. UiVerification checks that Pesan sekarang creates the order through the
+  existing checkout.
 
 COLLECTION AND SEARCH PAGES (customer only, `CollectionView.cs`):
 - One view for the five collections (`ShowCollection(name)`) and for search results

@@ -31,48 +31,6 @@ public sealed class FoodDetailView : UserControl
     }
 }
 
-public sealed class CartView : UserControl
-{
-    internal Button? CheckoutButton { get; private set; }
-    internal CartView(MainWindow host, DemoSession session)
-    {
-        var items = Ui.Stack(0);
-        foreach (var item in session.Cart.Items)
-        {
-            var minus = Ui.Button("−", () => host.Run(() => session.ChangeQuantity(item.ListingId, item.Quantity - 1), host.ShowCart));
-            var plus = Ui.Button("+", () => host.Run(() => session.ChangeQuantity(item.ListingId, item.Quantity + 1), host.ShowCart));
-            plus.IsEnabled = item.Quantity < item.Listing.Quantity && item.Listing.IsAvailable(DateTime.UtcNow);
-            Avalonia.Automation.AutomationProperties.SetName(minus, $"Kurangi jumlah {item.Listing.Menu.Name}");
-            Avalonia.Automation.AutomationProperties.SetName(plus, $"Tambah jumlah {item.Listing.Menu.Name}");
-            var information = Ui.Stack(6, Ui.Text(item.Listing.Menu.Name, 18, bold: true),
-                Ui.Text($"Pengambilan {item.Listing.PickupStart.ToLocalTime():dd MMM, HH:mm}–{item.Listing.PickupEnd.ToLocalTime():HH:mm}", 13, Ui.Muted),
-                    Ui.Text(item.Listing.IsAvailable(DateTime.UtcNow) && item.Listing.Menu.IsActive ? $"{DemoSession.Rupiah(item.UnitPrice)} / porsi" : "Penawaran tidak tersedia. Hapus untuk melanjutkan.", 13, Ui.Muted));
-            items.Children.Add(Ui.TableRow("*,160,160,100", false, information,
-                Ui.Row(8, minus, Ui.Text(item.Quantity.ToString()), plus),
-                Ui.Text(DemoSession.Rupiah(item.CalculateSubtotal()), 18, bold: true),
-                Ui.Button("Hapus", () => host.Run(() => session.ChangeQuantity(item.ListingId, 0), host.ShowCart))));
-        }
-        if (session.Cart.Items.Count == 0)
-        {
-            Content = Ui.Page(Ui.Heading("Keranjang", "Belum ada makanan yang dipilih."),
-                Ui.Button("Jelajahi makanan", host.ShowMarketplace, true)); return;
-        }
-        CheckoutButton = Ui.Button("Reservasi pesanan", async () =>
-        {
-            await host.RunAsync(async () =>
-            {
-                await session.CheckoutAsync();
-                host.ShowOrder(session.LastOrder!, false);
-            }, "Pesanan berhasil dibuat.", "Pesanan belum dapat dibuat. Periksa koneksi PostgreSQL lalu coba lagi.");
-        }, true);
-        CheckoutButton.IsEnabled = session.Cart.ValidateCart() && session.Cart.Items.All(i => i.Listing.Menu.IsActive);
-        Content = Ui.Page(Ui.Heading("Keranjang", session.RestaurantLine(session.Cart.RestaurantId)), items,
-            Ui.Columns("*,Auto", Ui.Text("Total pesanan", 20, bold: true), Ui.Text(DemoSession.Rupiah(session.Cart.CalculateSubtotal()), 26, Ui.Green, true)),
-            Ui.Text("Periksa jumlah dan jadwal sebelum reservasi. Pembayaran belum tersedia pada prototipe ini.", 14, Ui.Muted),
-            Ui.Row(16, CheckoutButton, Ui.Button("Tambah makanan lain", host.ShowMarketplace)));
-    }
-}
-
 public sealed class OrdersView : UserControl
 {
     internal OrdersView(MainWindow host, DemoSession session, bool restaurant)

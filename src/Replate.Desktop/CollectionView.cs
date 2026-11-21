@@ -51,26 +51,11 @@ public sealed class CollectionView : UserControl
     {
         Collection = collection; Query = query;
         Feed = new ListingFeed(owner, session, source, () => ListingFeed.EmptyState(emptyTitle, emptyMessage, owner.ShowMarketplace));
-        AddStyles();
+        AddBackLinkStyles(Styles);
 
         // Back link
-        BackGlyph = new Path
-        {
-            Data = BackIcon, Width = BackIconSize, Height = BackIconSize, Stretch = Stretch.None, StrokeThickness = 1.75,
-            StrokeLineCap = PenLineCap.Round, StrokeJoin = PenLineJoin.Round, VerticalAlignment = VerticalAlignment.Center
-        };
-        var label = new TextBlock { Text = BackLabel, FontSize = 14, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
-        BackLink = new Button
-        {
-            Content = Ui.Row(8, BackGlyph, label), Padding = new Thickness(8, 6), Margin = new Thickness(-8, 0, 0, 0),
-            MinHeight = BackLinkMinHeight, VerticalContentAlignment = VerticalAlignment.Center,
-            CornerRadius = new CornerRadius(6), BorderThickness = default, HorizontalAlignment = HorizontalAlignment.Left,
-            Cursor = new Cursor(StandardCursorType.Hand)
-        };
-        BackLink.Classes.Add(BackLinkClass);
-        BackGlyph[!Shape.StrokeProperty] = BackLink[!TemplatedControl.ForegroundProperty];
-        AutomationProperties.SetName(BackLink, BackLabel);
-        BackLink.Click += (_, _) => owner.ShowMarketplace();
+        BackLink = CreateBackLink(owner.ShowMarketplace, out var glyph);
+        BackGlyph = glyph;
 
         // Title
         Title = Ui.Text(title, MarketplaceView.TitleSize, Ui.Ink, true);
@@ -105,17 +90,39 @@ public sealed class CollectionView : UserControl
 
     internal void Refresh() => Feed.Refresh();
 
-    // Styles
-    private void AddStyles()
+    // Back link
+    internal static Button CreateBackLink(Action back, out Path glyph)
+    {
+        glyph = new Path
+        {
+            Data = BackIcon, Width = BackIconSize, Height = BackIconSize, Stretch = Stretch.None, StrokeThickness = 1.75,
+            StrokeLineCap = PenLineCap.Round, StrokeJoin = PenLineJoin.Round, VerticalAlignment = VerticalAlignment.Center
+        };
+        var label = new TextBlock { Text = BackLabel, FontSize = 14, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+        var link = new Button
+        {
+            Content = Ui.Row(8, glyph, label), Padding = new Thickness(8, 6), Margin = new Thickness(-8, 0, 0, 0),
+            MinHeight = BackLinkMinHeight, VerticalContentAlignment = VerticalAlignment.Center,
+            CornerRadius = new CornerRadius(6), BorderThickness = default, HorizontalAlignment = HorizontalAlignment.Left,
+            Cursor = new Cursor(StandardCursorType.Hand)
+        };
+        link.Classes.Add(BackLinkClass);
+        glyph[!Shape.StrokeProperty] = link[!TemplatedControl.ForegroundProperty];
+        AutomationProperties.SetName(link, BackLabel);
+        link.Click += (_, _) => back();
+        return link;
+    }
+
+    internal static void AddBackLinkStyles(Styles styles)
     {
         Style State(Func<Selector, Selector> state, IBrush background, IBrush foreground) =>
             new(x => state(x.OfType<Button>().Class(BackLinkClass)))
             {
                 Setters = { new Setter(TemplatedControl.BackgroundProperty, background), new Setter(TemplatedControl.ForegroundProperty, foreground) }
             };
-        Styles.Add(State(x => x, Brushes.Transparent, Ui.Green));
-        Styles.Add(State(x => x.Class(":pointerover"), Ui.Selection, Ui.Green));
-        Styles.Add(new Style(x => x.OfType<Button>().Class(BackLinkClass).Class(":pointerover").Template().OfType<Avalonia.Controls.Presenters.ContentPresenter>().Name("PART_ContentPresenter"))
+        styles.Add(State(x => x, Brushes.Transparent, Ui.Green));
+        styles.Add(State(x => x.Class(":pointerover"), Ui.Selection, Ui.Green));
+        styles.Add(new Style(x => x.OfType<Button>().Class(BackLinkClass).Class(":pointerover").Template().OfType<Avalonia.Controls.Presenters.ContentPresenter>().Name("PART_ContentPresenter"))
         {
             Setters = { new Setter(Avalonia.Controls.Presenters.ContentPresenter.BackgroundProperty, Ui.Selection), new Setter(Avalonia.Controls.Presenters.ContentPresenter.ForegroundProperty, Ui.Green) }
         });
