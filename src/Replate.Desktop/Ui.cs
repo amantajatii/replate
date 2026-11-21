@@ -81,6 +81,7 @@ internal static class Ui
             BasedOn = fluent,
             Setters =
             {
+                new Setter(Visual.ClipToBoundsProperty, false),
                 new Setter(TemplatedControl.TemplateProperty,
                     new FuncControlTemplate<Button>((button, _) => FocusFrame(PrimaryFill(button, new ContentPresenter
                     {
@@ -144,6 +145,15 @@ internal static class Ui
         if (primary) button.Classes.AddRange([PrimaryClass, CompactClass]);
         button.Click += (_, _) => action(); return button;
     }
+    public static Button Round(Button button, double size, bool icon = false)
+    {
+        button.Classes.Remove(CompactClass);
+        button.Classes.Add(icon ? IconClass : RoundClass);
+        button.Width = button.Height = size; button.Padding = default; button.CornerRadius = new CornerRadius(size / 2);
+        button.HorizontalContentAlignment = HorizontalAlignment.Center; button.VerticalContentAlignment = VerticalAlignment.Center;
+        if (icon) { button.ClearValue(TemplatedControl.BackgroundProperty); button.ClearValue(TemplatedControl.ForegroundProperty); }
+        return button;
+    }
     public static Button FullWidth(Button button)
     {
         button.Classes.Remove(CompactClass);
@@ -154,10 +164,12 @@ internal static class Ui
     // Primary button
     public const string PrimaryClass = "primary";
     public const string CompactClass = "compact";
+    public const string RoundClass = "round";
+    public const string IconClass = "icon";
     public const double PrimaryHoverScale = 1.03;
     public static readonly TimeSpan PrimaryHoverDuration = TimeSpan.FromMilliseconds(120);
     public static readonly BoxShadows PrimaryButtonHoverShadow = BoxShadows.Parse("0 4 12 0 #4D245B43");
-    public static void UsePrimaryButtons(Application app) => app.Styles.Add(PrimaryStyles());
+    public static void UsePrimaryButtons(Application app) { app.Styles.Add(PrimaryStyles()); app.Styles.Add(IconStyles()); }
     private static Styles PrimaryStyles()
     {
         var ease = new CubicEaseOut();
@@ -209,12 +221,30 @@ internal static class Ui
             Face(x => x.Class(":pointerover"), Selection, Green, PrimaryButtonHoverShadow),
             Face(x => x.Class(":pressed"), DividerFill, Green, PrimaryButtonHoverShadow),
             Face(x => x.Class(":pressed").Not(y => y.Class(":pointerover")), DividerFill, Green, default),
+            Face(x => x.Class(RoundClass).Class(":pointerover"), Selection, Green, default),
+            Face(x => x.Class(RoundClass).Class(":pressed"), DividerFill, Green, default),
             new Style(x => x.OfType<Button>().Class(PrimaryClass).Class(":disabled").Template().OfType<Panel>().Child().OfType<ContentPresenter>().Name("PART_ContentPresenter"))
             {
                 Setters = { new Setter(ContentPresenter.BackgroundProperty, new Avalonia.Data.TemplateBinding(TemplatedControl.BackgroundProperty)) }
             },
             Scale(x => x, 1, 0),
             Scale(x => x.Class(CompactClass).Class(":pointerover").Not(y => y.Class(":disabled")), PrimaryHoverScale, 1)
+        };
+    }
+
+    // Icon button
+    private static Styles IconStyles()
+    {
+        Style State(Func<Selector, Selector> state, IBrush background, IBrush foreground) =>
+            new(x => state(x.OfType<Button>().Class(IconClass)))
+            {
+                Setters = { new Setter(TemplatedControl.BackgroundProperty, background), new Setter(TemplatedControl.ForegroundProperty, foreground) }
+            };
+        return new Styles
+        {
+            State(x => x, Brushes.Transparent, Ink),
+            State(x => x.Class(":pointerover"), Selection, Green),
+            State(x => x.Class(":pressed"), DividerFill, Green)
         };
     }
     public static Grid Columns(string definitions, params Control[] children)

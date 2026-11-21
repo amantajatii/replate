@@ -107,7 +107,7 @@ internal sealed class CustomerTopBar : Border
         SearchButton = Plain("bar-search-button", SearchGlyph, () => search(SearchBox.Text ?? ""));
         SearchButton.Classes.Remove(Ui.OnPrimaryClass);
         SearchButton.Width = SearchButton.Height = 40; SearchButton.Padding = default; SearchButton.Margin = new Thickness(8, 0, 0, 0);
-        SearchButton.CornerRadius = new CornerRadius(9999); SearchButton.Focusable = false; SearchButton.VerticalAlignment = VerticalAlignment.Center;
+        SearchButton.CornerRadius = new CornerRadius(SearchButton.Width / 2); SearchButton.Focusable = false; SearchButton.VerticalAlignment = VerticalAlignment.Center;
         SearchGlyph[!Shape.StrokeProperty] = SearchButton[!TemplatedControl.ForegroundProperty];
         AutomationProperties.SetName(SearchButton, "Cari");
         ToolTip.SetTip(SearchButton, "Cari");
@@ -144,7 +144,7 @@ internal sealed class CustomerTopBar : Border
         var userGlyph = Glyph(UserIcon, null, default);
         ProfileButton = Plain("bar-profile", userGlyph, () => { });
         ProfileButton.Width = ProfileButton.Height = 44; ProfileButton.Padding = default;
-        ProfileButton.CornerRadius = new CornerRadius(9999);
+        ProfileButton.CornerRadius = new CornerRadius(ProfileButton.Width / 2);
         ProfileButton.HorizontalContentAlignment = HorizontalAlignment.Center;
         userGlyph[!Shape.StrokeProperty] = ProfileButton[!TemplatedControl.ForegroundProperty];
         AutomationProperties.SetName(ProfileButton, "Akun");

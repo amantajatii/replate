@@ -63,15 +63,20 @@ internal static class UiVerification
             Ensure(market.VisibleCount == 10 && window.TopBar.SearchBox.Text == "", "Jelajah is back with every listing and an empty search");
             await FoodDialogVerification.Run(window);
             await PrimaryButtons(window);
+            await CartVerification.Run(window);
             market = window.Marketplace;
             var listing = window.Session.Listings[0];
             window.ShowFood(listing); await Shot("food-detail");
             for (var i = 0; i <= listing.Quantity; i++) market.Add(listing);
             Ensure(window.Session.Cart.Items.Single().Quantity == listing.Quantity, "Cart stock bound");
             window.ShowCart(); await Shot("cart");
-            Click(((CartView)window.CurrentPage!).CheckoutButton!);
+            var checkout = ((CartView)window.CurrentPage!).CheckoutButton!;
+            Ensure(checkout.Content as string == CartView.CheckoutLabel && checkout.IsEnabled, "Pesan sekarang is ready");
+            Click(checkout); await Settle();
             Ensure(window.Session.LastOrder?.TotalPrice == 96000m, "Checkout total");
             Ensure(listing.Quantity == 0 && window.Session.Cart.Items.Count == 0, "Stock reserved");
+            Ensure(window.CurrentPage is OrderDetailView && window.SuccessMessage == "Pesanan berhasil dibuat." && !window.TopBar.CartBadge.IsVisible,
+                "Pesan sekarang creates the order through the existing checkout, opens it and clears the badge");
             await Shot("reservation");
             var order = window.Session.LastOrder!;
             window.ShowCustomerOrders(); await Shot("customer-orders");
@@ -253,10 +258,15 @@ internal static class UiVerification
             add.BringIntoView(); await Settle();
             await PrimaryButton(add, true, market.Scroll, market.Scroll, $"{size} Tambah");
             await DisabledPrimary(add, $"{size} Tambah");
+            await HoverShape(window, add, $"{size} Tambah");
             add.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await Settle();
             var dialog = window.Dialog ?? throw new InvalidOperationException($"{size}: Tambah opens the food dialog");
             await PrimaryButton(dialog.AddButton, true, dialog.Scroll, dialog.Card, $"{size} Tambah ke keranjang");
-            if (dialog.PlusButton.IsEnabled) await PrimaryButton(dialog.PlusButton, true, dialog.Scroll, dialog.Card, $"{size} stepper plus");
+            await HoverShape(window, dialog.AddButton, $"{size} Tambah ke keranjang");
+            await HoverShape(window, dialog.PlusButton, $"{size} plus");
+            dialog.Change(1); await Settle();
+            await HoverShape(window, dialog.MinusButton, $"{size} minus");
+            await HoverShape(window, dialog.CloseButton, $"{size} close");
             Ensure(market.Scroll.Extent.Width <= market.Scroll.Viewport.Width + .5 && dialog.Scroll.Extent.Width <= dialog.Scroll.Viewport.Width + .5,
                 $"{size}: no horizontal scrolling on Jelajah or in the dialog");
             dialog.Close(); await Settle();
@@ -344,6 +354,59 @@ internal static class UiVerification
     private static Color Fill(IBrush? brush) => brush is ISolidColorBrush solid ? solid.Color : Colors.Transparent;
     private static async Task Hold(StyledElement element, string pseudo, bool on)
     { ((IPseudoClasses)element.Classes).Set(pseudo, on); await Task.Delay(Ui.PrimaryHoverDuration * 3); }
+    // Hover shape
+    internal static async Task HoverShape(Window window, Button button, string label)
+    {
+        var presenter = Presenter(button);
+        var round = button.Classes.Contains(Ui.RoundClass) || button.Classes.Contains(Ui.IconClass);
+        Ensure(!button.ClipToBounds && presenter.CornerRadius == button.CornerRadius, $"{label}: the hover face uses the button radius and nothing clips it to a square");
+        if (round)
+            Ensure(button.Width == button.Height && button.CornerRadius == new CornerRadius(button.Width / 2) && !button.Classes.Contains(Ui.CompactClass),
+                $"{label}: round button is {button.Width}x{button.Height} with radius {button.CornerRadius.TopLeft}, half its size");
+        await Hold(button, ":pointerover", true);
+        var shadow = presenter.BoxShadow;
+        var fill = Fill(presenter.Background);
+        if (round) Ensure(shadow.Count == 0 && Math.Abs(Scale(button) - 1) <= .005, $"{label}: round and icon buttons have no hover shadow and no scale ({shadow}, {Scale(button):0.###})");
+        if (round && button.Classes.Contains(Ui.PrimaryClass)) Face(button, Selection, Primary, $"{label} hover");
+        var shaded = Snapshot(window);
+        if (shadow.Count > 0) { presenter.BoxShadow = default; await Task.Delay(Ui.PrimaryHoverDuration * 3); }
+        var hovered = Snapshot(window);
+        if (shadow.Count > 0) { presenter.ClearValue(ContentPresenter.BoxShadowProperty); await Task.Delay(Ui.PrimaryHoverDuration * 3); }
+        var opacity = button.Opacity; button.Opacity = 0;
+        await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Render);
+        var surface = Snapshot(window);
+        button.Opacity = opacity;
+        var box = new Rect(button.Bounds.Size).TransformToAABB(button.TransformToVisual(window)!.Value);
+        await Hold(button, ":pointerover", false);
+        var (left, top, right, bottom) = ((int)Math.Ceiling(box.X), (int)Math.Ceiling(box.Y), (int)Math.Floor(box.Right) - 1, (int)Math.Floor(box.Bottom) - 1);
+        foreach (var (x, y) in new[] { (left, top), (right, top), (left, bottom), (right, bottom) })
+            Ensure(Near(hovered(x, y), surface(x, y)), $"{label}: corner ({x},{y}) outside the shape keeps the surface {surface(x, y)}, not a hover tint {hovered(x, y)}");
+        var (ix, iy) = ((int)(box.X + Math.Min(box.Width, box.Height) * .25), (int)(box.Y + box.Height / 2));
+        Ensure(fill != Colors.Transparent && Near(hovered(ix, iy), fill), $"{label}: inside the shape the hover fill is {hovered(ix, iy)}, expected {fill}");
+        if (shadow.Count == 0) return;
+        var reach = new Rect(box.X + shadow[0].OffsetX - shadow[0].Blur, box.Y + shadow[0].OffsetY - shadow[0].Blur,
+            box.Width + 2 * shadow[0].Blur, box.Height + 2 * shadow[0].Blur);
+        var (bx, by) = ((int)box.Center.X, bottom + 4);
+        Ensure(!Near(shaded(bx, by), surface(bx, by)), $"{label}: the hover shadow shows below the button ({shaded(bx, by)} on {surface(bx, by)})");
+        Ensure(button.GetVisualAncestors().OfType<Visual>().Where(v => v.ClipToBounds).All(v => v.TransformToVisual(window) is { } m && new Rect(v.Bounds.Size).TransformToAABB(m).Contains(reach)),
+            $"{label}: no container clips the hover shadow ({reach})");
+    }
+    private static bool Near(Color a, Color b) => Math.Abs(a.R - b.R) <= 3 && Math.Abs(a.G - b.G) <= 3 && Math.Abs(a.B - b.B) <= 3;
+    private static Func<int, int, Color> Snapshot(Window window)
+    {
+        var size = new PixelSize((int)window.Bounds.Width, (int)window.Bounds.Height);
+        using var bitmap = new RenderTargetBitmap(size, new Vector(96, 96));
+        bitmap.Render(window);
+        using var target = new WriteableBitmap(size, new Vector(96, 96), Avalonia.Platform.PixelFormat.Bgra8888, Avalonia.Platform.AlphaFormat.Unpremul);
+        var bytes = new byte[size.Width * size.Height * 4];
+        using (var frame = target.Lock())
+        {
+            bitmap.CopyPixels(frame);
+            for (var row = 0; row < size.Height; row++)
+                System.Runtime.InteropServices.Marshal.Copy(frame.Address + row * frame.RowBytes, bytes, row * size.Width * 4, size.Width * 4);
+        }
+        return (x, y) => { var i = (y * size.Width + x) * 4; return Color.FromArgb(bytes[i + 3], bytes[i + 2], bytes[i + 1], bytes[i]); };
+    }
     private static void Capture(Window window, string path)
     {
         using var bitmap = new RenderTargetBitmap(new PixelSize((int)window.Bounds.Width, (int)window.Bounds.Height), new Vector(96, 96));

@@ -17,16 +17,14 @@ internal sealed class FoodDialog : Grid
     internal const double CardWidth = 760;
     internal const double Inset = 32;
     internal const double PhotoSize = 300;
-    internal const double StepperSize = 36;
+    internal const double StepperSize = QuantityStepper.ButtonSize;
     internal const string UnavailableText = "Penawaran tidak tersedia";
     internal const string FullText = "Sudah di keranjang dengan jumlah maksimal";
     internal const string AddLabel = "Tambah ke keranjang";
     internal static readonly IBrush Scrim = Brush.Parse("#6623382C");
     internal static readonly IBrush ErrorBrush = Brush.Parse("#9B3A25");
-    internal static readonly IBrush DisabledFill = Brush.Parse("#DDE3DA");
+    internal static readonly IBrush DisabledFill = QuantityStepper.DisabledFill;
     private static readonly Geometry CloseIcon = Geometry.Parse("M6 6L18 18 M18 6L6 18");
-    private static readonly Geometry MinusIcon = Geometry.Parse("M5 11H19V13H5Z");
-    private static readonly Geometry PlusIcon = Geometry.Parse("M11 5H13V11H19V13H13V19H11V13H5V11H11Z");
 
     private readonly DemoSession session;
     private readonly Func<SurplusListing, int, string?> add;
@@ -47,14 +45,15 @@ internal sealed class FoodDialog : Grid
     internal TextBlock PriceText { get; }
     internal TextBlock NormalPriceText { get; }
     internal TextBlock SavingText { get; }
-    internal TextBlock QuantityText { get; }
+    internal QuantityStepper Stepper { get; }
+    internal TextBlock QuantityText => Stepper.QuantityText;
     internal TextBlock LimitNote { get; }
     internal TextBlock ErrorText { get; }
     internal TextBlock TotalText { get; }
     internal Border Bar { get; }
     internal Button CloseButton { get; }
-    internal Button MinusButton { get; }
-    internal Button PlusButton { get; }
+    internal Button MinusButton => Stepper.MinusButton;
+    internal Button PlusButton => Stepper.PlusButton;
     internal Button AddButton { get; }
     internal event Action? Closed;
 
@@ -93,13 +92,10 @@ internal sealed class FoodDialog : Grid
         SavingText = Ui.Text($"Hemat {listing.CalculateDiscount():0}%", 13, Ui.Green, true);
 
         // Quantity
-        MinusButton = Stepper(MinusIcon, "Kurangi jumlah porsi", -1);
-        PlusButton = Stepper(PlusIcon, "Tambah jumlah porsi", 1);
-        QuantityText = Ui.Text("1", 18, Ui.Ink, true);
-        QuantityText.MinWidth = 32; QuantityText.TextAlignment = TextAlignment.Center;
-        AutomationProperties.SetName(QuantityText, "Jumlah porsi");
+        Stepper = new QuantityStepper("Kurangi jumlah porsi", "Tambah jumlah porsi", "Jumlah porsi", Change);
+        Stepper.HorizontalAlignment = HorizontalAlignment.Left;
         LimitNote = Ui.Text("", 12, Ui.Muted);
-        var stepper = Ui.Stack(8, Ui.Text("Jumlah porsi", 14, Ui.Ink, true), Ui.Row(12, MinusButton, QuantityText, PlusButton), LimitNote);
+        var stepper = Ui.Stack(8, Ui.Text("Jumlah porsi", 14, Ui.Ink, true), Stepper, LimitNote);
 
         var facts = Ui.Stack(12, header, MetaText, DescriptionText,
             Ui.Stack(4, PickupText, StockText),
@@ -149,12 +145,10 @@ internal sealed class FoodDialog : Grid
         var available = Available;
         var limit = Limit;
         if (Quantity > limit) Quantity = Math.Max(1, limit);
-        QuantityText.Text = Quantity.ToString();
+        Stepper.Show(Quantity, available && limit > 0 && Quantity > 1, available && Quantity < limit);
         StockText.Text = $"{Listing.Quantity} porsi tersisa";
         TotalText.Text = DemoSession.Rupiah(Listing.RescuePrice * Quantity);
-        SetEnabled(MinusButton, available && limit > 0 && Quantity > 1);
-        SetEnabled(PlusButton, available && Quantity < limit);
-        SetEnabled(AddButton, available && limit > 0);
+        QuantityStepper.SetEnabled(AddButton, available && limit > 0);
         LimitNote.Text = !available ? UnavailableText : limit == 0 ? FullText : Quantity >= limit ? $"Maksimal {limit} porsi" : "";
         LimitNote.IsVisible = LimitNote.Text.Length > 0;
     }
@@ -183,24 +177,6 @@ internal sealed class FoodDialog : Grid
     }
 
     // Controls
-    private static void SetEnabled(Button button, bool enabled)
-    {
-        button.IsEnabled = enabled;
-        button.Background = enabled ? Ui.Green : DisabledFill;
-        button.Foreground = enabled ? Ui.OnPrimary : Ui.Muted;
-    }
-
-    private Button Stepper(Geometry icon, string name, int delta)
-    {
-        var button = Ui.Button("", () => Change(delta), true);
-        button.Content = new PathIcon { Data = icon, Width = 14, Height = 14 };
-        button.Width = button.Height = StepperSize; button.Padding = new Thickness(0);
-        button.CornerRadius = new CornerRadius(9999);
-        button.HorizontalContentAlignment = HorizontalAlignment.Center; button.VerticalContentAlignment = VerticalAlignment.Center;
-        AutomationProperties.SetName(button, name); ToolTip.SetTip(button, name);
-        return button;
-    }
-
     private Button IconButton()
     {
         var glyph = new Path
@@ -208,11 +184,8 @@ internal sealed class FoodDialog : Grid
             Data = CloseIcon, Width = 24, Height = 24, Stretch = Stretch.None, StrokeThickness = 1.75,
             StrokeLineCap = PenLineCap.Round, StrokeJoin = PenLineJoin.Round
         };
-        var button = Ui.Button("", Close);
-        button.Content = glyph; button.Background = Brushes.Transparent; button.Foreground = Ui.Ink;
-        button.Width = button.Height = 36; button.Padding = new Thickness(0); button.CornerRadius = new CornerRadius(9999);
-        button.HorizontalContentAlignment = HorizontalAlignment.Center; button.VerticalContentAlignment = VerticalAlignment.Center;
-        button.VerticalAlignment = VerticalAlignment.Top;
+        var button = Ui.Round(Ui.Button("", Close), 36, true);
+        button.Content = glyph; button.VerticalAlignment = VerticalAlignment.Top;
         glyph[!Shape.StrokeProperty] = button[!TemplatedControl.ForegroundProperty];
         AutomationProperties.SetName(button, "Tutup"); ToolTip.SetTip(button, "Tutup");
         return button;
