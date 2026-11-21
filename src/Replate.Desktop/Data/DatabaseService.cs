@@ -47,6 +47,15 @@ internal sealed class DatabaseService : IOrderStore
                 status varchar(30) NOT NULL,
                 ordered_at timestamp with time zone NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS order_items (
+                id uuid PRIMARY KEY,
+                order_id uuid NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+                listing_id uuid NOT NULL,
+                menu_name varchar(200) NOT NULL,
+                quantity integer NOT NULL,
+                unit_price numeric(18, 2) NOT NULL
+            );
             """;
 
             await using var command = new NpgsqlCommand(sql, connection);
@@ -55,13 +64,13 @@ internal sealed class DatabaseService : IOrderStore
         catch (NpgsqlException e)
         {
             var target = new NpgsqlConnectionStringBuilder(_connectionString);
-            var stage = connected ? "gagal menyiapkan tabel orders" : "gagal membuka koneksi";
+            var stage = connected ? "gagal menyiapkan tabel orders dan order_items" : "gagal membuka koneksi";
             var detail = e switch
             {
                 PostgresException { SqlState: "28P01" or "28000" } =>
                     "Autentikasi ditolak. Periksa username Session pooler dan password database.",
                 PostgresException { SqlState: "42501" } =>
-                    "Izin database kurang. Periksa izin pengguna untuk membuat tabel orders.",
+                    "Izin database kurang. Periksa izin pengguna untuk membuat tabel orders dan order_items.",
                 PostgresException postgres => $"PostgreSQL mengembalikan SQLSTATE {postgres.SqlState}.",
                 _ when e.GetBaseException() is AuthenticationException =>
                     "Validasi TLS gagal. Periksa sertifikat dan kecocokan host Supabase.",
