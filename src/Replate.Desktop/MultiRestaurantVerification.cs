@@ -93,7 +93,7 @@ internal static class MultiRestaurantVerification
         ExpectFailure(() => session.SelectRestaurant(bumi.Id));
         Ensure(session.Restaurant == pagi, "Owner cannot select another owner's restaurant");
         Ensure(session.Search("dapur bumi", "Semua").Count() == bumi.Menus.Count, "Search ignores active restaurant");
-        Ensure(session.Search("gado", "Vegetarian").Single().Menu.RestaurantId == sambal.Id, "Search by menu name across restaurants");
+        Ensure(session.Search("gado", MenuCategories.Produce).Single().Menu.RestaurantId == sambal.Id, "Search by menu name across restaurants");
         Ensure(session.RestaurantListings.All(l => l.Menu.RestaurantId == pagi.Id) && session.RestaurantListings.Count() == pagi.Menus.Count,
             "Restaurant area lists only the active restaurant's offers");
         ExpectFailure(() => session.SelectRestaurant(Guid.NewGuid()));
@@ -141,7 +141,8 @@ internal static class MultiRestaurantVerification
         session.Register(UserRole.RestaurantOwner, "Bima", "bima@example.com", "kata-sandi-2",
             new Replate.Domain.Services.RestaurantProfile("Bakmi Bima", "Jl. Magelang 5", "0812 3456 789", new TimeOnly(17, 0), new TimeOnly(1, 0)));
         session.AsOwner("Warung Sambal Ijo");
-        var sambalMenu = session.SaveMenu(null, "Es teh sereh", "Teh dingin dengan sereh.", "Vegetarian", 8000, .2m);
+        var sambalMenu = session.SaveMenu(null, "Es teh sereh", "Teh dingin dengan sereh.", MenuCategories.LegacyProduce, 8000, .2m);
+        Ensure(sambalMenu.Category == MenuCategories.Produce, "Saving the old Vegetarian category stores Buah & sayur");
         var savedText = File.ReadAllText(seededPath);
         Ensure(Version(seededPath) == 2, "Save writes version 2");
         var roundTrip = new DemoSession(seededPath);

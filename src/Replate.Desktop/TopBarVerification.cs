@@ -29,22 +29,26 @@ internal static class TopBarVerification
         Ensure(window.CurrentPage is MarketplaceView && bar.IsEffectivelyVisible && window.GetVisualDescendants().Contains(bar), "Customer top bar is shown");
         Ensure(Math.Abs(bar.Bounds.Height - CustomerTopBar.BarHeight) < .5 && ColorOf(bar.Background) == Primary &&
             bar.BorderThickness == default && bar.BoxShadow.Count == 0, "Top bar has a fixed height and a primary fill with no bottom rule");
-        Ensure(bar.Wordmark.Content is TextBlock { Text: "replate.", FontSize: 36 } mark && ColorOf(mark.Foreground) == Colors.White &&
-            Contrast(Colors.White, Primary) >= 4.5, $"Wordmark replate. is white on primary ({Contrast(Colors.White, Primary):0.0}:1)");
+        Ensure(bar.LogoButton.Content == bar.Logo && bar.Logo.Source == Ui.LogoWhite && bar.Logo.Stretch == Stretch.Uniform &&
+            Math.Abs(bar.Logo.Bounds.Height - CustomerTopBar.LogoHeight) < .5 && double.IsNaN(bar.Logo.Width) && Contrast(Colors.White, Primary) >= 4.5,
+            $"White logo sits on the primary top bar ({bar.Logo.Bounds.Width:0.#}x{bar.Logo.Bounds.Height:0.#}, {Contrast(Colors.White, Primary):0.0}:1)");
+        Ensure(!bar.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == "replate."), "Text wordmark is removed from the top bar");
+        Ensure(AutomationProperties.GetName(bar.LogoButton) == Ui.LogoName && ToolTip.GetTip(bar.LogoButton) as string == "Jelajah", "Logo button is named Replate");
+        CheckRatio(bar.Logo, "top bar logo");
         Ensure(ColorOf(bar.SearchBox.Background) == Colors.White && bar.SearchBox.BorderThickness == default && bar.SearchBox.CornerRadius == new CornerRadius(9999) &&
             ColorOf(bar.SearchBox.Foreground) == Ink && ColorOf(bar.SearchBox.PlaceholderForeground) == Muted &&
-            bar.SearchBox.InnerLeftContent is Avalonia.Controls.Shapes.Path { Stroke: var lens } && ColorOf(lens) == Muted, "Search is a white pill with muted icon and placeholder and ink text");
+            bar.SearchBox.InnerLeftContent == bar.SearchButton && ColorOf(bar.SearchGlyph.Stroke) == Muted && !bar.SearchButton.Focusable, "Search is a white pill with muted icon and placeholder and ink text");
         var searchBorder = bar.SearchBox.GetVisualDescendants().OfType<Border>().First(b => b.Name == "PART_BorderElement");
         Ensure(searchBorder.BorderThickness == default && ColorOf(bar.SearchRing.BorderBrush) == Colors.Transparent, "Search has no dark border at rest");
         bar.SearchBox.Focus(); await Settle();
         Ensure(searchBorder.BorderThickness == default && ColorOf(bar.SearchRing.BorderBrush) == Colors.White && bar.SearchRing.BorderThickness == new Thickness(Ui.FocusRingWidth) &&
             Contrast(Colors.White, Primary) >= 3, "Focused search shows a thin white ring, not a black border");
-        bar.Wordmark.Focus(NavigationMethod.Pointer); await Settle();
+        bar.LogoButton.Focus(NavigationMethod.Pointer); await Settle();
         Ensure(ColorOf(bar.SearchRing.BorderBrush) == Colors.Transparent, "Search ring hides when focus leaves");
         Ensure(bar.SearchBox.PlaceholderText == "Mulai cari menu atau restoran" && bar.SearchBox.IsEffectivelyVisible, "Search field shows its placeholder");
         Ensure(AutomationProperties.GetName(bar.CartButton) == "Keranjang" && ToolTip.GetTip(bar.CartButton) as string == "Keranjang", "Cart icon is named Keranjang");
         Ensure(AutomationProperties.GetName(bar.ProfileButton) == "Akun" && ToolTip.GetTip(bar.ProfileButton) as string == "Akun", "Profile circle is named Akun");
-        Ensure(new Control[] { bar.Wordmark, bar.SearchBox, bar.CartButton, bar.ProfileButton }.All(c => c.Focusable && c.IsEnabled && KeyboardNavigation.GetIsTabStop(c)),
+        Ensure(new Control[] { bar.LogoButton, bar.SearchBox, bar.CartButton, bar.ProfileButton }.All(c => c.Focusable && c.IsEnabled && KeyboardNavigation.GetIsTabStop(c)),
             "Every top bar control is reachable with Tab");
         Ensure(!window.GetVisualDescendants().OfType<Button>().Any(b => b.Content is string text && (text is "Jelajah" or "Pesanan saya" or "Keluar" || text.StartsWith("Keranjang"))),
             "Old Jelajah, Pesanan saya, Keranjang and Keluar tabs are removed");
@@ -65,7 +69,7 @@ internal static class TopBarVerification
         await Pseudo(bar.ProfileButton, ":pointerover", false);
 
         // Focus
-        foreach (var button in new[] { bar.Wordmark, bar.CartButton, bar.ProfileButton })
+        foreach (var button in new[] { bar.LogoButton, bar.CartButton, bar.ProfileButton })
         {
             var ring = FocusRing(button);
             Ensure(button.FocusAdorner == Ui.NoFocusAdorner && ColorOf(ring.BorderBrush) == Colors.Transparent, $"{AutomationProperties.GetName(button)}: no default focus adorner and no ring at rest");
@@ -92,27 +96,20 @@ internal static class TopBarVerification
             "Cart icon opens Keranjang and shows a thin white line under the icon");
         window.Run(() => session.ChangeQuantity(listing.Id, 0), window.ShowCart); await Settle();
         Ensure(!bar.CartBadge.IsVisible, "Badge hides again at 0");
-        Click(bar.Wordmark); await Settle();
+        Click(bar.LogoButton); await Settle();
         Ensure(window.CurrentPage is MarketplaceView && !bar.CartIndicator.IsVisible && ColorOf(bar.CartGlyph.Stroke) == Colors.White,
-            "Wordmark opens Jelajah and the cart line hides");
+            "Logo opens Jelajah and the cart line hides");
 
         // Search
-        window.Marketplace.ClearFilter();
         bar.SearchBox.Text = "croissant"; await Settle();
-        Ensure(window.Marketplace.VisibleCount == 1, "Top bar search filters Jelajah directly");
-        bar.SearchBox.Text = ""; await Settle();
+        Ensure(window.CurrentPage is MarketplaceView { VisibleCount: 10 }, "Typing does not filter Jelajah directly");
         window.ShowCart(); await Settle();
+        Ensure(bar.SearchBox.Text == "", "Leaving Jelajah clears the search");
         bar.SearchBox.Focus();
         bar.SearchBox.Text = "croissant"; await Settle();
-        Ensure(window.CurrentPage is MarketplaceView market && market.VisibleCount == 1 && bar.SearchBox.Text == "croissant",
-            "Typing on Keranjang switches to Jelajah with that keyword");
-        Ensure(bar.SearchBox.IsFocused, "Search keeps focus after switching to Jelajah");
+        Ensure(window.CurrentPage is CartView && bar.SearchBox.IsFocused, "Typing on Keranjang stays on Keranjang");
         bar.SearchBox.Text = ""; await Settle();
-        window.ShowCustomerOrders(); await Settle();
-        bar.SearchBox.Text = "sambal"; await Settle();
-        Ensure(window.CurrentPage is MarketplaceView { VisibleCount: 3 }, "Typing on Pesanan saya switches to Jelajah");
-        bar.SearchBox.Text = ""; await Settle();
-        Ensure(window.Marketplace.VisibleCount == 10, "Clearing the search shows every listing");
+        window.ShowMarketplace(); await Settle();
 
         // Profile menu
         Ensure(!bar.ProfileMenu.IsOpen && bar.ProfileMenu.IsLightDismissEnabled && bar.ProfileMenu.PlacementTarget == bar.ProfileButton,
@@ -149,7 +146,7 @@ internal static class TopBarVerification
         Ensure(bar.ProfileMenu.IsOpen && FocusVisible(bar.OrdersItem), "Space opens the menu with a visible focus");
         Click(bar.OrdersItem); await Settle();
         Ensure(window.CurrentPage is OrdersView && !bar.ProfileMenu.IsOpen, "Pesanan saya opens the orders page and closes the menu");
-        Click(bar.Wordmark); await Settle();
+        Click(bar.LogoButton); await Settle();
 
         // Layout
         var (width, height) = (window.Width, window.Height);
@@ -158,7 +155,7 @@ internal static class TopBarVerification
         window.Width = width; window.Height = height; await Settle();
         foreach (var size in new[] { 1040d, 1920d })
         {
-            var sample = new CustomerTopBar(() => { }, () => { }, () => { }, () => { }, () => { });
+            var sample = new CustomerTopBar(() => { }, () => { }, () => { }, () => { }, _ => { });
             sample.SetCartCount(120);
             var frame = new Window { Width = 1040, Height = 720, Content = new Canvas { Children = { new Border { Child = sample, Width = size } } } };
             try { frame.Show(); await Settle(); CheckLayout(sample, $"{size:0} wide"); }
@@ -178,7 +175,7 @@ internal static class TopBarVerification
 
     private static void CheckLayout(CustomerTopBar bar, string label)
     {
-        var parts = new (string Name, Control Control)[] { ("wordmark", bar.Wordmark), ("search", bar.SearchBox), ("cart", bar.CartButton), ("profile", bar.ProfileButton) };
+        var parts = new (string Name, Control Control)[] { ("logo", bar.LogoButton), ("search", bar.SearchBox), ("cart", bar.CartButton), ("profile", bar.ProfileButton) };
         var area = new Rect(bar.Bounds.Size);
         foreach (var (name, control) in parts)
             Ensure(control.IsEffectivelyVisible && Contains(Rect(control, bar), area), $"{label}: {name} sits inside the top bar");
@@ -187,10 +184,20 @@ internal static class TopBarVerification
                 Ensure(!Rect(parts[i].Control, bar).Intersects(Rect(parts[j].Control, bar)), $"{label}: {parts[i].Name} and {parts[j].Name} overlap");
         var search = Rect(bar.SearchBox, bar);
         Ensure(search.Width >= CustomerTopBar.SearchMinWidth - .5 && search.Width <= CustomerTopBar.SearchMaxWidth + .5, $"{label}: search is {search.Width:0} wide");
-        var left = search.X - Rect(bar.Wordmark, bar).Right;
+        var left = search.X - Rect(bar.LogoButton, bar).Right;
         var right = Rect(bar.CartButton, bar).X - search.Right;
-        Ensure(left >= 31.5 && right >= 31.5 && Math.Abs(left - right) < 1, $"{label}: search is centered between wordmark and icons ({left:0}, {right:0})");
+        Ensure(left >= 31.5 && right >= 31.5 && Math.Abs(left - right) < 1, $"{label}: search is centered between logo and icons ({left:0}, {right:0})");
         Ensure(Contains(Rect(bar.CartBadge, bar), Rect(bar.CartButton, bar)), $"{label}: badge stays inside the cart icon");
+        Ensure(Math.Abs(bar.Bounds.Height - CustomerTopBar.BarHeight) < .5, $"{label}: top bar stays {CustomerTopBar.BarHeight:0} high ({bar.Bounds.Height:0.#})");
+        CheckRatio(bar.Logo, $"{label}: logo");
+    }
+
+    internal static void CheckRatio(Image logo, string label)
+    {
+        var pixels = ((Avalonia.Media.Imaging.Bitmap)logo.Source!).PixelSize;
+        var expected = (double)pixels.Width / pixels.Height;
+        var actual = logo.Bounds.Width / logo.Bounds.Height;
+        Ensure(logo.Bounds.Height > 0 && Math.Abs(actual / expected - 1) <= .01, $"{label} keeps the bitmap ratio ({actual:0.###}, bitmap {expected:0.###})");
     }
 
     internal static double Contrast(Color a, Color b)

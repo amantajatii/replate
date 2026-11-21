@@ -2,7 +2,7 @@
 
 Aplikasi Avalonia UI 12.1.4 / .NET 10 dengan area pelanggan dan pemilik restoran
 terpisah. Seluruh layar, keranjang, detail pesanan, dan formulir memakai halaman
-penuh. Pelanggan menggunakan bar atas berisi wordmark
+penuh. Pelanggan menggunakan bar atas berisi logo putih
 (ke Jelajah), kolom cari, ikon keranjang dengan jumlah item, dan lingkaran profil
 yang membuka menu **Pesanan saya** dan **Keluar**; restoran memiliki sidebar operasional.
 
@@ -23,7 +23,7 @@ latar terang dan setengah di atas panel hijau. Batas itu berada di sekitar 72% l
 jendela, sehingga panel hijau sekitar 28% lebar. Diameter piring sekitar 56% tinggi
 jendela. Kartu formulir mulai di sekitar 12% lebar jendela (minimal 48) dan berjarak
 sekitar 8% lebar jendela dari piring; pada jendela kecil jarak itu mengecil sampai
-minimal 24. Wordmark
+minimal 24. Logo hijau
 tetap di atas, sejajar dengan tepi kiri kartu, sedangkan satu kartu formulir di
 bawahnya dapat digulir vertikal; baris akun demo mengikuti lebar dan tepi kiri kartu. Area gulir memakai scrollbar tipis tanpa
 track dan tanpa tombol panah yang hanya tampil saat menggulir atau saat kursor berada
@@ -61,7 +61,9 @@ Akun demo tidak digandakan dan tidak menimpa akun yang sudah ada.
 | --- | --- | --- |
 | Awal | Masuk | Kartu email dan kata sandi di samping foto; arah halaman mengikuti peran akun |
 | Awal | Daftar | Kartu akun pelanggan atau pemilik restoran beserta profil restoran, di samping foto |
-| Pelanggan | Jelajah | Banner sapaan, cari dari bar atas, kartu filter (Termurah, Segera berakhir, Makanan utama, Roti & kue, Vegetarian), kartu makanan dengan harga, stok, jadwal pengambilan |
+| Pelanggan | Jelajah | Banner sapaan, kartu koleksi (Termurah, Segera berakhir, Makanan utama, Roti & kue, Buah & sayur) yang membuka halamannya sendiri, semua kartu makanan dengan harga, stok, jadwal pengambilan |
+| Pelanggan | Koleksi | Tautan Kembali ke Jelajah, judul koleksi dengan kalimat pengantar, kartu makanan terurut (harga atau batas pengambilan) atau tersaring per kategori |
+| Pelanggan | Hasil pencarian | Dibuka dengan Enter atau ikon kaca pembesar di bar atas; judul "Hasil untuk {kata}", semua kata harus cocok dengan nama menu, deskripsi, restoran, atau kategori |
 | Pelanggan | Detail makanan | Deskripsi, harga, jumlah porsi, tambah ke keranjang |
 | Pelanggan | Keranjang | Ubah jumlah, hapus item, periksa total, reservasi |
 | Pelanggan | Pesanan saya | Filter pesanan aktif, selesai, dibatalkan |
@@ -165,7 +167,7 @@ tengah piring (setengah di atas latar terang, toleransi 0,02 diameter) dan di se
 72% lebar (panel sekitar 28%), tepi kiri kartu di sekitar 12% lebar dan minimal 48,
 piring tidak berpotongan dengan kartu (jarak minimal 24, dan minimal 8% lebar pada
 1360 × 940, 1283 × 780, dan 1920 × 1080), kartu tidak terpotong,
-wordmark dan baris akun demo sejajar tepi kiri kartu, wordmark tidak terpotong saat
+logo dan baris akun demo sejajar tepi kiri kartu, logo tidak terpotong saat
 digulir, tidak ada gulir horizontal, tidak ada scrollbar bertrack atau berpanah yang
 tampil, dan setiap kolom yang difokuskan dengan Tab tergulir ke tampilan. Pemeriksaan
 juga mencakup judul tebal tanpa subjudul, tombol mata yang terlihat saat kolom kosong

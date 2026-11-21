@@ -84,6 +84,7 @@ internal static class SessionStore
         foreach (var menu in menus.Values)
         {
             var restaurant = restaurants[menu.RestaurantId];
+            menu.Category = MenuCategories.Normalize(menu.Category);
             menu.Restaurant = restaurant; restaurant.Menus.Add(menu);
         }
         var listings = state.Listings.Select(Convert<SurplusListing>).ToDictionary(l => l.Id);

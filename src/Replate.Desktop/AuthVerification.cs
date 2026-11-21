@@ -79,14 +79,19 @@ internal static class AuthVerification
         }
         var buttons = card.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("auth-primary")).ToList();
         Check(buttons.Count == 1 && Math.Abs(buttons[0].Bounds.Width - (card.Bounds.Width - 64)) < 1, $"{where}: primary button spans the card");
-        var mark = RectIn(surface.Wordmark, surface); var scrollBox = RectIn(surface.FormScroll, surface);
-        Check(surface.Wordmark.Text == "replate." && mark.X >= 0 && mark.Y >= 0 && mark.Bottom <= scrollBox.Y + .5 && Gap(mark, plate) > 0 &&
-            !surface.FormScroll.GetVisualDescendants().Contains(surface.Wordmark), $"{where}: wordmark stays fully visible above the scroll area");
-        Check(Math.Abs(mark.X - cardBox.X) < 1, $"{where}: wordmark aligns with the card left edge ({mark.X:0.#}, card {cardBox.X:0.#})");
+        var mark = RectIn(surface.Logo, surface); var scrollBox = RectIn(surface.FormScroll, surface);
+        Check(surface.Logo.Source == Ui.LogoGreen && surface.Logo.Stretch == Stretch.Uniform && double.IsNaN(surface.Logo.Width) &&
+            Math.Abs(mark.Height - AuthSurface.LogoHeight) < .5 && Avalonia.Automation.AutomationProperties.GetName(surface.Logo) == Ui.LogoName &&
+            !surface.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == "replate."),
+            $"{where}: green logo replaces the text wordmark ({mark.Width:0.#}x{mark.Height:0.#})");
+        TopBarVerification.CheckRatio(surface.Logo, $"{where}: auth logo");
+        Check(mark.X >= 0 && mark.Y >= 0 && mark.Bottom <= scrollBox.Y + .5 && Gap(mark, plate) > 0 &&
+            !surface.FormScroll.GetVisualDescendants().Contains(surface.Logo), $"{where}: logo stays fully visible above the scroll area");
+        Check(Math.Abs(mark.X - cardBox.X) < 1, $"{where}: logo aligns with the card left edge ({mark.X:0.#}, card {cardBox.X:0.#})");
         var header = RectIn(surface.Header, surface); var clip = RectIn(surface.FormClip, surface);
         Check(ColorOf(surface.Header.Background) == Color.Parse("#FAFAF8") && header.Contains(mark) && header.Bottom <= clip.Y + .5 &&
             surface.FormClip.ClipToBounds && surface.Header.GetVisualParent() is Panel host && host.Children.IndexOf(surface.Header) > host.Children.IndexOf(surface.FormClip),
-            $"{where}: wordmark sits on a clean canvas band above a clipped scroll area (band bottom {header.Bottom:0.#}, scroll top {clip.Y:0.#})");
+            $"{where}: logo sits on a clean canvas band above a clipped scroll area (band bottom {header.Bottom:0.#}, scroll top {clip.Y:0.#})");
         Check(cardBox.X >= scrollBox.X - .5 && cardBox.Right <= scrollBox.Right + .5 && scrollBox.Right <= plate.X + 1,
             $"{where}: card is not clipped and the scroll area stays clear of the plate (card {cardBox.X:0.#}-{cardBox.Right:0.#}, scroll {scrollBox.X:0.#}-{scrollBox.Right:0.#}, plate {plate.X:0.#})");
         Check(scrollBox.X <= cardBox.X - AuthSurface.ShadowPad + .5 && clip.X <= cardBox.X - AuthSurface.ShadowPad + .5 && clip.Right >= cardBox.Right + AuthSurface.ShadowPad - .5 &&
@@ -174,11 +179,11 @@ internal static class AuthVerification
     internal static async Task CheckScrolled(AuthSurface surface, string where, Action? capture = null)
     {
         var scroll = surface.FormScroll;
-        var mark = RectIn(surface.Wordmark, surface);
+        var mark = RectIn(surface.Logo, surface);
         scroll.Offset = new Vector(0, scroll.Extent.Height); await Task.Delay(300);
         var plate = RectIn(surface.Hero, surface); var card = RectIn(surface.Card, surface);
         Check(scroll.Offset.Y > 0 && scroll.Offset.X == 0, $"{where}: left column scrolls vertically only");
-        Check(RectIn(surface.Wordmark, surface) == mark, $"{where}: wordmark does not move or clip while scrolling");
+        Check(RectIn(surface.Logo, surface) == mark, $"{where}: logo does not move or clip while scrolling");
         Check(Math.Abs(plate.Center.Y - surface.Bounds.Height / 2) < 1 && Gap(card, plate) >= AuthSurface.PlateGap - .5, $"{where}: plate stays fixed and clear of the scrolled card");
         var bar = VerticalBar(surface);
         var thumb = RectIn(bar.GetVisualDescendants().OfType<Thumb>().Single(), bar);
@@ -431,9 +436,9 @@ internal static class AuthVerification
             Ensure(signIn.PasswordInput.PasswordChar != default, "Password is masked");
             Ensure(Avalonia.Automation.AutomationProperties.GetName(signIn.EmailInput) == "Email" &&
                 Avalonia.Automation.AutomationProperties.GetName(signIn.PasswordInput) == "Kata sandi", "Sign-in automation names match labels");
-            Ensure(Texts().Any(t => t.Text == "Masuk") && Texts().Any(t => t.Text == "replate.") &&
+            Ensure(Texts().Any(t => t.Text == "Masuk") && signIn.Surface.Logo.Source == Ui.LogoGreen && !Texts().Any(t => t.Text == "replate.") &&
                 Texts().Any(t => t.Text == "Akun demo: pelanggan@replate.demo atau dapur-bumi@replate.demo, kata sandi replate123."),
-                "Sign-in shows wordmark, heading and demo account hint");
+                "Sign-in shows logo, heading and demo account hint");
             Ensure(!window.GetVisualDescendants().OfType<Button>().Any(b => b.Content as string is "Jelajahi makanan" or "Buka area restoran" or "Ganti area"),
                 "Old automatic demo entry buttons are removed");
             Ensure(((Avalonia.Media.ISolidColorBrush)signIn.SignInButton.Background!).Color == Avalonia.Media.Color.Parse("#245B43"), "Masuk is the green primary action");

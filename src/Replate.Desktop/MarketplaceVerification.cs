@@ -20,24 +20,24 @@ internal static class MarketplaceVerification
     {
         var session = window.Session;
         var view = window.Marketplace;
-        Ensure(window.CurrentPage == view && view.ActiveFilter is null && window.SearchText == "", "Jelajah starts without a filter or search");
+        Ensure(window.CurrentPage == view && window.SearchText == "", "Jelajah starts with an empty search");
 
         // Banner
         var name = session.CurrentUser!.Name;
         Ensure(view.Banner.Greeting.Text == $"Halo, {name}." && view.Banner.Message.Text == "Yuk, Selamatkan Makanan Lewat Setiap Pesanan!",
             "Banner greets the signed-in user with the call to action");
-        Ensure(view.Body.Children[0] == view.Banner && view.Body.Children[1] == view.FilterRow && view.Body.Children[2] == view.Section &&
+        Ensure(view.Body.Children[0] == view.Banner && view.Body.Children[1] == view.CollectionRow && view.Body.Children[2] == view.Section &&
             view.Section.Children[0] == view.TitleRow && view.Section.Children[1] == view.ListingsPanel, "Banner, filter cards, then the Jelajahi Menu section");
         Ensure(!view.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text?.Contains("menu tersedia") == true), "The N menu tersedia counter is gone");
-        Ensure(view.Title.Text == MarketplaceView.SectionTitle && view.Title.FontSize == 20 && view.Title.FontWeight >= FontWeight.SemiBold &&
+        Ensure(view.Title.Text == MarketplaceView.SectionTitle && view.Title.FontSize >= 30 && view.Title.FontWeight >= FontWeight.Bold &&
             ColorOf(view.Title.Foreground) == Color.Parse("#23382C") && view.Title.HorizontalAlignment == Avalonia.Layout.HorizontalAlignment.Left,
-            "Jelajahi Menu is a bold, left-aligned section title in ink");
+            $"Jelajahi Menu is a bold, left-aligned section title in ink ({view.Title.FontSize:0})");
         Ensure(!view.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text is "Semua restoran" or "Makanan tersedia" || t.Text?.Contains('—') == true),
             "Decorative section titles are removed and no text uses an em dash");
 
         // Filter cards
-        Ensure(view.FilterCards.Keys.SequenceEqual(MarketplaceView.FilterNames) && !view.FilterCards.ContainsKey("Semua"), "Five filter cards without Semua");
-        foreach (var (label, card) in view.FilterCards)
+        Ensure(view.CollectionCards.Keys.SequenceEqual(MarketplaceView.CollectionNames) && !view.CollectionCards.ContainsKey("Semua"), "Five collection cards without Semua");
+        foreach (var (label, card) in view.CollectionCards)
         {
             var icon = card.GetVisualDescendants().OfType<Path>().Single();
             var frame = card.GetVisualDescendants().OfType<Border>().First();
@@ -53,45 +53,16 @@ internal static class MarketplaceVerification
                 $"{label}: keyboard focus shows a 2 px primary ring");
             await Pseudo(card, ":focus-visible", false);
         }
-        var first = view.FilterCards[MarketplaceView.Cheapest];
+        var first = view.CollectionCards[MarketplaceView.Cheapest];
         await Pseudo(first, ":pointerover", true);
         Ensure(ColorOf(first.Background) == Selection, "Filter card hover uses the selection fill");
         await Pseudo(first, ":pointerover", false);
 
         var all = view.VisibleCount;
-        Click(view.FilterCards["Vegetarian"]); await Settle();
-        Ensure(view.ActiveFilter == "Vegetarian" && view.VisibleListings.All(l => l.Menu.Category == "Vegetarian") && view.VisibleCount == 3,
-            "Vegetarian filters by category");
-        CheckActive(view, "Vegetarian");
-        Click(view.FilterCards["Roti & kue"]); await Settle();
-        Ensure(view.ActiveFilter == "Roti & kue" && view.VisibleCount > 0 && view.VisibleListings.All(l => l.Menu.Category == "Roti & kue"), "Pick one: Roti & kue replaces Vegetarian");
-        CheckActive(view, "Roti & kue");
-        Click(view.FilterCards["Roti & kue"]); await Settle();
-        Ensure(view.ActiveFilter is null && view.VisibleCount == all && view.FilterCards.Values.All(c => !c.Classes.Contains("active")),
-            "Clicking the active card again shows every listing");
-        Click(view.FilterCards["Makanan utama"]); await Settle();
-        Ensure(view.VisibleCount > 0 && view.VisibleListings.All(l => l.Menu.Category == "Makanan utama"), "Makanan utama filters by category");
-        Click(view.FilterCards["Makanan utama"]); await Settle();
-
-        var defaultOrder = view.VisibleListings.ToList();
-        Click(view.FilterCards[MarketplaceView.Cheapest]); await Settle();
-        Ensure(view.VisibleCount == all && Ascending(view.VisibleListings.Select(l => l.RescuePrice)), "Termurah sorts by rescue price ascending");
-        Key(view.FilterCards[MarketplaceView.EndingSoon], Avalonia.Input.Key.Enter); await Settle();
-        Ensure(view.ActiveFilter == MarketplaceView.EndingSoon && view.VisibleCount == all && Ascending(view.VisibleListings.Select(l => l.PickupEnd)),
-            "Segera berakhir (Enter) sorts by pickup end ascending");
-        Key(view.FilterCards[MarketplaceView.EndingSoon], Avalonia.Input.Key.Enter); await Settle();
-        Ensure(view.ActiveFilter is null && view.VisibleListings.SequenceEqual(defaultOrder), "Without a card the default order returns");
-
-        window.TopBar.SearchBox.Text = "croissant"; await Settle();
-        Click(view.FilterCards["Roti & kue"]); await Settle();
-        Ensure(view.VisibleCount == 1, "Top bar search applies together with the active card");
-        Click(view.FilterCards["Vegetarian"]); await Settle();
-        Ensure(view.VisibleCount == 0 && view.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == "Tidak ada menu yang cocok"), "Empty state shows");
-        var empty = view.ListingsPanel.Children.Single();
-        Ensure(view.Title.IsEffectivelyVisible && Math.Abs(Rect(empty, view).Y - Rect(view.Title, view).Bottom - Ui.Spacing.Related) < 1,
-            "Empty state keeps the title with the same 16 gap");
-        Click(view.ListingsPanel.GetVisualDescendants().OfType<Button>().Single(b => b.Content as string == "Hapus filter")); await Settle();
-        Ensure(view.ActiveFilter is null && window.SearchText == "" && view.VisibleCount == all, "Hapus filter clears the card and the search");
+        Ensure(view.VisibleListings.SequenceEqual(ListingQuery.Available(session)) && view.CollectionCards.Values.All(c => !c.Classes.Contains("active")),
+            "Jelajah lists every available listing in the default order with no selected card");
+        Ensure(!typeof(MarketplaceView).GetMembers().Any(m => m.Name is "ActiveFilter" or "SelectFilter" or "ClearFilter") &&
+            !view.GetVisualDescendants().OfType<Button>().Any(b => b.Content as string == "Hapus filter"), "Pick-one filter state and Hapus filter are gone");
 
         // Listing cards
         var cards = view.ListingsPanel.Children.OfType<Border>().ToList();
@@ -135,7 +106,7 @@ internal static class MarketplaceVerification
         }
         foreach (var size in new[] { new Size(1040, 720), new Size(1360, 940), new Size(1920, 1080) })
         {
-            var bar = new CustomerTopBar(() => { }, () => { }, () => { }, () => { }, () => { });
+            var bar = new CustomerTopBar(() => { }, () => { }, () => { }, () => { }, _ => { });
             var sample = new MarketplaceView(window, session);
             DockPanel.SetDock(bar, Dock.Top);
             var shell = new DockPanel { Width = size.Width, Height = size.Height, Children = { bar, sample } };
@@ -202,15 +173,15 @@ internal static class MarketplaceVerification
         var bannerBox = Rect(banner, view);
         Ensure(Math.Abs(size.Width - expected) < 1 && Math.Abs(bannerBox.X - content.X) < 1 && Math.Abs(bannerBox.Right - content.Right) < 1,
             $"{label}: banner is the content width ({size.Width:0} at {bannerBox.X:0})");
-        var row = Rect(view.FilterRow, view);
+        var row = Rect(view.CollectionRow, view);
         Ensure(Math.Abs(bannerBox.X - row.X) <= 1 && Math.Abs(bannerBox.Right - row.Right) <= 1,
-            $"{label}: banner edges ({bannerBox.X:0} to {bannerBox.Right:0}) match the filter row ({row.X:0} to {row.Right:0})");
+            $"{label}: banner edges ({bannerBox.X:0} to {bannerBox.Right:0}) match the collection row ({row.X:0} to {row.Right:0})");
         var listings = view.ListingsPanel.Children.OfType<Border>().Select(c => Rect(c, view)).ToList();
         Ensure(listings.Count > 0 && listings.All(c => Math.Abs(bannerBox.X - c.X) <= 1 && Math.Abs(bannerBox.Right - c.Right) <= 1),
             $"{label}: banner edges match the listing cards");
-        var cards = view.FilterCards.Values.Select(c => Rect(c, view)).ToList();
-        Ensure(cards.All(c => Math.Abs(c.Y - cards[0].Y) < .5 && Math.Abs(c.Width - cards[0].Width) < 1), $"{label}: five equal filter cards in one row");
-        Ensure(cards.Zip(cards.Skip(1)).All(p => p.First.Right <= p.Second.X + .5) && cards[^1].Right <= content.Right + .5, $"{label}: filter cards do not overlap or wrap");
+        var cards = view.CollectionCards.Values.Select(c => Rect(c, view)).ToList();
+        Ensure(cards.All(c => Math.Abs(c.Y - cards[0].Y) < .5 && Math.Abs(c.Width - cards[0].Width) < 1), $"{label}: five equal collection cards in one row");
+        Ensure(cards.Zip(cards.Skip(1)).All(p => p.First.Right <= p.Second.X + .5) && cards[^1].Right <= content.Right + .5, $"{label}: collection cards do not overlap or wrap");
         Ensure(view.ListingsPanel.Children.All(c => Rect(c, view).Right <= content.Right + .5), $"{label}: listing cards fit the content width");
     }
 
@@ -218,7 +189,7 @@ internal static class MarketplaceVerification
     {
         var bar = Rect(topBar, window);
         var banner = Rect(view.Banner, window);
-        var filters = Rect(view.FilterRow, window);
+        var filters = Rect(view.CollectionRow, window);
         var title = Rect(view.Title, window);
         var first = Rect(view.ListingsPanel.Children[0], window);
         var content = Rect(view.Body, window);
@@ -231,23 +202,6 @@ internal static class MarketplaceVerification
         Console.WriteLine($"Jelajah rhythm at {label}: gaps {string.Join("/", gaps.Select(g => g.ToString("0.#")))}, title-card {first.Y - title.Bottom:0.#}");
     }
 
-    private static void CheckActive(MarketplaceView view, string name)
-    {
-        foreach (var (label, card) in view.FilterCards)
-        {
-            var active = label == name;
-            var text = card.GetVisualDescendants().OfType<TextBlock>().Single();
-            Ensure(card.Classes.Contains("active") == active, $"{label}: only {name} is active");
-            if (active)
-                Ensure(ColorOf(card.Background) == Selection && ColorOf(text.Foreground) == Primary && text.FontWeight == FontWeight.SemiBold,
-                    $"{label}: active card uses selection, primary and semibold");
-            else Ensure(ColorOf(card.Background) == Colors.White && text.FontWeight == FontWeight.Normal, $"{label}: inactive card is white");
-        }
-    }
-
-    private static bool Ascending<T>(IEnumerable<T> values) where T : IComparable<T> =>
-        values.Zip(values.Skip(1)).All(p => p.First.CompareTo(p.Second) <= 0);
-
     private static Rect Rect(Visual visual, Visual root) =>
         new(visual.TranslatePoint(default, root) ?? throw new InvalidOperationException("Element is outside Jelajah"), visual.Bounds.Size);
 
@@ -255,9 +209,6 @@ internal static class MarketplaceVerification
 
     private static async Task Pseudo(StyledElement element, string pseudo, bool on)
     { ((IPseudoClasses)element.Classes).Set(pseudo, on); await Task.Delay(100); }
-
-    private static void Key(Control target, Key key) =>
-        target.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = key, Source = target });
 
     private static void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 

@@ -32,6 +32,7 @@ internal sealed class AuthSurface : Grid
     internal const double GapShare = 0.08;
     internal const double MinMargin = 48;
     internal const double Inset = 32;
+    internal const double LogoHeight = 44;
     internal const double ScrollBarWidth = 6;
     internal const double ScrollGap = 16;
     internal const double ShadowPad = 24;
@@ -83,7 +84,7 @@ internal sealed class AuthSurface : Grid
     internal Border HeroPanel { get; }
     internal Canvas HeroLayer { get; }
     internal Image Hero { get; }
-    internal TextBlock Wordmark { get; }
+    internal Image Logo { get; }
     internal ScrollViewer FormScroll { get; }
     internal Border FormClip { get; }
     internal Border Header { get; }
@@ -117,8 +118,8 @@ internal sealed class AuthSurface : Grid
         column.Children.Add(Card);
         Below = below;
         if (below is not null) column.Children.Add(below);
-        Wordmark = Ui.Text("replate.", 36, Ui.Green, true);
-        Wordmark.HorizontalAlignment = HorizontalAlignment.Left; Wordmark.Margin = new Thickness(Inset, Inset, Inset, 0);
+        Logo = Ui.Logo(Ui.LogoGreen, LogoHeight);
+        Logo.Margin = new Thickness(Inset, Inset, Inset, 0);
         var content = new Border { Child = column, Padding = new Thickness(ShadowPad, 24, 0, Inset) };
         FormScroll = Ui.Scroll(content);
         FormScroll.HorizontalAlignment = HorizontalAlignment.Left;
@@ -131,7 +132,7 @@ internal sealed class AuthSurface : Grid
             var y = Math.Clamp(FormScroll.Offset.Y - e.Delta.Y * 50, 0, FormScroll.Extent.Height - FormScroll.Viewport.Height);
             FormScroll.Offset = new Vector(0, y); e.Handled = true;
         };
-        Header = new Border { Child = Wordmark, Background = CanvasFill };
+        Header = new Border { Child = Logo, Background = CanvasFill };
         var left = new Grid { RowDefinitions = RowDefinitions.Parse("Auto,*") };
         SetRow(FormClip, 1);
         left.Children.Add(FormClip); left.Children.Add(Header);
@@ -223,7 +224,7 @@ internal sealed class AuthSurface : Grid
         FormScroll.Width = ShadowPad + cardWidth + ScrollGap + ScrollBarWidth;
         FormScroll.Margin = new Thickness(left - ShadowPad, 0, 0, 0);
         column.Width = cardWidth;
-        Wordmark.Margin = new Thickness(left, Inset, 0, 0);
+        Logo.Margin = new Thickness(left, Inset, 0, 0);
         Hero.Width = plate; Hero.Height = plate;
         Canvas.SetLeft(Hero, plateX); Canvas.SetTop(Hero, (size.Height - plate) / 2);
     }
