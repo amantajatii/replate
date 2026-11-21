@@ -14,7 +14,7 @@ Keluar -> Masuk as owner -> restaurant order -> confirm -> ready -> verify custo
 code -> production rescue counts and dashboard update. Menu -> production -> listing
 is the supply workflow. Accounts are local and prototype-grade.
 
-FIRST VIEWPORT: Customer pages fill the window below a horizontal customer nav,
+FIRST VIEWPORT: Customer pages fill the window below the customer top bar (below),
 with no owner dashboard link. Owner pages use a dedicated sidebar with Dashboard,
 Menu, Penawaran surplus, Produksi, Pesanan. All forms and cart are full pages.
 
@@ -29,15 +29,20 @@ Center and padding 10, 5.5, 6, 5.5 (top equals bottom), so typed text, placehold
 password dots and the password-toggle share the field's vertical center (within 1 px).
 Multiline TextBoxes (AcceptsReturn, e.g. Deskripsi) use VerticalContentAlignment Top
 and padding 10, 10, 6, 5.5 (top equals left); text and placeholder start at the top
-padding (within 1 px). Field heights stay 42 (multiline 88, marketplace search 44). Every TextBox has an Indonesian
-PlaceholderText, "Masukkan ..." where it fits (search: "Cari menu atau restoran"), no
+padding (within 1 px). Field heights stay 42 (multiline 88, top bar search 44). Every TextBox has an Indonesian
+PlaceholderText, "Masukkan ..." where it fits (top bar search: "Mulai cari menu atau restoran"), no
 em dash and no exclamation mark. Placeholder color is `muted` (#59675D) at full
 opacity (the Fluent 0.5 placeholder opacity is reset to 1); it disappears once the
 field has content, with no other effect. `--verify-ui` (InputVerification) checks every
 visible TextBox on each captured screen and on the auth surface at all four sizes.
 
-Quality bar: quiet, useful desktop UI. No glyph icons or marketing hero. Tables align
-numeric columns; focus and disabled states use native affordances. Preserve domain
+Quality bar: quiet, useful desktop UI. No marketing hero, except the Jelajah banner
+(greeting and one call to action, below); icons only where they carry meaning (the
+password-toggle eye, the top bar magnifier, cart and user icons, and the five Jelajah
+filter icons). Tables align
+numeric columns; disabled states use native affordances. Customer routes replace the
+native focus adorner with the shared keyboard focus style (below); auth and restaurant
+routes keep theirs. Preserve domain
 rules, action outcomes, local data visibility and realistic persistence boundaries.
 
 ROUTES AND ROLES:
@@ -56,8 +61,8 @@ ROUTES AND ROLES:
   "Akun berhasil dibuat.", then routes by role. Kembali ke masuk returns to Masuk.
 - After sign-in: Customer -> Jelajah (marketplace); RestaurantOwner -> Dashboard of
   the restaurant that owner manages.
-- Keluar replaces Ganti area in the customer top nav and the restaurant rail. It
-  signs out, clears the displayed page, and returns to Masuk.
+- Keluar sits in the customer profile menu and in the restaurant rail. It signs out,
+  clears the displayed page and the top bar search, and returns to Masuk.
 - Every customer route (Jelajah, detail makanan, Keranjang, Pesanan saya, detail
   pesanan) requires a Customer; every restaurant route (Dashboard, Menu, Penawaran
   surplus, Produksi, Pesanan, editors, detail pesanan) requires the RestaurantOwner
@@ -68,6 +73,91 @@ ROUTES AND ROLES:
 - The restaurant rail shows the signed-in owner's restaurant name. A new restaurant
   with no menus, listings, production or orders renders every restaurant page with an
   empty state and a next step (Tambah menu, Buat penawaran).
+
+CUSTOMER TOP BAR (every customer route, implemented in `CustomerTopBar.cs`):
+- One persistent bar, 72 high, `primary` fill, side padding 32, no bottom rule and no
+  shadow (the green against the canvas is the separation). No route tabs: Jelajah,
+  Pesanan saya, Keranjang (n) and Keluar are no longer buttons in the bar.
+- Left: wordmark replate. (36, semibold, white), a button that opens Jelajah.
+- Middle: search pill (`rounded.full`, 44 high, white, no border), 32 from the wordmark and from
+  the icons, width between 320 and 720, centered in the remaining space; magnifier
+  icon (`muted`) inside on the left; placeholder "Mulai cari menu atau restoran" in `muted`,
+  typed text in `ink`. While focused it shows a 2 px white ring 2 outside the pill, never a
+  dark border. It replaces the
+  old Jelajah search field and label. Typing filters Jelajah live; typing on another
+  customer page switches to Jelajah with that keyword and keeps focus in the field.
+- Right, 16 apart: cart icon button (44, transparent, white icon, `selection` tint on
+  hover with no box; while Keranjang is open a white line 20 by 2 sits under the icon)
+  with a white circular badge holding the portion count in `primary`, hidden at 0;
+  profile circle (44, white fill, primary user icon, `selection` fill on hover).
+  Automation names and tooltips "Keranjang" and "Akun". Contrast on the green: white
+  about 7.9:1, `selection` about 6.4:1.
+- Profile menu: Popup anchored to the circle (BottomEdgeAlignedRight, overlay layer,
+  light dismiss). White card, `rounded.card`, `elevation.card`, padding 8, width 260, no
+  border: muted name and email (not clickable), divider, Pesanan saya, Keluar. Click,
+  Enter or Space on the circle opens it and focuses Pesanan saya; Up/Down move between
+  items; Esc or a click outside closes it. Pesanan saya opens the orders page; Keluar
+  signs out. Opened with the mouse, Pesanan saya takes focus without looking focused;
+  opened with Enter or Space it shows the keyboard focus fill.
+- Icons are Path geometry on a 24 grid, stroke 1.75, round caps and joins. Every control
+  is a Tab stop with the shared keyboard focus style (white ring on the bar).
+- Verified by `--verify-ui` (TopBarVerification): primary fill without rule, white
+  wordmark and icons with contrast at least 4.5 (text) and 3 (icons), search colors and
+  focus ring, elements and names, removed tabs and old search, hover colors, badge
+  colors and count, cart active line, search from Keranjang and Pesanan saya, menu
+  contents, keyboard and focus visibility, Keluar, and no overlap at 1040x720 and
+  1920x1080 (search 320 to 720).
+
+KEYBOARD FOCUS (customer routes, shared `Ui.FocusStyles` in `Ui.cs`):
+- The native Fluent focus adorner (the black double box) is replaced by an empty
+  adorner on every control in the customer shell, its profile menu and the customer
+  cancellation dialog.
+- Buttons show a 2 px ring, 2 outside the control, only on `:focus-visible` (Tab or
+  arrow keys, never after a click): `primary` on light surfaces, white on the green top
+  bar. Profile menu items show a `selection` fill with `primary` text instead of a ring.
+  ComboBox uses a `primary` border on `:focus-visible`. Text fields keep their own
+  focus border, except the top bar search (white ring above).
+- No blur, glow, gradient or animation.
+
+JELAJAH (customer marketplace, `MarketplaceView.cs` and `MarketplaceBanner.cs`):
+- One vertical ScrollViewer under the top bar, no horizontal scrolling. Content is at
+  most 1200 wide, side inset 32, centered on wide windows. Order: banner, filter cards,
+  the "Jelajahi Menu" title row, listing cards, sample-data note. No result counter, no
+  "Makanan tersedia" or "Semua restoran" headings.
+- Rhythm (shared constants `Ui.Spacing`): 24 from the top bar to the banner, from the
+  banner to the filter cards and from the filter cards to the title; 16 from the title
+  to the first listing card (equal to the gap between cards); 32 below the page. Side
+  insets and the 16 between filter cards are unchanged.
+- Title: "Jelajahi Menu", `section` role (20, semibold), `ink`, left-aligned with the
+  content edge, always shown, including when the list is empty. The add-to-cart notice
+  sits right-aligned on the same row. Jelajah has no restaurant picker.
+- Banner: `rounded.card`, no border or shadow, centered in the content column,
+  width = content width (left and right edges aligned with the filter row and listing
+  cards at every size), height = width x bitmap height / bitmap width (4344 by 1280), so
+  `Assets/marketplace-hero.webp` is shown whole with Uniform stretch, never cropped or
+  distorted (about 288 high at 1040x720, 354 at the 1200 content maximum). Overlay text: "Halo, {name}."
+  (bold primary, 0.0287 x width clamped 22 to 32, one line, ellipsis) and "Yuk,
+  Selamatkan Makanan Lewat Setiap Pesanan!" (muted, 0.0184 x width clamped 15 to 20, at
+  most two lines). Text inset 40, vertically centered above the cabinets (87.8% of the
+  height), right edge at most 45% of the banner width (the nearest illustration object
+  starts at 46.2%).
+- Filter cards: Termurah, Segera berakhir, Makanan utama, Roti & kue, Vegetarian;
+  equal widths in one row, 16 apart, height 96, card style with a primary line icon
+  above the label. Pick one; the selected card again clears it; no Semua. Termurah
+  sorts by RescuePrice ascending, Segera berakhir by PickupEnd ascending, the rest
+  filter by category, always together with the top bar search. Hover selection fill;
+  selected selection fill, primary semibold; selected hover divider fill; Tab, Enter
+  and Space work with the shared 2 px primary focus ring.
+- Listing cards: card style, padding 20, 16 apart, same columns and content as the old
+  rows; no row dividers. Tambah behaves as before. Empty state "Tidak ada menu yang
+  cocok" with Hapus filter, which clears the card and the search; it sits 16 under the
+  title like the first card.
+- Verified by `--verify-ui` (MarketplaceVerification) at 1040x720, 1360x940 and
+  1920x1080: banner ratio equals the bitmap ratio (within 1%), banner left and right
+  edges equal the filter row and listing cards (within 1 px), centered text inside 45%
+  that does not intersect the illustration; no "menu tersedia" text; the bold,
+  left-aligned title; the three 24 gaps equal (within 1 px) and the title to first card
+  gap 16; focus rings on filter cards and Tambah without the native adorner.
 
 AUTH SURFACE (Masuk and Daftar, implemented in `AuthViews.cs` as `AuthSurface`):
 - A two-column Grid fills the page: the left canvas column and the right primary

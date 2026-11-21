@@ -2,7 +2,9 @@
 
 Aplikasi Avalonia UI 12.1.4 / .NET 10 dengan area pelanggan dan pemilik restoran
 terpisah. Seluruh layar, keranjang, detail pesanan, dan formulir memakai halaman
-penuh. Pelanggan menggunakan navigasi atas; restoran memiliki sidebar operasional.
+penuh. Pelanggan menggunakan bar atas berisi wordmark
+(ke Jelajah), kolom cari, ikon keranjang dengan jumlah item, dan lingkaran profil
+yang membuka menu **Pesanan saya** dan **Keluar**; restoran memiliki sidebar operasional.
 
 ## Menjalankan
 
@@ -31,7 +33,7 @@ selalu terlihat untuk menampilkan atau menyembunyikan isi. Di Daftar, peran dipi
 dengan dua tombol **Pelanggan** / **Pemilik restoran** (bisa juga dengan tombol panah),
 dan Jam buka serta Jam tutup dipilih dari daftar jam 00 sampai 23 dan menit 00 sampai
 59 (format 24 jam). Jika database belum tersambung, peringatan ringkas tampil di atas kartu Masuk. Pelanggan diarahkan ke marketplace, pemilik
-restoran ke dashboard restorannya. **Keluar** di navigasi pelanggan atau sidebar
+restoran ke dashboard restorannya. **Keluar** di menu profil pelanggan atau sidebar
 restoran mengakhiri sesi dan kembali ke layar Masuk. Halaman pelanggan hanya untuk
 pelanggan yang masuk; halaman restoran hanya untuk pemilik restoran tersebut. Peran
 yang tidak sesuai atau belum masuk diarahkan kembali ke layar Masuk.
@@ -59,7 +61,7 @@ Akun demo tidak digandakan dan tidak menimpa akun yang sudah ada.
 | --- | --- | --- |
 | Awal | Masuk | Kartu email dan kata sandi di samping foto; arah halaman mengikuti peran akun |
 | Awal | Daftar | Kartu akun pelanggan atau pemilik restoran beserta profil restoran, di samping foto |
-| Pelanggan | Marketplace | Cari, filter, lihat harga, stok, jadwal pengambilan |
+| Pelanggan | Jelajah | Banner sapaan, cari dari bar atas, kartu filter (Termurah, Segera berakhir, Makanan utama, Roti & kue, Vegetarian), kartu makanan dengan harga, stok, jadwal pengambilan |
 | Pelanggan | Detail makanan | Deskripsi, harga, jumlah porsi, tambah ke keranjang |
 | Pelanggan | Keranjang | Ubah jumlah, hapus item, periksa total, reservasi |
 | Pelanggan | Pesanan saya | Filter pesanan aktif, selesai, dibatalkan |
@@ -78,7 +80,7 @@ Akun demo tidak digandakan dan tidak menimpa akun yang sudah ada.
 1. Di layar **Masuk**, masuk sebagai `pelanggan@replate.demo` / `replate123`.
 2. Pilih makanan, buka keranjang, lalu **Reservasi pesanan**. Catat kode
    pengambilan di detail pesanan.
-3. **Keluar**, lalu masuk sebagai `dapur-bumi@replate.demo` / `replate123`
+3. Lingkaran profil → **Keluar**, lalu masuk sebagai `dapur-bumi@replate.demo` / `replate123`
    (atau pemilik restoran tempat makanan dipesan) → **Pesanan** → **Lihat pesanan**.
 4. Isi estimasi persiapan → **Konfirmasi pesanan** → **Tandai siap diambil**.
 5. Masukkan kode pelanggan → **Verifikasi dan selesaikan**.

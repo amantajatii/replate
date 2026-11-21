@@ -261,6 +261,7 @@ public sealed class OrderDetailView : UserControl
                     Background = host.Background,
                     FontFamily = host.FontFamily
                 };
+                if (!restaurant) dialog.Styles.Add(Ui.FocusStyles());
                 var dismiss = Ui.Button("Kembali", () => dialog.Close(false));
                 var confirm = Ui.Button("Ya, batalkan pesanan", () => dialog.Close(true), true);
                 var buttons = Ui.Row(12, dismiss, confirm);

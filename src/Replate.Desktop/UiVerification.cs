@@ -44,20 +44,21 @@ internal static class UiVerification
                 signIn.EmailInput.Text = email; signIn.PasswordInput.Text = DemoAccounts.Password;
                 Click(signIn.SignInButton); await Settle();
             }
-            Button ShellButton(string text) => window.GetVisualDescendants().OfType<Button>().Single(b => b.Content as string == text);
             await SignInWithForm(DemoAccounts.CustomerEmail);
             Ensure(window.Session.CurrentUser?.Email == DemoAccounts.CustomerEmail && window.CurrentPage is MarketplaceView, "Customer sign-in opens marketplace");
             await Shot("marketplace");
+            await TopBarVerification.Run(window);
+            await MarketplaceVerification.Run(window);
             var market = window.Marketplace;
             Ensure(market.VisibleCount == 10, "Initial listings from all restaurants");
-            market.SearchBox.Text = "croissant"; await Settle(); Ensure(market.VisibleCount == 1, "Search");
-            market.SelectCategory("Vegetarian"); Ensure(market.VisibleCount == 0, "Combined empty filter");
+            window.TopBar.SearchBox.Text = "croissant"; await Settle(); Ensure(market.VisibleCount == 1, "Search");
+            market.SelectFilter("Vegetarian"); Ensure(market.VisibleCount == 0, "Combined empty filter");
             await Shot("marketplace-empty");
-            market.SearchBox.Text = ""; await Settle(); Ensure(market.VisibleCount == 3, "Category");
-            market.SearchBox.Text = "sambal"; await Settle(); Ensure(market.VisibleCount == 1, "Restaurant search with category");
-            market.SelectCategory("Semua"); Ensure(market.VisibleCount == 3, "Restaurant search");
-            market.SearchBox.Text = ""; await Settle();
-            market.SelectCategory("Semua");
+            window.TopBar.SearchBox.Text = ""; await Settle(); Ensure(market.VisibleCount == 3, "Category");
+            window.TopBar.SearchBox.Text = "sambal"; await Settle(); Ensure(market.VisibleCount == 1, "Restaurant search with category");
+            market.ClearFilter(); Ensure(market.VisibleCount == 3, "Restaurant search");
+            window.TopBar.SearchBox.Text = ""; await Settle();
+            market.ClearFilter();
             var listing = window.Session.Listings[0];
             window.ShowFood(listing); await Shot("food-detail");
             for (var i = 0; i <= listing.Quantity; i++) market.Add(listing);
@@ -69,8 +70,7 @@ internal static class UiVerification
             await Shot("reservation");
             var order = window.Session.LastOrder!;
             window.ShowCustomerOrders(); await Shot("customer-orders");
-            Click(ShellButton("Keluar")); await Settle();
-            Ensure(window.CurrentPage is SignInView && !window.Session.IsSignedIn, "Keluar returns to sign-in");
+            await TopBarVerification.SignOut(window);
             await SignInWithForm(DemoAccounts.OwnerEmail("Dapur Bumi"));
             Ensure(window.Session.CurrentUser is Replate.Domain.Entities.RestaurantOwner && window.Session.Restaurant.Name == "Dapur Bumi" &&
                 window.CurrentPage is DashboardView, "Owner sign-in opens Dapur Bumi dashboard");

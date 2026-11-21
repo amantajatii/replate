@@ -13,5 +13,6 @@
   </ItemGroup>
   <ItemGroup>
     <AvaloniaResource Include="Assets/auth-hero.png" />
+    <AvaloniaResource Include="Assets/marketplace-hero.webp" />
   </ItemGroup>
 </Project>
