@@ -2,7 +2,7 @@
 
 Aplikasi Avalonia UI 12.1.4 / .NET 10 dengan area pelanggan dan pemilik restoran
 terpisah. Seluruh layar, keranjang, detail pesanan, dan formulir memakai halaman
-penuh. Pelanggan menggunakan bar atas berisi logo putih
+penuh; detail makanan tampil sebagai pop up di atas halaman. Pelanggan menggunakan bar atas berisi logo putih
 (ke Jelajah), kolom cari, ikon keranjang dengan jumlah item, dan lingkaran profil
 yang membuka menu **Pesanan saya** dan **Keluar**; restoran memiliki sidebar operasional.
 
@@ -64,7 +64,7 @@ Akun demo tidak digandakan dan tidak menimpa akun yang sudah ada.
 | Pelanggan | Jelajah | Banner sapaan, kartu koleksi (Termurah, Segera berakhir, Makanan utama, Roti & kue, Buah & sayur) yang membuka halamannya sendiri, semua kartu makanan dengan harga, stok, jadwal pengambilan |
 | Pelanggan | Koleksi | Tautan Kembali ke Jelajah, judul koleksi dengan kalimat pengantar, kartu makanan terurut (harga atau batas pengambilan) atau tersaring per kategori |
 | Pelanggan | Hasil pencarian | Dibuka dengan Enter atau ikon kaca pembesar di bar atas; judul "Hasil untuk {kata}", semua kata harus cocok dengan nama menu, deskripsi, restoran, atau kategori |
-| Pelanggan | Detail makanan | Deskripsi, harga, jumlah porsi, tambah ke keranjang |
+| Pelanggan | Pop up detail makanan | Dibuka dari tombol Tambah atau klik kartu makanan; foto, deskripsi, harga, stok, jadwal, pengatur jumlah porsi, tambah ke keranjang tanpa pindah halaman |
 | Pelanggan | Keranjang | Ubah jumlah, hapus item, periksa total, reservasi |
 | Pelanggan | Pesanan saya | Filter pesanan aktif, selesai, dibatalkan |
 | Pelanggan | Detail pesanan | Status, rincian, kode pengambilan, pembatalan |
@@ -80,7 +80,8 @@ Akun demo tidak digandakan dan tidak menimpa akun yang sudah ada.
 ## Alur demonstrasi
 
 1. Di layar **Masuk**, masuk sebagai `pelanggan@replate.demo` / `replate123`.
-2. Pilih makanan, buka keranjang, lalu **Reservasi pesanan**. Catat kode
+2. Klik **Tambah** pada kartu makanan, atur jumlah porsi di pop up, lalu
+   **Tambah ke keranjang**. Buka keranjang, lalu **Reservasi pesanan**. Catat kode
    pengambilan di detail pesanan.
 3. Lingkaran profil → **Keluar**, lalu masuk sebagai `dapur-bumi@replate.demo` / `replate123`
    (atau pemilik restoran tempat makanan dipesan) → **Pesanan** → **Lihat pesanan**.

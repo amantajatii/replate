@@ -306,11 +306,12 @@ internal static class AuthVerification
     {
         var presenter = button.GetVisualDescendants().OfType<ContentPresenter>().Single(p => p.Name == "PART_ContentPresenter");
         Color Fill() => ColorOf(presenter.Background);
-        await Pseudo(button, ":pointerover", false);
+        async Task Hover(bool on) { await Pseudo(button, ":pointerover", on); await Task.Delay(Ui.PrimaryHoverDuration * 2); }
+        await Hover(false);
         var normal = Fill();
-        await Pseudo(button, ":pointerover", true);
+        await Hover(true);
         var hovered = Fill();
-        await Pseudo(button, ":pointerover", false);
+        await Hover(false);
         Check(hovered != normal && hovered == background && Fill() == normal, $"{screen}: {button.Content} hover changes its background ({normal} to {hovered}, expected {background})");
     }
 
@@ -448,7 +449,7 @@ internal static class AuthVerification
                 signIn.Surface.Card.TranslatePoint(default, signIn.Surface)!.Value.Y + signIn.Surface.Card.Bounds.Height, "Demo account line sits below the card");
             CheckTitle(signIn.TitleText, "Masuk", "Masuk");
             await CheckReveal(signIn.PasswordInput, "Masuk");
-            await CheckHover(signIn.SignInButton, Color.Parse("#23382C"), "Masuk");
+            await CheckHover(signIn.SignInButton, Color.Parse("#E0E9DF"), "Masuk");
             await CheckHover(signIn.RegisterButton, Color.Parse("#E0E9DF"), "Masuk");
             Shot("auth-sign-in");
             Click(AuthSurface.RevealToggle(signIn.PasswordInput));
@@ -518,7 +519,7 @@ internal static class AuthVerification
             await CheckSurface(window, register.Surface, "Daftar");
             await CheckReveal(register.PasswordInput, "Daftar");
             await CheckReveal(register.ConfirmPasswordInput, "Daftar");
-            await CheckHover(register.RegisterButton, Color.Parse("#23382C"), "Daftar");
+            await CheckHover(register.RegisterButton, Color.Parse("#E0E9DF"), "Daftar");
             await CheckHover(register.BackButton, Color.Parse("#E0E9DF"), "Daftar");
             await CheckRoles(register);
             var users = session.Users.Count;

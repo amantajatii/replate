@@ -30,7 +30,8 @@ Aplikasi desktop tersedia di [`src/Replate.Desktop`](./src/Replate.Desktop), den
 area pelanggan dan restoran terpisah. Halaman pelanggan memakai bar atas
 (logo, kolom cari, keranjang, dan menu profil);
 dashboard dan pengelolaan restoran memakai sidebar operasional. Keranjang,
-detail makanan/pesanan, serta formulir menggunakan halaman penuh.
+detail pesanan, serta formulir menggunakan halaman penuh. Tombol Tambah pada kartu
+makanan membuka pop up detail dengan pengatur jumlah porsi.
 
 ```bash
 dotnet run --project src/Replate.Desktop

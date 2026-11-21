@@ -1,4 +1,6 @@
 using Avalonia;
+using Avalonia.Animation;
+using Avalonia.Animation.Easings;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Presenters;
@@ -8,6 +10,7 @@ using Avalonia.Controls.Templates;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Media.Transformation;
 using Avalonia.Styling;
 using Replate.Domain.Entities;
 using Path = Avalonia.Controls.Shapes.Path;
@@ -23,6 +26,12 @@ public sealed class MarketplaceView : UserControl
     internal const double TitleSize = 32;
     internal static readonly string[] CollectionNames = [Cheapest, EndingSoon, MenuCategories.MainCourse, MenuCategories.Bakery, MenuCategories.Produce];
     internal static readonly BoxShadows CardShadow = BoxShadows.Parse("0 8 24 0 #1F23382C");
+    internal static readonly BoxShadows PrimaryCardShadow = BoxShadows.Parse("0 6 18 0 #4D245B43");
+    internal static readonly BoxShadows PrimaryCardHoverShadow = BoxShadows.Parse("0 10 24 0 #59245B43");
+    internal const double HoverScale = 1.03;
+    internal static readonly TimeSpan HoverDuration = TimeSpan.FromMilliseconds(120);
+    internal const string CardFacePart = "PART_CardFace";
+    internal static readonly IBrush PressedFill = Brush.Parse("#DDE3DA");
     private static readonly Dictionary<string, Geometry> CollectionIcons = new()
     {
         [Cheapest] = Geometry.Parse("M3.5 12.2V4.5A1 1 0 0 1 4.5 3.5H12.2L20.5 11.8A1.5 1.5 0 0 1 20.5 13.9L13.9 20.5A1.5 1.5 0 0 1 11.8 20.5Z M8 6.5A1.5 1.5 0 1 1 8 9.5A1.5 1.5 0 1 1 8 6.5Z"),
@@ -37,11 +46,13 @@ public sealed class MarketplaceView : UserControl
         {
             new Setter(TemplatedControl.TemplateProperty, new FuncControlTemplate<Button>((button, _) => Ui.FocusFrame(new Border
             {
+                Name = CardFacePart,
+                Transitions = [new BoxShadowsTransition { Property = Border.BoxShadowProperty, Duration = HoverDuration, Easing = new CubicEaseOut() }],
                 [!Border.BackgroundProperty] = button[!TemplatedControl.BackgroundProperty],
                 [!Border.BorderBrushProperty] = button[!TemplatedControl.BorderBrushProperty],
                 [!Border.BorderThicknessProperty] = button[!TemplatedControl.BorderThicknessProperty],
                 [!Border.PaddingProperty] = button[!TemplatedControl.PaddingProperty],
-                CornerRadius = new CornerRadius(16), BoxShadow = CardShadow,
+                CornerRadius = new CornerRadius(16),
                 Child = new ContentPresenter
                 {
                     Name = "PART_ContentPresenter",
@@ -96,7 +107,7 @@ public sealed class MarketplaceView : UserControl
     {
         var icon = new Path
         {
-            Data = CollectionIcons[name], Width = 24, Height = 24, Stretch = Stretch.None, Stroke = Ui.Green, StrokeThickness = 1.75,
+            Data = CollectionIcons[name], Width = 24, Height = 24, Stretch = Stretch.None, StrokeThickness = 1.75,
             StrokeLineCap = PenLineCap.Round, StrokeJoin = PenLineJoin.Round, HorizontalAlignment = HorizontalAlignment.Center
         };
         var label = new TextBlock
@@ -108,8 +119,16 @@ public sealed class MarketplaceView : UserControl
         {
             Theme = CardButton, Content = Ui.Stack(8, icon, label), Height = 96, Padding = new Thickness(12, 16),
             BorderThickness = new Thickness(2), HorizontalAlignment = HorizontalAlignment.Stretch, ClipToBounds = false,
-            HorizontalContentAlignment = HorizontalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand)
+            HorizontalContentAlignment = HorizontalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand),
+            RenderTransformOrigin = RelativePoint.Center,
+            Transitions =
+            [
+                new BrushTransition { Property = TemplatedControl.BackgroundProperty, Duration = HoverDuration, Easing = new CubicEaseOut() },
+                new BrushTransition { Property = TemplatedControl.ForegroundProperty, Duration = HoverDuration, Easing = new CubicEaseOut() },
+                new TransformOperationsTransition { Property = Visual.RenderTransformProperty, Duration = HoverDuration, Easing = new CubicEaseOut() }
+            ]
         };
+        icon.Bind(Shape.StrokeProperty, card.GetObservable(TemplatedControl.ForegroundProperty));
         card.Classes.Add("collection-card");
         AutomationProperties.SetName(card, name);
         card.Click += (_, _) => open();
@@ -119,7 +138,6 @@ public sealed class MarketplaceView : UserControl
 
     private void AddStyles()
     {
-        var selection = Ui.Selection;
         Style State(Func<Selector, Selector> state, IBrush? background, IBrush? foreground, IBrush? border = null, FontWeight? weight = null)
         {
             var style = new Style(x => state(x.OfType<Button>().Class("collection-card")));
@@ -129,12 +147,22 @@ public sealed class MarketplaceView : UserControl
             if (weight is not null) style.Setters.Add(new Setter(TemplatedControl.FontWeightProperty, weight.Value));
             return style;
         }
-        Styles.Add(State(x => x, Brushes.White, Ui.Ink, Brushes.Transparent, FontWeight.Normal));
-        Styles.Add(State(x => x.Class(":pointerover"), selection, Ui.Green));
+        var rest = State(x => x, Ui.Green, Ui.OnPrimary, Brushes.Transparent, FontWeight.Normal);
+        rest.Setters.Add(new Setter(Visual.RenderTransformProperty, TransformOperations.Parse("scale(1)")));
+        Styles.Add(rest);
+        var hover = State(x => x.Class(":pointerover"), Ui.Selection, Ui.Green);
+        hover.Setters.Add(new Setter(Visual.RenderTransformProperty, TransformOperations.Parse($"scale({HoverScale.ToString(System.Globalization.CultureInfo.InvariantCulture)})")));
+        hover.Setters.Add(new Setter(Visual.ZIndexProperty, 1));
+        Styles.Add(hover);
+        Styles.Add(State(x => x.Class(":pressed"), PressedFill, Ui.Green));
+        Style Face(Func<Selector, Selector> state, BoxShadows shadow) => new(x => state(x.OfType<Button>().Class("collection-card")).Template().OfType<Border>().Name(CardFacePart))
+        { Setters = { new Setter(Border.BoxShadowProperty, shadow) } };
+        Styles.Add(Face(x => x, PrimaryCardShadow));
+        Styles.Add(Face(x => x.Class(":pointerover"), PrimaryCardHoverShadow));
     }
 
     // Listings
     internal void Refresh() => Feed.Refresh();
 
-    internal void Add(SurplusListing listing) => Feed.Add(listing);
+    internal string? Add(SurplusListing listing, int quantity = 1) => Feed.Add(listing, quantity);
 }

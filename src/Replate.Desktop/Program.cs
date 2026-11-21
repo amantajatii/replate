@@ -40,6 +40,7 @@ public sealed class App : Application
         RequestedThemeVariant = ThemeVariant.Light;
         Styles.Add(new FluentTheme());
         Ui.UseInputs(this);
+        Ui.UsePrimaryButtons(this);
     }
 
     public override void OnFrameworkInitializationCompleted()

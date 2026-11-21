@@ -1,4 +1,6 @@
 using Avalonia;
+using Avalonia.Animation;
+using Avalonia.Animation.Easings;
 using Avalonia.Controls;
 using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
@@ -7,6 +9,7 @@ using Avalonia.Automation;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using Avalonia.Media.Transformation;
 using Avalonia.Platform;
 using Avalonia.Styling;
 
@@ -19,6 +22,7 @@ internal static class Ui
     public static readonly IBrush Muted = Brush.Parse("#59675D");
     public static readonly IBrush Selection = Brush.Parse("#E0E9DF");
     public static readonly IBrush OnPrimary = Brushes.White;
+    public static readonly IBrush DividerFill = Brush.Parse("#DDE3DA");
 
     // Logo
     public const string LogoName = "Replate";
@@ -62,6 +66,13 @@ internal static class Ui
         };
     }
     public static Panel FocusFrame(Control face, CornerRadius radius) => new() { Children = { face, FocusRing(radius) } };
+    private static ContentPresenter PrimaryFill(Button button, ContentPresenter presenter)
+    {
+        if (button.Classes.Contains(PrimaryClass))
+            presenter.Bind(ContentPresenter.BackgroundProperty, button.GetObservable(TemplatedControl.BackgroundProperty), Avalonia.Data.BindingPriority.Template);
+        else presenter[!ContentPresenter.BackgroundProperty] = button[!TemplatedControl.BackgroundProperty];
+        return presenter;
+    }
     public static Styles FocusStyles()
     {
         var fluent = Application.Current?.FindResource(typeof(Button)) as ControlTheme;
@@ -71,10 +82,9 @@ internal static class Ui
             Setters =
             {
                 new Setter(TemplatedControl.TemplateProperty,
-                    new FuncControlTemplate<Button>((button, _) => FocusFrame(new ContentPresenter
+                    new FuncControlTemplate<Button>((button, _) => FocusFrame(PrimaryFill(button, new ContentPresenter
                     {
                         Name = "PART_ContentPresenter", RecognizesAccessKey = true,
-                        [!ContentPresenter.BackgroundProperty] = button[!TemplatedControl.BackgroundProperty],
                         [!ContentPresenter.BorderBrushProperty] = button[!TemplatedControl.BorderBrushProperty],
                         [!ContentPresenter.BorderThicknessProperty] = button[!TemplatedControl.BorderThicknessProperty],
                         [!ContentPresenter.CornerRadiusProperty] = button[!TemplatedControl.CornerRadiusProperty],
@@ -83,7 +93,7 @@ internal static class Ui
                         [!ContentPresenter.ContentTemplateProperty] = button[!ContentControl.ContentTemplateProperty],
                         [!ContentPresenter.HorizontalContentAlignmentProperty] = button[!ContentControl.HorizontalContentAlignmentProperty],
                         [!ContentPresenter.VerticalContentAlignmentProperty] = button[!ContentControl.VerticalContentAlignmentProperty]
-                    }, button.CornerRadius)))
+                    }), button.CornerRadius)))
             }
         };
         Style Ring(Func<Selector?, Selector> selector, IBrush brush) =>
@@ -131,7 +141,81 @@ internal static class Ui
         var button = new Button { Content = text, Padding = new Thickness(16, 11), CornerRadius = new CornerRadius(6),
             Background = primary ? Green : Brushes.White, Foreground = primary ? Brushes.White : Ink,
             FontWeight = FontWeight.SemiBold, FontSize = 13, Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand) };
+        if (primary) button.Classes.AddRange([PrimaryClass, CompactClass]);
         button.Click += (_, _) => action(); return button;
+    }
+    public static Button FullWidth(Button button)
+    {
+        button.Classes.Remove(CompactClass);
+        button.HorizontalAlignment = HorizontalAlignment.Stretch;
+        return button;
+    }
+
+    // Primary button
+    public const string PrimaryClass = "primary";
+    public const string CompactClass = "compact";
+    public const double PrimaryHoverScale = 1.03;
+    public static readonly TimeSpan PrimaryHoverDuration = TimeSpan.FromMilliseconds(120);
+    public static readonly BoxShadows PrimaryButtonHoverShadow = BoxShadows.Parse("0 4 12 0 #4D245B43");
+    public static void UsePrimaryButtons(Application app) => app.Styles.Add(PrimaryStyles());
+    private static Styles PrimaryStyles()
+    {
+        var ease = new CubicEaseOut();
+        Style Face(Func<Selector, Selector> state, IBrush background, IBrush foreground, BoxShadows shadow) =>
+            new(x => state(x.OfType<Button>().Class(PrimaryClass).Not(y => y.Class(":disabled"))).Template().OfType<ContentPresenter>().Name("PART_ContentPresenter"))
+            {
+                Setters =
+                {
+                    new Setter(ContentPresenter.BackgroundProperty, background),
+                    new Setter(ContentPresenter.ForegroundProperty, foreground),
+                    new Setter(ContentPresenter.BoxShadowProperty, shadow)
+                }
+            };
+        Style Scale(Func<Selector, Selector> state, double scale, int z) =>
+            new(x => state(x.OfType<Button>().Class(PrimaryClass)))
+            {
+                Setters =
+                {
+                    new Setter(Visual.RenderTransformProperty, TransformOperations.Parse($"scale({scale.ToString(System.Globalization.CultureInfo.InvariantCulture)})")),
+                    new Setter(Visual.ZIndexProperty, z)
+                }
+            };
+        return new Styles
+        {
+            new Style(x => x.OfType<Button>().Class(PrimaryClass).Template().OfType<ContentPresenter>().Name("PART_ContentPresenter"))
+            {
+                Setters =
+                {
+                    new Setter(Animatable.TransitionsProperty, new Transitions
+                    {
+                        new BrushTransition { Property = ContentPresenter.BackgroundProperty, Duration = PrimaryHoverDuration, Easing = ease },
+                        new BrushTransition { Property = ContentPresenter.ForegroundProperty, Duration = PrimaryHoverDuration, Easing = ease },
+                        new BoxShadowsTransition { Property = ContentPresenter.BoxShadowProperty, Duration = PrimaryHoverDuration, Easing = ease }
+                    })
+                }
+            },
+            new Style(x => x.OfType<Button>().Class(PrimaryClass).Class(CompactClass))
+            {
+                Setters =
+                {
+                    new Setter(Visual.RenderTransformOriginProperty, RelativePoint.Center),
+                    new Setter(Animatable.TransitionsProperty, new Transitions
+                    {
+                        new TransformOperationsTransition { Property = Visual.RenderTransformProperty, Duration = PrimaryHoverDuration, Easing = ease }
+                    })
+                }
+            },
+            Face(x => x, Green, OnPrimary, default),
+            Face(x => x.Class(":pointerover"), Selection, Green, PrimaryButtonHoverShadow),
+            Face(x => x.Class(":pressed"), DividerFill, Green, PrimaryButtonHoverShadow),
+            Face(x => x.Class(":pressed").Not(y => y.Class(":pointerover")), DividerFill, Green, default),
+            new Style(x => x.OfType<Button>().Class(PrimaryClass).Class(":disabled").Template().OfType<Panel>().Child().OfType<ContentPresenter>().Name("PART_ContentPresenter"))
+            {
+                Setters = { new Setter(ContentPresenter.BackgroundProperty, new Avalonia.Data.TemplateBinding(TemplatedControl.BackgroundProperty)) }
+            },
+            Scale(x => x, 1, 0),
+            Scale(x => x.Class(CompactClass).Class(":pointerover").Not(y => y.Class(":disabled")), PrimaryHoverScale, 1)
+        };
     }
     public static Grid Columns(string definitions, params Control[] children)
     {
@@ -143,7 +227,7 @@ internal static class Ui
     public static Control FormPair(Control first, Control second) => new FormColumns(first, second);
     public static TextBlock SupportingText(string text, IBrush? color = null) => Text(text, 14, color ?? Muted);
     public static TextBlock FieldError() => Text("", 14, Brush.Parse("#B3261E"));
-    public static Border Divider() => new() { Height = 1, Background = Brush.Parse("#DDE3DA") };
+    public static Border Divider() => new() { Height = 1, Background = DividerFill };
 
     public static ScrollViewer Scroll(Control body) => new() { Content = body,
         HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };

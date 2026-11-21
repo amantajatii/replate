@@ -121,7 +121,30 @@ KEYBOARD FOCUS (customer routes, shared `Ui.FocusStyles` in `Ui.cs`):
   bar. Profile menu items show a `selection` fill with `primary` text instead of a ring.
   ComboBox uses a `primary` border on `:focus-visible`. Text fields keep their own
   focus border, except the top bar search (white ring above).
-- No blur, glow, gradient or animation.
+- No blur, glow, gradient or animation, except the Jelajah collection card hover
+  (scale 1.03, 120 ms ease-out, see JELAJAH) and the compact primary button hover
+  (scale 1.03, 120 ms ease-out, see PRIMARY BUTTONS).
+
+PRIMARY BUTTONS (whole app, shared style `Ui.UsePrimaryButtons` in `Ui.cs`):
+- `Ui.Button(..., primary: true)` adds the `primary` and `compact` classes;
+  `Ui.FullWidth` removes `compact` and stretches the button (Masuk, Daftar).
+- Fill and text/icon color are set on `/template/ ContentPresenter#PART_ContentPresenter`
+  for every enabled state, so the Fluent PointerOver/Pressed foreground (black text) never
+  wins. Normal: `primary` fill, white text, flat. Hover: `selection` fill, `primary`
+  text (about 6.4:1), shadow `elevation.button-primary-hover` (`0 4 12 0 #4D245B43`).
+  Pressed: `divider` fill, `primary` text (about 6.1:1), same shadow. Disabled: unchanged,
+  no hover or press effect.
+- Compact buttons (Tambah, Tambah ke keranjang, stepper, page actions, the owner's Tambah
+  menu and Buat penawaran) scale to 1.03 from the center as a render transform on hover,
+  ZIndex 1, without moving layout or being clipped. Full-width buttons do not scale. The
+  Fluent press shrink is off for primary buttons. Fill, text, shadow and scale share
+  120 ms ease-out. The `:focus-visible` ring is unchanged and stays on top.
+- The restaurant owner screens use the same `Ui.Button` primary style, so their primary
+  buttons change the same way. Secondary buttons are unchanged.
+- Verified at 1040x720 and 1920x1080 by `--verify-ui` (UiVerification): normal, hover,
+  pressed and disabled colors with contrast at least 4.5, the hover shadow, compact scale
+  1.03 (within 0.005), no scale on full-width buttons, unchanged neighbour layout, no
+  clipping and no horizontal scrolling.
 
 JELAJAH (customer marketplace, `MarketplaceView.cs` and `MarketplaceBanner.cs`):
 - One vertical ScrollViewer under the top bar, no horizontal scrolling. Content is at
@@ -147,21 +170,66 @@ JELAJAH (customer marketplace, `MarketplaceView.cs` and `MarketplaceBanner.cs`):
   height), right edge at most 45% of the banner width (the nearest illustration object
   starts at 46.2%).
 - Collection cards: Termurah, Segera berakhir, Makanan utama, Roti & kue, Buah & sayur;
-  equal widths in one row, 16 apart, height 96, card style with a primary line icon
-  above the label; no Semua and no selected state. Each card is a link to its
-  collection page (`MainWindow.ShowCollection`). Hover selection fill; Tab, Enter and
-  Space work with the shared 2 px primary focus ring.
+  equal widths in one row, 16 apart, height 96, `rounded.card` with the
+  `elevation.card-primary` shadow (`0 6 18 0 #4D245B43`, primary at about 30%) and no
+  border, filled `primary` with a white 24 line icon above a white 14 label (about
+  7.9:1); no Semua and no selected state. Each card is a link to its collection page
+  (`MainWindow.ShowCollection`). Hover: `selection` fill with `primary` icon and label
+  (about 6.4:1), shadow `elevation.card-primary-hover` (`0 10 24 0 #59245B43`), scale
+  1.03 from the center as a RenderTransform (layout unchanged) and ZIndex 1. Press:
+  `divider` fill with `primary` text (about 6.1:1). Color, scale and shadow transition
+  over 120 ms ease-out and back on leave; this is the only allowed animation. Reduced
+  motion is not read. Tab, Enter and Space work with the shared 2 px primary focus
+  ring, 2 outside the card on the canvas; it scales with the card and stays on top.
 - Listing cards: card style, padding 20, 16 apart, same columns and content as the old
-  rows; no row dividers (`ListingFeed.cs`, shared with collection pages). Tambah
-  behaves as before and keeps one restaurant per cart. Empty state "Belum ada menu
+  rows; no row dividers (`ListingFeed.cs`, shared with collection pages). Tambah, the
+  menu name, or a click anywhere else on the card opens the food dialog; Tambah never
+  adds directly. Empty state "Belum ada menu
   tersedia", 16 under the title.
 - Verified by `--verify-ui` (MarketplaceVerification) at 1040x720, 1360x940 and
   1920x1080: banner ratio equals the bitmap ratio (within 1%), banner left and right
   edges equal the collection row and listing cards (within 1 px), centered text inside 45%
   that does not intersect the illustration; no "menu tersedia" text; the bold,
   left-aligned title; the three 24 gaps equal (within 1 px) and the title to first card
-  gap 16; focus rings on collection cards and Tambah without the native adorner; no
+  gap 16; collection cards in primary with white icon and label (contrast at least
+  4.5 for text and 3 for icons) and the primary-tinted resting shadow; a selection
+  hover fill that differs from primary with primary icon and label (at least 4.5), a
+  divider press fill, hover scale 1.03 (within 0.005) with 120 ms ease-out
+  transitions, unchanged position and size of the other cards, ZIndex above the
+  neighbours, no clipping of the hovered card or its shadow and no overlap with
+  neighbours, the deeper primary hover shadow, the focus ring on top while hovered,
+  and the return to rest (checked on the first and last card in the window and at
+  1040x720 and 1920x1080 with no horizontal scrolling); height 96, equal widths and
+  16 gaps; focus rings on collection cards and Tambah without the native adorner; no
   pick-one state or Hapus filter.
+
+FOOD DIALOG (customer only, `FoodDialog.cs`, opened by `MainWindow.ShowFoodDialog`):
+- An overlay inside the main window (no OS window), one at a time, above the top bar:
+  a flat scrim (`scrim`, ink at 40%, no blur) and a centered white card (760 wide,
+  radius 16, card shadow, no border, at least 32 from every edge, internal vertical
+  scroll when short, the bar always visible).
+- Content: photo 300 by 300 or the large "Foto belum tersedia" box; name, "Restoran ·
+  Kategori", description, "Pengambilan HH:mm–HH:mm", "N porsi tersisa", rescue price
+  with "/porsi", struck normal price, "Hemat N%"; round primary minus and plus with the
+  quantity (1 to stock minus cart quantity for that listing). At the limit plus is
+  disabled with "Maksimal N porsi"; nothing left: "Sudah di keranjang dengan jumlah
+  maksimal" and Tambah ke keranjang disabled; expired or sold out: "Penawaran tidak
+  tersedia" and disabled. Bottom bar on `selection`: total (rescue price x quantity)
+  and the primary "Tambah ke keranjang".
+- Tambah ke keranjang calls `DemoSession.AddToCart` with the quantity (through
+  `ListingFeed.Add`). Success closes the dialog, updates the badge and the existing
+  notice, and stays on the page. Another restaurant in the cart: the existing message
+  shows inside the dialog above the bar, nothing is added, the dialog stays open.
+- Closes with the X button, Esc, or a click on the scrim, without touching the cart.
+  Opening and closing never write state. Focus moves into the dialog, Tab cycles
+  inside it, and closing returns focus to the trigger; `:focus-visible` rings only.
+- Any navigation (Render or a public page) dismisses an open dialog.
+- Verified by `--verify-ui` (FoodDialogVerification): Tambah opens without adding;
+  content; plus/minus and total; limit and disabled plus; adding the chosen quantity
+  and closing; one restaurant message inside the dialog; expired offer; Esc, X and
+  scrim close without adding; no state write on open/close; focus trap and return
+  (pointer and keyboard); collection and search pages; centered and not cut off at
+  1040x720 and 1920x1080.
 
 COLLECTION AND SEARCH PAGES (customer only, `CollectionView.cs`):
 - One view for the five collections (`ShowCollection(name)`) and for search results
@@ -190,7 +258,8 @@ COLLECTION AND SEARCH PAGES (customer only, `CollectionView.cs`):
 - Verified by `--verify-ui` (CollectionVerification): each card opens its page with the
   right title; ordering and category filtering; search by menu name, restaurant name
   and words out of order; unknown words empty state; blank search stays; back link,
-  logo, cart and orders clear the field; Tambah keeps one restaurant per cart; rhythm
+  logo, cart and orders clear the field; Tambah opens the food dialog, which adds and
+  keeps one restaurant per cart; rhythm
   and alignment; no horizontal scrolling at 1040x720 and 1920x1080; role guards.
 
 AUTH SURFACE (Masuk and Daftar, implemented in `AuthViews.cs` as `AuthSurface`):
@@ -263,10 +332,10 @@ AUTH SURFACE (Masuk and Daftar, implemented in `AuthViews.cs` as `AuthSurface`):
   card width, existing warning colors, short message "Database belum tersambung.
   Pesanan belum dapat disimpan." with the error detail trimmed to two lines and the
   full detail in a tooltip.
-- Hover: primary buttons change to ink background with white text; secondary
-  buttons change to selection background with primary text. Pressed, focus and
-  disabled states of those two remain native Fluent. No blur, glow, gradients or
-  animation.
+- Hover: primary buttons follow PRIMARY BUTTONS (selection background with primary
+  text and the soft primary shadow, full width so no scale); secondary buttons change
+  to selection background with primary text, and their pressed, focus and disabled
+  states remain native Fluent. No blur, glow or gradients.
 - Verified at 1360x940, 1040x720, 1283x780 and 1920x1080 by `--verify-ui` (AuthVerification):
   scrollbar within 24 of the card's right edge and not over it, scrollbar at least 24
   from the plate, shadow room, clean logo band, green logo with bitmap ratio, toggle hover color and keyboard.

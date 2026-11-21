@@ -143,11 +143,16 @@ internal static class CollectionVerification
         Button Add(SurplusListing listing) => page2.Feed.Panel.Children[page2.VisibleListings.ToList().IndexOf(listing)]
             .GetVisualDescendants().OfType<Button>().Single(b => b.Content as string == "Tambah");
         Click(Add(first)); await Settle();
-        Ensure(session.Cart.Items.Single().ListingId == first.Id && page2.Feed.Notice.IsVisible && bar.CartBadgeText.Text == "1" &&
-            window.CurrentPage == page2, "Tambah on a collection page adds to the cart and stays on the page");
+        Ensure(window.Dialog?.Listing == first && session.Cart.Items.Count == 0, "Tambah on a collection page opens the food dialog");
+        Click(window.Dialog!.AddButton); await Settle();
+        Ensure(window.Dialog is null && session.Cart.Items.Single().ListingId == first.Id && page2.Feed.Notice.IsVisible && bar.CartBadgeText.Text == "1" &&
+            window.CurrentPage == page2, "Tambah ke keranjang on a collection page adds to the cart and stays on the page");
         Click(Add(other)); await Settle();
-        Ensure(session.Cart.Items.Count == 1 && session.Cart.Items.Single().ListingId == first.Id && page2.Feed.Notice.Text == ListingFeed.OneRestaurantMessage,
-            "Tambah keeps one restaurant per cart");
+        var rejected = window.Dialog!;
+        Click(rejected.AddButton); await Settle();
+        Ensure(session.Cart.Items.Count == 1 && session.Cart.Items.Single().ListingId == first.Id && window.Dialog == rejected &&
+            rejected.ErrorText.Text == ListingFeed.OneRestaurantMessage, "Tambah keeps one restaurant per cart");
+        rejected.Close(); await Settle();
         window.ShowMarketplace(); await Settle();
         Ensure(session.Cart.Items.Single().ListingId == first.Id && bar.CartBadgeText.Text == "1", "The cart survives navigation");
         session.ChangeQuantity(first.Id, 0); window.UpdateCartCount();
