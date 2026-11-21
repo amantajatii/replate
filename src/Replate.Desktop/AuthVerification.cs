@@ -417,9 +417,11 @@ internal static class AuthVerification
             }
             async Task SignOut()
             {
-                Click(Find("Keluar")); await Settle();
+                if (session.CurrentUser is Customer) await TopBarVerification.SignOut(window);
+                else { Click(Find("Keluar")); await Settle(); }
                 Ensure(window.CurrentPage is SignInView && !session.IsSignedIn, "Keluar signs out and returns to sign-in");
-                Ensure(!window.GetVisualDescendants().OfType<Button>().Any(b => b.Content as string is "Dashboard" or "Jelajah"),
+                Ensure(!window.GetVisualDescendants().OfType<Button>().Any(b => b.Content as string is "Dashboard") &&
+                    !window.GetVisualDescendants().OfType<CustomerTopBar>().Any(),
                     "Signed-out window shows no area navigation");
             }
 

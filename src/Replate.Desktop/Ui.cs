@@ -1,5 +1,8 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
+using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Templates;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
@@ -11,6 +14,83 @@ internal static class Ui
     public static readonly IBrush Green = Brush.Parse("#245B43");
     public static readonly IBrush Ink = Brush.Parse("#23382C");
     public static readonly IBrush Muted = Brush.Parse("#59675D");
+    public static readonly IBrush Selection = Brush.Parse("#E0E9DF");
+    public static readonly IBrush OnPrimary = Brushes.White;
+
+    // Spacing
+    internal static class Spacing
+    {
+        public const double Related = 16;
+        public const double Section = 24;
+        public const double Page = 32;
+    }
+
+    // Focus
+    public const double FocusRingWidth = 2;
+    public const double FocusRingOffset = 2;
+    public const string FocusRingPart = "PART_FocusRing";
+    public const string OnPrimaryClass = "on-primary";
+    public const string FocusFillClass = "focus-fill";
+    public static readonly ITemplate<Control> NoFocusAdorner = new FuncTemplate<Control>(() => new Panel { IsHitTestVisible = false });
+    public static Border FocusRing(CornerRadius radius)
+    {
+        var grow = FocusRingWidth + FocusRingOffset;
+        return new Border
+        {
+            Name = FocusRingPart, BorderThickness = new Thickness(FocusRingWidth),
+            Margin = new Thickness(-grow), IsHitTestVisible = false,
+            CornerRadius = new CornerRadius(radius.TopLeft + grow, radius.TopRight + grow, radius.BottomRight + grow, radius.BottomLeft + grow)
+        };
+    }
+    public static Panel FocusFrame(Control face, CornerRadius radius) => new() { Children = { face, FocusRing(radius) } };
+    public static Styles FocusStyles()
+    {
+        var fluent = Application.Current?.FindResource(typeof(Button)) as ControlTheme;
+        var ringed = new ControlTheme(typeof(Button))
+        {
+            BasedOn = fluent,
+            Setters =
+            {
+                new Setter(TemplatedControl.TemplateProperty,
+                    new FuncControlTemplate<Button>((button, _) => FocusFrame(new ContentPresenter
+                    {
+                        Name = "PART_ContentPresenter", RecognizesAccessKey = true,
+                        [!ContentPresenter.BackgroundProperty] = button[!TemplatedControl.BackgroundProperty],
+                        [!ContentPresenter.BorderBrushProperty] = button[!TemplatedControl.BorderBrushProperty],
+                        [!ContentPresenter.BorderThicknessProperty] = button[!TemplatedControl.BorderThicknessProperty],
+                        [!ContentPresenter.CornerRadiusProperty] = button[!TemplatedControl.CornerRadiusProperty],
+                        [!ContentPresenter.PaddingProperty] = button[!TemplatedControl.PaddingProperty],
+                        [!ContentPresenter.ContentProperty] = button[!ContentControl.ContentProperty],
+                        [!ContentPresenter.ContentTemplateProperty] = button[!ContentControl.ContentTemplateProperty],
+                        [!ContentPresenter.HorizontalContentAlignmentProperty] = button[!ContentControl.HorizontalContentAlignmentProperty],
+                        [!ContentPresenter.VerticalContentAlignmentProperty] = button[!ContentControl.VerticalContentAlignmentProperty]
+                    }, button.CornerRadius)))
+            }
+        };
+        Style Ring(Func<Selector?, Selector> selector, IBrush brush) =>
+            new(x => selector(x).Template().OfType<Border>().Name(FocusRingPart)) { Setters = { new Setter(Border.BorderBrushProperty, brush) } };
+        return new Styles
+        {
+            new Style(x => x.Is<Control>()) { Setters = { new Setter(Control.FocusAdornerProperty, NoFocusAdorner) } },
+            new Style(x => x.OfType<Button>()) { Setters = { new Setter(StyledElement.ThemeProperty, ringed) } },
+            Ring(x => x!.OfType<Button>().Class(":focus-visible"), Green),
+            Ring(x => x!.OfType<Button>().Class(OnPrimaryClass).Class(":focus-visible"), OnPrimary),
+            Ring(x => x!.OfType<Button>().Class(FocusFillClass).Class(":focus-visible"), Brushes.Transparent),
+            new Style(x => x.OfType<Button>().Class(FocusFillClass).Class(":focus-visible"))
+            {
+                Setters =
+                {
+                    new Setter(TemplatedControl.BackgroundProperty, Selection),
+                    new Setter(TemplatedControl.ForegroundProperty, Green)
+                }
+            },
+            new Style(x => x.OfType<ComboBox>().Class(":focus-visible"))
+            {
+                Setters = { new Setter(TemplatedControl.BorderBrushProperty, Green) }
+            }
+        };
+    }
+
     public static TextBlock Text(string text, double size = 14, IBrush? color = null, bool bold = false) => new()
     {
         Text = text, FontSize = size, Foreground = color ?? Ink,
@@ -66,7 +146,7 @@ internal static class Ui
     public static void UseInputs(Application app)
     {
         app.Styles.Add(InputStyles());
-        Avalonia.Controls.Primitives.TemplatedControl.TemplateAppliedEvent.AddClassHandler<TextBox>((_, e) =>
+        TemplatedControl.TemplateAppliedEvent.AddClassHandler<TextBox>((_, e) =>
         {
             if (e.NameScope.Find<TextBlock>("PART_Placeholder") is { } placeholder) placeholder.Opacity = 1;
         });

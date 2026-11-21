@@ -19,7 +19,10 @@ public sealed class MainWindow : Window
     private readonly string? startupError;
     internal string? SuccessMessage => successBanner.IsVisible ? successText.Text : null;
     private TextBlock? alert;
-    private Button? cartLink;
+    internal CustomerTopBar TopBar { get; }
+    private readonly ContentControl customerArea = new();
+    private readonly DockPanel customerShell = new();
+    internal string SearchText => TopBar.SearchBox.Text?.Trim() ?? "";
 
     public MainWindow(DemoSession? session = null, string? startupError = null)
     {
@@ -36,6 +39,10 @@ public sealed class MainWindow : Window
             BorderThickness = new Thickness(4, 0, 0, 0), CornerRadius = new CornerRadius(6),
             Padding = new Thickness(16, 12), Margin = new Thickness(32, 16, 32, 0)
         };
+        TopBar = new CustomerTopBar(ShowMarketplace, ShowCart, ShowCustomerOrders, SignOut, OnSearchChanged);
+        DockPanel.SetDock(TopBar, Dock.Top);
+        customerShell.Children.Add(TopBar); customerShell.Children.Add(customerArea);
+        customerShell.Styles.Add(Ui.FocusStyles());
         var shell = new DockPanel();
         DockPanel.SetDock(successBanner, Dock.Top);
         shell.Children.Add(successBanner);
@@ -59,15 +66,17 @@ public sealed class MainWindow : Window
 
     internal void SignOut()
     {
+        TopBar.ProfileMenu.IsOpen = false;
         Session.SignOut();
         successTimer.Stop(); successBanner.IsVisible = false;
         ShowSignIn();
+        TopBar.SearchBox.Text = "";
     }
 
     private void ShowPublic(Control page)
     {
         CurrentPage = page;
-        cartLink = null; alert = null;
+        alert = null;
         pageHost.Content = page;
     }
 
@@ -140,9 +149,15 @@ public sealed class MainWindow : Window
         if (Allowed(true)) Render(true, new OrdersView(this, Session, true), "Pesanan");
     }
 
-    internal void UpdateCartCount()
+    internal void UpdateCartCount() => TopBar.SetCartCount(Session.Cart.Items.Sum(i => i.Quantity));
+
+    internal void ClearSearch() => TopBar.SearchBox.Text = "";
+
+    private void OnSearchChanged()
     {
-        if (cartLink is not null) cartLink.Content = $"Keranjang ({Session.Cart.Items.Sum(i => i.Quantity)})";
+        if (Session.CurrentUser is not Customer) return;
+        if (CurrentPage is MarketplaceView marketplace) marketplace.Refresh();
+        else if (SearchText.Length > 0) ShowMarketplace();
     }
 
     internal void Run(Action action, Action? next = null, string? successMessage = null, Action<string>? onError = null)
@@ -194,7 +209,6 @@ public sealed class MainWindow : Window
     private void Render(bool restaurant, Control page, string active)
     {
         CurrentPage = page;
-        cartLink = null;
         alert = Ui.Text(Session.StorageError ?? "", 14, Brush.Parse("#963E28"));
         alert.IsVisible = Session.StorageError is not null; alert.Margin = new Thickness(32, 16, 32, 0);
         var area = new DockPanel(); DockPanel.SetDock(alert, Dock.Top); area.Children.Add(alert); area.Children.Add(page);
@@ -208,14 +222,9 @@ public sealed class MainWindow : Window
         }
         if (!restaurant)
         {
-            cartLink = Nav("Keranjang", ShowCart); UpdateCartCount();
-            var links = Ui.Row(12, logo, Nav("Jelajah", ShowMarketplace), Nav("Pesanan saya", ShowCustomerOrders), cartLink);
-            var signOut = Ui.Button("Keluar", SignOut);
-            var top = new Border { Child = Ui.Columns("*,Auto", links, signOut),
-                Padding = new Thickness(32, 16), Background = Brushes.White,
-                BorderBrush = Brush.Parse("#DDE3DA"), BorderThickness = new Thickness(0, 0, 0, 1) };
-            var root = new DockPanel(); DockPanel.SetDock(top, Dock.Top); root.Children.Add(top); root.Children.Add(area);
-            pageHost.Content = root;
+            TopBar.Show(Session.CurrentUser, Session.Cart.Items.Sum(i => i.Quantity), active == "Keranjang");
+            customerArea.Content = area;
+            pageHost.Content = customerShell;
         }
         else
         {
