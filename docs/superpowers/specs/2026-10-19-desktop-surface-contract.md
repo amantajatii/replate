@@ -159,6 +159,15 @@ PRIMARY BUTTONS (whole app, shared style `Ui.UsePrimaryButtons` in `Ui.cs`):
   (rendered with the button hidden), the inside to show the hover fill, round buttons
   to be square with half-size radius, no shadow or scale on round and icon buttons,
   and the compact shadow to show below the button inside every clipping container.
+- Text link (`CollectionView.AddBackLinkStyles`, class `back-link`, the only text link):
+  every "Kembali ke Jelajah" (collection, search results, Keranjang). Transparent fill and
+  border in every state, set on the Button and on PART_ContentPresenter so Fluent adds no
+  fill; rest and pressed `primary`, hover `primary-hover` #357F5D (about 4.6:1 on the
+  canvas); no shadow, scale (Fluent's pressed scale is reset), or underline; at least 32
+  high; the shared focus ring. `UiVerification.TextLinks` checks it at 1040x720 and
+  1920x1080: the pixels around the arrow and text match the canvas (rendered with the
+  link hidden) on hover and press, the label repaints on hover, the colors and contrast,
+  the height, `:focus-visible`, and no horizontal scrolling.
 
 JELAJAH (customer marketplace, `MarketplaceView.cs` and `MarketplaceBanner.cs`):
 - One vertical ScrollViewer under the top bar, no horizontal scrolling. Content is at
@@ -325,7 +334,9 @@ COLLECTION AND SEARCH PAGES (customer only, `CollectionView.cs`):
   and sent to Masuk; an unknown collection name is ignored. Cart and session survive.
 - Same top bar; in the Jelajah content column (at most 1200, inset 32), no banner:
   "Kembali ke Jelajah" link (16 left arrow, stroke 1.75, 8 from the 14 text, centered,
-  at least 32 high, primary, hover selection fill, primary focus ring), then the title
+  at least 32 high, primary, transparent in every state; hover only turns the arrow and
+  text primary-hover #357F5D, about 4.6:1 on the canvas, pressed returns to primary; no
+  fill, border, shadow, scale or underline; primary focus ring), then the title
   (32 bold ink, one line), then on collection pages with listings an intro sentence 8
   under it (16, muted, wrapping; exact copy in DESIGN.md), then listing cards 16 below.
   Search results and empty states have no intro. Rhythm from

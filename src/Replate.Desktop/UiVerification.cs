@@ -63,6 +63,7 @@ internal static class UiVerification
             Ensure(market.VisibleCount == 10 && window.TopBar.SearchBox.Text == "", "Jelajah is back with every listing and an empty search");
             await FoodDialogVerification.Run(window);
             await PrimaryButtons(window);
+            await TextLinks(window);
             await CartVerification.Run(window);
             market = window.Marketplace;
             var listing = window.Session.Listings[0];
@@ -426,6 +427,84 @@ internal static class UiVerification
         Ensure(!Near(shaded(bx, by), surface(bx, by)), $"{label}: the hover shadow shows below the button ({shaded(bx, by)} on {surface(bx, by)})");
         Ensure(button.GetVisualAncestors().OfType<Visual>().Where(v => v.ClipToBounds).All(v => v.TransformToVisual(window) is { } m && new Rect(v.Bounds.Size).TransformToAABB(m).Contains(reach)),
             $"{label}: no container clips the hover shadow ({reach})");
+    }
+    // Text links
+    private static readonly Color PrimaryHover = Color.Parse("#357F5D");
+    private static async Task TextLinks(MainWindow window)
+    {
+        var (width, height) = (window.Width, window.Height);
+        foreach (var (w, h) in new[] { (1040d, 720d), (1920d, 1080d) })
+        {
+            window.Width = w; window.Height = h;
+            var size = $"{w:0}x{h:0}";
+            window.ShowCollection(MarketplaceView.Cheapest); await Settle();
+            var collection = (CollectionView)window.CurrentPage!;
+            await TextLink(window, collection.BackLink, () => Fits(collection.Scroll), $"{size} collection");
+            window.ShowSearch("roti"); await Settle();
+            var search = (CollectionView)window.CurrentPage!;
+            await TextLink(window, search.BackLink, () => Fits(search.Scroll), $"{size} search");
+            window.ShowCart(); await Settle();
+            var cart = (CartView)window.CurrentPage!;
+            await TextLink(window, cart.BackLink, () => (cart.ListScroll is not { } list || Fits(list)) && cart.Bounds.Width <= window.Bounds.Width + .5, $"{size} cart");
+        }
+        window.Width = width; window.Height = height; window.ShowMarketplace(); await Settle();
+    }
+    private static bool Fits(ScrollViewer scroll) => scroll.Extent.Width <= scroll.Viewport.Width + .5;
+    private static async Task TextLink(Window window, Button link, Func<bool> fits, string label)
+    {
+        var presenter = Presenter(link);
+        var glyph = link.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Path>().Single();
+        var text = link.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == CollectionView.BackLabel);
+        Ensure(link.Classes.Contains(CollectionView.BackLinkClass) && link.Bounds.Height >= CollectionView.BackLinkMinHeight - .5,
+            $"{label}: Kembali ke Jelajah uses the shared text link and is {link.Bounds.Height:0.#} high");
+        void Colors(Color foreground, string state) =>
+            Ensure(Fill(presenter.Background) == Avalonia.Media.Colors.Transparent && Fill(presenter.BorderBrush) == Avalonia.Media.Colors.Transparent &&
+                Fill(link.Background) == Avalonia.Media.Colors.Transparent && presenter.BoxShadow.Count == 0 && Math.Abs(Scale(link) - 1) <= .005 &&
+                Fill(presenter.Foreground) == foreground && Fill(text.Foreground) == foreground && Fill(glyph.Stroke) == foreground &&
+                text.TextDecorations is null or { Count: 0 },
+                $"{label} {state}: transparent with {Fill(presenter.Foreground)} text and {Fill(glyph.Stroke)} arrow, expected {foreground} ({Fill(presenter.Background)} fill)");
+        var box = new Rect(link.Bounds.Size).TransformToAABB(link.TransformToVisual(window)!.Value);
+        Rect Inner(Visual visual) => new Rect(visual.Bounds.Size).TransformToAABB(visual.TransformToVisual(window)!.Value).Inflate(1);
+        var (marks, icon) = (Inner(text), Inner(glyph));
+        var points = new List<(int X, int Y)>();
+        for (var y = (int)Math.Ceiling(box.Y) + 1; y < (int)Math.Floor(box.Bottom) - 1; y++)
+            for (var x = (int)Math.Ceiling(box.X) + 1; x < (int)Math.Floor(box.Right) - 1; x++)
+                if (!marks.Contains(new Point(x + .5, y + .5)) && !icon.Contains(new Point(x + .5, y + .5))) points.Add((x, y));
+        var opacity = link.Opacity; link.Opacity = 0;
+        await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Render);
+        var surface = Snapshot(window);
+        link.Opacity = opacity;
+        await Hold(link, ":pointerover", false);
+        Colors(Primary, "at rest");
+        var rest = Snapshot(window);
+
+        await Hold(link, ":pointerover", true);
+        Colors(PrimaryHover, "hover");
+        var hovered = Snapshot(window);
+        var canvas = surface((int)box.X + 2, (int)box.Center.Y);
+        var contrast = TopBarVerification.Contrast(PrimaryHover, canvas);
+        Ensure(PrimaryHover != Primary && contrast >= 4.5 && Fill(Ui.PrimaryHover) == PrimaryHover,
+            $"{label}: hover color {PrimaryHover} differs from {Primary} at {contrast:0.0}:1 on the canvas {canvas}");
+        var tinted = points.FirstOrDefault(p => !Near(hovered(p.X, p.Y), surface(p.X, p.Y)));
+        Ensure(points.Count > 0 && points.All(p => Near(hovered(p.X, p.Y), surface(p.X, p.Y))),
+            $"{label}: hover keeps the canvas behind the link ({hovered(tinted.X, tinted.Y)} at {tinted}, canvas {surface(tinted.X, tinted.Y)})");
+        Ensure(Enumerable.Range((int)marks.X, (int)marks.Width).Any(x => Enumerable.Range((int)marks.Y, (int)marks.Height).Any(y => rest(x, y) != hovered(x, y))),
+            $"{label}: the label is drawn in a new color on hover");
+        Ensure(fits(), $"{label}: no horizontal scrolling while hovered");
+
+        await Hold(link, ":pressed", true);
+        Colors(Primary, "pressed");
+        var pressed = Snapshot(window);
+        Ensure(points.All(p => Near(pressed(p.X, p.Y), surface(p.X, p.Y))), $"{label}: pressed keeps the canvas behind the link");
+        await Hold(link, ":pressed", false);
+        await Hold(link, ":pointerover", false);
+        Colors(Primary, "after leave");
+
+        var ring = TopBarVerification.FocusRing(link);
+        await Hold(link, ":focus-visible", true);
+        Ensure(ring.BorderBrush is ISolidColorBrush { Color: var color } && color == Primary && ring.IsVisible && ring.BorderThickness.Left > 0,
+            $"{label}: :focus-visible shows the primary focus ring");
+        await Hold(link, ":focus-visible", false);
     }
     private static bool Near(Color a, Color b) => Math.Abs(a.R - b.R) <= 3 && Math.Abs(a.G - b.G) <= 3 && Math.Abs(a.B - b.B) <= 3;
     private static Func<int, int, Color> Snapshot(Window window)

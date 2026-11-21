@@ -1,11 +1,13 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Media.Transformation;
 using Avalonia.Styling;
 using Replate.Domain.Entities;
 using Path = Avalonia.Controls.Shapes.Path;
@@ -115,17 +117,32 @@ public sealed class CollectionView : UserControl
 
     internal static void AddBackLinkStyles(Styles styles)
     {
-        Style State(Func<Selector, Selector> state, IBrush background, IBrush foreground) =>
+        Style State(Func<Selector, Selector> state, IBrush foreground) =>
             new(x => state(x.OfType<Button>().Class(BackLinkClass)))
             {
-                Setters = { new Setter(TemplatedControl.BackgroundProperty, background), new Setter(TemplatedControl.ForegroundProperty, foreground) }
+                Setters =
+                {
+                    new Setter(TemplatedControl.BackgroundProperty, Brushes.Transparent), new Setter(TemplatedControl.BorderBrushProperty, Brushes.Transparent),
+                    new Setter(TemplatedControl.ForegroundProperty, foreground), new Setter(Visual.RenderTransformProperty, TransformOperations.Identity)
+                }
             };
-        styles.Add(State(x => x, Brushes.Transparent, Ui.Green));
-        styles.Add(State(x => x.Class(":pointerover"), Ui.Selection, Ui.Green));
-        styles.Add(new Style(x => x.OfType<Button>().Class(BackLinkClass).Class(":pointerover").Template().OfType<Avalonia.Controls.Presenters.ContentPresenter>().Name("PART_ContentPresenter"))
+        Style Face(Func<Selector, Selector> state, IBrush foreground) =>
+            new(x => state(x.OfType<Button>().Class(BackLinkClass)).Template().OfType<ContentPresenter>().Name("PART_ContentPresenter"))
+            {
+                Setters =
+                {
+                    new Setter(ContentPresenter.BackgroundProperty, Brushes.Transparent), new Setter(ContentPresenter.BorderBrushProperty, Brushes.Transparent),
+                    new Setter(ContentPresenter.ForegroundProperty, foreground)
+                }
+            };
+        foreach (var (state, foreground) in new (Func<Selector, Selector>, IBrush)[]
         {
-            Setters = { new Setter(Avalonia.Controls.Presenters.ContentPresenter.BackgroundProperty, Ui.Selection), new Setter(Avalonia.Controls.Presenters.ContentPresenter.ForegroundProperty, Ui.Green) }
-        });
+            (x => x, Ui.Green), (x => x.Class(":pointerover"), Ui.PrimaryHover), (x => x.Class(":pressed"), Ui.Green), (x => x.Class(":disabled"), Ui.Green)
+        })
+        {
+            styles.Add(State(state, foreground));
+            styles.Add(Face(state, foreground));
+        }
     }
 }
 

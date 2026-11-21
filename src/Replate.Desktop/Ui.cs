@@ -18,6 +18,7 @@ namespace Replate.Desktop;
 internal static class Ui
 {
     public static readonly IBrush Green = Brush.Parse("#245B43");
+    public static readonly IBrush PrimaryHover = Brush.Parse("#357F5D");
     public static readonly IBrush Ink = Brush.Parse("#23382C");
     public static readonly IBrush Muted = Brush.Parse("#59675D");
     public static readonly IBrush Selection = Brush.Parse("#E0E9DF");
