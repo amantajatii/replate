@@ -309,7 +309,7 @@ internal static class MultiRestaurantVerification
 
     private sealed class TestOrderStore(bool fail) : Data.IOrderStore
     {
-        internal const string Message = "Pesanan dibuat, tetapi belum dapat disimpan ke PostgreSQL. Periksa koneksi database lalu coba lagi.";
+        internal const string Message = "Pesanan dan detailnya gagal disimpan ke PostgreSQL. Periksa koneksi serta tabel orders dan order_items.";
         public List<Order> Calls { get; } = [];
 
         public Task SaveOrderAsync(Order order)
