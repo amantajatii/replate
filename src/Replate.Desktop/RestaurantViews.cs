@@ -108,7 +108,7 @@ public sealed class MenuEditorView : UserControl
             Ui.Row(12, PickPhotoButton, RemovePhotoButton), PhotoError);
         NameInput = Ui.Input("Masukkan nama menu", menu?.Name ?? "");
         DescriptionInput = Ui.Input("Masukkan deskripsi menu", menu?.Description ?? "", true);
-        var category = new ComboBox { ItemsSource = new[] { "Makanan utama", "Roti & kue", "Vegetarian" }, SelectedItem = menu?.Category ?? "Makanan utama", MinHeight = 42 };
+        var category = new ComboBox { ItemsSource = MenuCategories.Names, SelectedItem = menu?.Category ?? "Makanan utama", MinHeight = 42 };
         PriceInput = Ui.Number("Masukkan harga", menu?.NormalPrice ?? 20000, 10000000, 1000);
         WeightInput = Ui.Number("Masukkan berat per porsi", menu?.WeightPerPortion ?? .3m, 100, .05m);
         var inputs = new Dictionary<string, Control>

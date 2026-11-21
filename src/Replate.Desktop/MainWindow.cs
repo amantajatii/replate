@@ -20,6 +20,8 @@ public sealed class MainWindow : Window
     internal string? SuccessMessage => successBanner.IsVisible ? successText.Text : null;
     private TextBlock? alert;
     internal CustomerTopBar TopBar { get; }
+    internal const double RailLogoHeight = 32;
+    internal Image? RailLogo { get; private set; }
     private readonly ContentControl customerArea = new();
     private readonly DockPanel customerShell = new();
     internal string SearchText => TopBar.SearchBox.Text?.Trim() ?? "";
@@ -39,7 +41,7 @@ public sealed class MainWindow : Window
             BorderThickness = new Thickness(4, 0, 0, 0), CornerRadius = new CornerRadius(6),
             Padding = new Thickness(16, 12), Margin = new Thickness(32, 16, 32, 0)
         };
-        TopBar = new CustomerTopBar(ShowMarketplace, ShowCart, ShowCustomerOrders, SignOut, OnSearchChanged);
+        TopBar = new CustomerTopBar(ShowMarketplace, ShowCart, ShowCustomerOrders, SignOut, SubmitSearch);
         DockPanel.SetDock(TopBar, Dock.Top);
         customerShell.Children.Add(TopBar); customerShell.Children.Add(customerArea);
         customerShell.Styles.Add(Ui.FocusStyles());
@@ -98,6 +100,21 @@ public sealed class MainWindow : Window
         Render(false, Marketplace, "Jelajah");
         Marketplace.Refresh();
     }
+    internal void ShowCollection(string name)
+    {
+        if (!Allowed(false) || !MarketplaceView.CollectionNames.Contains(name)) return;
+        var page = CollectionView.ForCollection(this, Session, name);
+        Render(false, page, "Jelajah");
+        page.Refresh();
+    }
+    internal void ShowSearch(string query)
+    {
+        var text = query.Trim();
+        if (!Allowed(false) || text.Length == 0) return;
+        var page = CollectionView.ForSearch(this, Session, text);
+        Render(false, page, "Jelajah", text);
+        page.Refresh();
+    }
     internal void ShowFood(SurplusListing listing)
     {
         if (Allowed(false)) Render(false, new FoodDetailView(this, Session, listing), "Jelajah");
@@ -151,13 +168,9 @@ public sealed class MainWindow : Window
 
     internal void UpdateCartCount() => TopBar.SetCartCount(Session.Cart.Items.Sum(i => i.Quantity));
 
-    internal void ClearSearch() => TopBar.SearchBox.Text = "";
-
-    private void OnSearchChanged()
+    internal void SubmitSearch(string query)
     {
-        if (Session.CurrentUser is not Customer) return;
-        if (CurrentPage is MarketplaceView marketplace) marketplace.Refresh();
-        else if (SearchText.Length > 0) ShowMarketplace();
+        if (!string.IsNullOrWhiteSpace(query)) ShowSearch(query);
     }
 
     internal void Run(Action action, Action? next = null, string? successMessage = null, Action<string>? onError = null)
@@ -206,13 +219,12 @@ public sealed class MainWindow : Window
             if (alert is not null) { alert.Text = failureMessage; alert.IsVisible = true; }
         }
     }
-    private void Render(bool restaurant, Control page, string active)
+    private void Render(bool restaurant, Control page, string active, string search = "")
     {
         CurrentPage = page;
         alert = Ui.Text(Session.StorageError ?? "", 14, Brush.Parse("#963E28"));
         alert.IsVisible = Session.StorageError is not null; alert.Margin = new Thickness(32, 16, 32, 0);
         var area = new DockPanel(); DockPanel.SetDock(alert, Dock.Top); area.Children.Add(alert); area.Children.Add(page);
-        var logo = Ui.Text("replate.", 28, Ui.Green, true);
         Button Nav(string label, Action route)
         {
             var button = Ui.Button(label, route);
@@ -223,13 +235,15 @@ public sealed class MainWindow : Window
         if (!restaurant)
         {
             TopBar.Show(Session.CurrentUser, Session.Cart.Items.Sum(i => i.Quantity), active == "Keranjang");
+            TopBar.SearchBox.Text = search;
             customerArea.Content = area;
             pageHost.Content = customerShell;
         }
         else
         {
-            logo.Margin = new Thickness(12, 0, 0, 32);
-            var nav = Ui.Stack(8, logo, Nav("Dashboard", ShowDashboard), Nav("Menu", ShowMenus),
+            RailLogo = Ui.Logo(Ui.LogoGreen, RailLogoHeight);
+            RailLogo.Margin = new Thickness(12, 0, 0, 32);
+            var nav = Ui.Stack(8, RailLogo, Nav("Dashboard", ShowDashboard), Nav("Menu", ShowMenus),
                 Nav("Penawaran surplus", ShowListings), Nav("Produksi", ShowProduction), Nav("Pesanan", ShowRestaurantOrders));
             foreach (var button in nav.Children.OfType<Button>()) button.HorizontalAlignment = HorizontalAlignment.Stretch;
             var footer = Ui.Stack(12, Ui.Text(Session.Restaurant.Name, 14, bold: true), Ui.Button("Keluar", SignOut));

@@ -51,14 +51,9 @@ internal static class UiVerification
             await MarketplaceVerification.Run(window);
             var market = window.Marketplace;
             Ensure(market.VisibleCount == 10, "Initial listings from all restaurants");
-            window.TopBar.SearchBox.Text = "croissant"; await Settle(); Ensure(market.VisibleCount == 1, "Search");
-            market.SelectFilter("Vegetarian"); Ensure(market.VisibleCount == 0, "Combined empty filter");
-            await Shot("marketplace-empty");
-            window.TopBar.SearchBox.Text = ""; await Settle(); Ensure(market.VisibleCount == 3, "Category");
-            window.TopBar.SearchBox.Text = "sambal"; await Settle(); Ensure(market.VisibleCount == 1, "Restaurant search with category");
-            market.ClearFilter(); Ensure(market.VisibleCount == 3, "Restaurant search");
-            window.TopBar.SearchBox.Text = ""; await Settle();
-            market.ClearFilter();
+            await CollectionVerification.Run(window);
+            market = window.Marketplace;
+            Ensure(market.VisibleCount == 10 && window.TopBar.SearchBox.Text == "", "Jelajah is back with every listing and an empty search");
             var listing = window.Session.Listings[0];
             window.ShowFood(listing); await Shot("food-detail");
             for (var i = 0; i <= listing.Quantity; i++) market.Add(listing);
@@ -74,8 +69,20 @@ internal static class UiVerification
             await SignInWithForm(DemoAccounts.OwnerEmail("Dapur Bumi"));
             Ensure(window.Session.CurrentUser is Replate.Domain.Entities.RestaurantOwner && window.Session.Restaurant.Name == "Dapur Bumi" &&
                 window.CurrentPage is DashboardView, "Owner sign-in opens Dapur Bumi dashboard");
+            await Settle();
+            Ensure(window.RailLogo is { Source: var railSource, IsEffectivelyVisible: true } rail && railSource == Ui.LogoGreen &&
+                Math.Abs(rail.Bounds.Height - MainWindow.RailLogoHeight) < .5 && !window.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == "replate."),
+                "Green logo replaces the text wordmark on the light restaurant rail");
+            TopBarVerification.CheckRatio(window.RailLogo!, "restaurant rail logo");
             await Shot("dashboard");
             window.ShowMenus(); await Shot("menus");
+            CollectionVerification.NoLegacyCategory(window, "Menu list");
+            var produceMenu = window.Session.Restaurant.Menus.First(m => m.Category == MenuCategories.Produce);
+            window.ShowMenuEditor(produceMenu); await Settle();
+            var categoryBox = window.CurrentPage!.GetVisualDescendants().OfType<ComboBox>().Single(c => c.ItemsSource is IEnumerable<string> items && items.Contains(MenuCategories.Produce));
+            Ensure(((IEnumerable<string>)categoryBox.ItemsSource!).SequenceEqual(MenuCategories.Names) && categoryBox.SelectedItem as string == MenuCategories.Produce,
+                "Menu form offers Makanan utama, Roti & kue and Buah & sayur");
+            CollectionVerification.NoLegacyCategory(window, "Menu form");
             window.ShowMenuEditor(); await Shot("menu-editor");
             var editor = (MenuEditorView)window.CurrentPage!;
             editor.DescriptionInput.Text = "Deskripsi tetap tersimpan di formulir";

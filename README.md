@@ -27,7 +27,8 @@ dotnet run --project tests/Replate.Domain.Checks/Replate.Domain.Checks.csproj
 ## User Interface Avalonia
 
 Aplikasi desktop tersedia di [`src/Replate.Desktop`](./src/Replate.Desktop), dengan
-area pelanggan dan restoran terpisah. Marketplace memakai navigasi pelanggan;
+area pelanggan dan restoran terpisah. Halaman pelanggan memakai bar atas
+(logo, kolom cari, keranjang, dan menu profil);
 dashboard dan pengelolaan restoran memakai sidebar operasional. Keranjang,
 detail makanan/pesanan, serta formulir menggunakan halaman penuh.
 
@@ -35,6 +36,10 @@ detail makanan/pesanan, serta formulir menggunakan halaman penuh.
 dotnet run --project src/Replate.Desktop
 ```
 
+Halaman Jelajah dibuka dengan banner sapaan, lalu lima kartu koleksi (Termurah, Segera
+berakhir, Makanan utama, Roti & kue, Buah & sayur) yang masing-masing membuka halamannya
+sendiri, dan daftar semua makanan berbentuk kartu. Enter atau ikon kaca pembesar di
+kolom cari membuka halaman hasil pencarian.
 Pelanggan dapat mencari makanan, mengatur keranjang, melakukan simulasi reservasi,
 dan memantau pesanan. Restoran dapat mengelola menu dan penawaran, mencatat produksi,
 mengonfirmasi pesanan, serta memverifikasi kode pengambilan. Dashboard menampilkan

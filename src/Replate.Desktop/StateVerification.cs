@@ -130,7 +130,40 @@ internal static class StateVerification
         allocationSession.CancelOrder(allocationOrder); CheckMinimum();
         var allErrors = allocationSession.ValidateProduction(null, DateOnly.FromDateTime(DateTime.Today.AddDays(1)), -1, -2);
         Ensure(allErrors.Count == 4, "Production validation reports all fields together");
+        CheckLegacyCategory();
         Console.WriteLine("All Replate desktop state checks passed.");
+    }
+
+    // Legacy category
+    internal static string WriteLegacyState()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "replate-legacy-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        var path = Path.Combine(directory, "state.json");
+        new DemoSession(path).Persist();
+        var text = File.ReadAllText(path);
+        var legacy = System.Text.RegularExpressions.Regex.Replace(text, @"""Category"": ""Buah (?:&|\\u0026) sayur""", "\"Category\": \"Vegetarian\"");
+        Ensure(legacy != text && legacy.Split("\"Category\": \"Vegetarian\"").Length - 1 == 3 && !legacy.Contains(@"Buah & sayur") && !legacy.Contains("Buah & sayur"),
+            "Legacy state file stores Vegetarian for three menus");
+        File.WriteAllText(path, legacy);
+        return path;
+    }
+
+    private static void CheckLegacyCategory()
+    {
+        var seeded = new DemoSession();
+        var produce = seeded.Restaurants.SelectMany(r => r.Menus).Where(m => m.Category == MenuCategories.Produce).Select(m => m.Name).ToList();
+        Ensure(produce.Count == 3 && seeded.Restaurants.SelectMany(r => r.Menus).All(m => MenuCategories.Names.Contains(m.Category)),
+            "Seed data uses Buah & sayur");
+        var path = WriteLegacyState();
+        var before = File.ReadAllBytes(path);
+        var stamp = File.GetLastWriteTimeUtc(path);
+        var session = new DemoSession(path);
+        var menus = session.Restaurants.SelectMany(r => r.Menus).ToList();
+        Ensure(session.StorageError is null && menus.Where(m => m.Category == MenuCategories.Produce).Select(m => m.Name).OrderBy(n => n).SequenceEqual(produce.OrderBy(n => n)) &&
+            !menus.Any(m => m.Category == MenuCategories.LegacyProduce), "Legacy Vegetarian menus load as Buah & sayur");
+        Ensure(File.ReadAllBytes(path).SequenceEqual(before) && File.GetLastWriteTimeUtc(path) == stamp, "Loading a legacy file does not rewrite it");
+        Ensure(session.Search("", MenuCategories.Produce).Count() == 3, "Legacy menus are found under Buah & sayur");
     }
     private static void Ensure(bool condition, string message)
     { if (!condition) throw new InvalidOperationException(message); }

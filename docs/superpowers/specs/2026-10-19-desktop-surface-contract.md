@@ -6,7 +6,7 @@ This is an application-flow extension, not a replacement brand or open visual-wo
 THESIS: Customers reserve food; restaurant staff process surplus and pickup. Each
 workspace must expose only that role's working navigation.
 
-OWN-WORLD: Existing Replate wordmark, native controls, pale neutral surfaces, green
+OWN-WORLD: Replate bitmap logo (white on primary, green on light surfaces), native controls, pale neutral surfaces, green
 actions/selection, precise tables and direct Indonesian labels. No invented claims.
 
 STORY: Masuk as customer -> browse -> food detail/cart -> reserve -> inspect order code.
@@ -38,8 +38,8 @@ visible TextBox on each captured screen and on the auth surface at all four size
 
 Quality bar: quiet, useful desktop UI. No marketing hero, except the Jelajah banner
 (greeting and one call to action, below); icons only where they carry meaning (the
-password-toggle eye, the top bar magnifier, cart and user icons, and the five Jelajah
-filter icons). Tables align
+password-toggle eye, the top bar magnifier, cart and user icons, the five Jelajah
+collection icons, and the back arrow). Tables align
 numeric columns; disabled states use native affordances. Customer routes replace the
 native focus adorner with the shared keyboard focus style (below); auth and restaurant
 routes keep theirs. Preserve domain
@@ -70,7 +70,7 @@ ROUTES AND ROLES:
   record belongs to the signed-in customer or restaurant. A signed-out user, a wrong
   role, or another owner's record is signed out and sent to Masuk without rendering
   the requested page.
-- The restaurant rail shows the signed-in owner's restaurant name. A new restaurant
+- The restaurant rail shows the green logo (32 high) at the top and the signed-in owner's restaurant name. A new restaurant
   with no menus, listings, production or orders renders every restaurant page with an
   empty state and a next step (Tambah menu, Buat penawaran).
 
@@ -78,14 +78,17 @@ CUSTOMER TOP BAR (every customer route, implemented in `CustomerTopBar.cs`):
 - One persistent bar, 72 high, `primary` fill, side padding 32, no bottom rule and no
   shadow (the green against the canvas is the separation). No route tabs: Jelajah,
   Pesanan saya, Keranjang (n) and Keluar are no longer buttons in the bar.
-- Left: wordmark replate. (36, semibold, white), a button that opens Jelajah.
-- Middle: search pill (`rounded.full`, 44 high, white, no border), 32 from the wordmark and from
+- Left: white logo `Assets/logo-white.webp` (36 high, Uniform stretch, width from the
+  bitmap ratio), a button named "Replate" that opens Jelajah. There is no text wordmark.
+- Middle: search pill (`rounded.full`, 44 high, white, no border), 32 from the logo and from
   the icons, width between 320 and 720, centered in the remaining space; magnifier
   icon (`muted`) inside on the left; placeholder "Mulai cari menu atau restoran" in `muted`,
   typed text in `ink`. While focused it shows a 2 px white ring 2 outside the pill, never a
   dark border. It replaces the
-  old Jelajah search field and label. Typing filters Jelajah live; typing on another
-  customer page switches to Jelajah with that keyword and keeps focus in the field.
+  old Jelajah search field and label. The magnifier is a button named "Cari" (not a Tab
+  stop). Typing alone changes nothing. Enter or the magnifier opens the search result
+  page (`MainWindow.ShowSearch`); an empty or blank field does nothing. The field keeps
+  the keyword on the result page; every other customer page opens with it empty.
 - Right, 16 apart: cart icon button (44, transparent, white icon, `selection` tint on
   hover with no box; while Keranjang is open a white line 20 by 2 sits under the icon)
   with a white circular badge holding the portion count in `primary`, hidden at 0;
@@ -102,9 +105,10 @@ CUSTOMER TOP BAR (every customer route, implemented in `CustomerTopBar.cs`):
 - Icons are Path geometry on a 24 grid, stroke 1.75, round caps and joins. Every control
   is a Tab stop with the shared keyboard focus style (white ring on the bar).
 - Verified by `--verify-ui` (TopBarVerification): primary fill without rule, white
-  wordmark and icons with contrast at least 4.5 (text) and 3 (icons), search colors and
+  logo and icons with contrast at least 4.5 (logo) and 3 (icons), logo ratio equal to the
+  bitmap ratio (within 1%), bar height unchanged at 72, search colors and
   focus ring, elements and names, removed tabs and old search, hover colors, badge
-  colors and count, cart active line, search from Keranjang and Pesanan saya, menu
+  colors and count, cart active line, typing without navigation, menu
   contents, keyboard and focus visibility, Keluar, and no overlap at 1040x720 and
   1920x1080 (search 320 to 720).
 
@@ -121,18 +125,19 @@ KEYBOARD FOCUS (customer routes, shared `Ui.FocusStyles` in `Ui.cs`):
 
 JELAJAH (customer marketplace, `MarketplaceView.cs` and `MarketplaceBanner.cs`):
 - One vertical ScrollViewer under the top bar, no horizontal scrolling. Content is at
-  most 1200 wide, side inset 32, centered on wide windows. Order: banner, filter cards,
+  most 1200 wide, side inset 32, centered on wide windows. Order: banner, collection cards,
   the "Jelajahi Menu" title row, listing cards, sample-data note. No result counter, no
   "Makanan tersedia" or "Semua restoran" headings.
 - Rhythm (shared constants `Ui.Spacing`): 24 from the top bar to the banner, from the
-  banner to the filter cards and from the filter cards to the title; 16 from the title
+  banner to the collection cards and from the collection cards to the title; 16 from the title
   to the first listing card (equal to the gap between cards); 32 below the page. Side
-  insets and the 16 between filter cards are unchanged.
-- Title: "Jelajahi Menu", `section` role (20, semibold), `ink`, left-aligned with the
+  insets and the 16 between collection cards are unchanged. Jelajah always lists every
+  available listing in the default order.
+- Title: "Jelajahi Menu", 32 bold (at least 30, verified), `ink`, left-aligned with the
   content edge, always shown, including when the list is empty. The add-to-cart notice
   sits right-aligned on the same row. Jelajah has no restaurant picker.
 - Banner: `rounded.card`, no border or shadow, centered in the content column,
-  width = content width (left and right edges aligned with the filter row and listing
+  width = content width (left and right edges aligned with the collection row and listing
   cards at every size), height = width x bitmap height / bitmap width (4344 by 1280), so
   `Assets/marketplace-hero.webp` is shown whole with Uniform stretch, never cropped or
   distorted (about 288 high at 1040x720, 354 at the 1200 content maximum). Overlay text: "Halo, {name}."
@@ -141,33 +146,62 @@ JELAJAH (customer marketplace, `MarketplaceView.cs` and `MarketplaceBanner.cs`):
   most two lines). Text inset 40, vertically centered above the cabinets (87.8% of the
   height), right edge at most 45% of the banner width (the nearest illustration object
   starts at 46.2%).
-- Filter cards: Termurah, Segera berakhir, Makanan utama, Roti & kue, Vegetarian;
+- Collection cards: Termurah, Segera berakhir, Makanan utama, Roti & kue, Buah & sayur;
   equal widths in one row, 16 apart, height 96, card style with a primary line icon
-  above the label. Pick one; the selected card again clears it; no Semua. Termurah
-  sorts by RescuePrice ascending, Segera berakhir by PickupEnd ascending, the rest
-  filter by category, always together with the top bar search. Hover selection fill;
-  selected selection fill, primary semibold; selected hover divider fill; Tab, Enter
-  and Space work with the shared 2 px primary focus ring.
+  above the label; no Semua and no selected state. Each card is a link to its
+  collection page (`MainWindow.ShowCollection`). Hover selection fill; Tab, Enter and
+  Space work with the shared 2 px primary focus ring.
 - Listing cards: card style, padding 20, 16 apart, same columns and content as the old
-  rows; no row dividers. Tambah behaves as before. Empty state "Tidak ada menu yang
-  cocok" with Hapus filter, which clears the card and the search; it sits 16 under the
-  title like the first card.
+  rows; no row dividers (`ListingFeed.cs`, shared with collection pages). Tambah
+  behaves as before and keeps one restaurant per cart. Empty state "Belum ada menu
+  tersedia", 16 under the title.
 - Verified by `--verify-ui` (MarketplaceVerification) at 1040x720, 1360x940 and
   1920x1080: banner ratio equals the bitmap ratio (within 1%), banner left and right
-  edges equal the filter row and listing cards (within 1 px), centered text inside 45%
+  edges equal the collection row and listing cards (within 1 px), centered text inside 45%
   that does not intersect the illustration; no "menu tersedia" text; the bold,
   left-aligned title; the three 24 gaps equal (within 1 px) and the title to first card
-  gap 16; focus rings on filter cards and Tambah without the native adorner.
+  gap 16; focus rings on collection cards and Tambah without the native adorner; no
+  pick-one state or Hapus filter.
+
+COLLECTION AND SEARCH PAGES (customer only, `CollectionView.cs`):
+- One view for the five collections (`ShowCollection(name)`) and for search results
+  (`ShowSearch(query)`). Both use the customer role guard: any other role is signed out
+  and sent to Masuk; an unknown collection name is ignored. Cart and session survive.
+- Same top bar; in the Jelajah content column (at most 1200, inset 32), no banner:
+  "Kembali ke Jelajah" link (16 left arrow, stroke 1.75, 8 from the 14 text, centered,
+  at least 32 high, primary, hover selection fill, primary focus ring), then the title
+  (32 bold ink, one line), then on collection pages with listings an intro sentence 8
+  under it (16, muted, wrapping; exact copy in DESIGN.md), then listing cards 16 below.
+  Search results and empty states have no intro. Rhythm from
+  `Ui.Spacing`: 24 from the top bar, 16 to the title, 16 to the first card, 32 below.
+- Titles: the card label exactly, or "Hasil untuk {kata}" with the keyword as typed
+  (trimmed), cut with an ellipsis when too long.
+- Termurah: every available listing by RescuePrice ascending; Segera berakhir: by
+  PickupEnd ascending; Makanan utama, Roti & kue, Buah & sayur: that category in the
+  default order. Search splits on spaces; every word must match the menu name,
+  description, restaurant name or category, case-insensitive; "vegetarian" also finds
+  Buah & sayur.
+- Category Buah & sayur replaces Vegetarian everywhere in the UI and the menu form. The
+  category is a string in state.json: "Vegetarian" loads as Buah & sayur in memory, load
+  never writes, the next save stores the new name, and the seed uses it.
+- Empty: collection "Belum ada menu di sini" with a short line; search "Tidak ada menu
+  yang cocok" with "Coba kata kunci lain."; both with a "Kembali ke Jelajah" button.
+- The logo, Kembali ke Jelajah, Keranjang and Pesanan saya clear the search field.
+- Verified by `--verify-ui` (CollectionVerification): each card opens its page with the
+  right title; ordering and category filtering; search by menu name, restaurant name
+  and words out of order; unknown words empty state; blank search stays; back link,
+  logo, cart and orders clear the field; Tambah keeps one restaurant per cart; rhythm
+  and alignment; no horizontal scrolling at 1040x720 and 1920x1080; role guards.
 
 AUTH SURFACE (Masuk and Daftar, implemented in `AuthViews.cs` as `AuthSurface`):
 - A two-column Grid fills the page: the left canvas column and the right primary
   (#245B43) panel, full height. The first column width is set in pixels from the
   plate position (`AuthSurface.Layout`); the panel is about 28% of the width.
-- Left column: canvas background. The wordmark replate. sits at the top (inset 32),
-  left-aligned with the card, on a `canvas` band drawn above the scroll area. Below it
+- Left column: canvas background. The green logo `Assets/logo-green.webp` (44 high, Uniform
+  stretch, width from the bitmap ratio) sits at the top (inset 32), left-aligned with the card, on a `canvas` band drawn above the scroll area. Below it
   a clip Border (ClipToBounds, from x 0 to plate left) holds the ScrollViewer, which
   scrolls vertically only (the owner registration form is taller than 720), so no
-  scrolled content shows under the wordmark. The ScrollViewer starts 24 left of the
+  scrolled content shows under the logo. The ScrollViewer starts 24 left of the
   card (inner padding for the shadow) and is 24 + card + 16 + 6 wide: the 6-wide
   scrollbar sits 16 beside the card's right edge. Its ScrollContentPresenter does not
   clip, so the card shadow is clipped only by the clip Border (at least 24 clear on
@@ -185,7 +219,7 @@ AUTH SURFACE (Masuk and Daftar, implemented in `AuthViews.cs` as `AuthSurface`):
   gap takes whatever the 440 card leaves (wide on large windows). If the card would
   be under 360, G shrinks first (minimum 46 = scrollbar gap 16 + scrollbar 6 + 24;
   reached only on narrow tall windows such as 1040x1080), then L (minimum 48), then B moves
-  right, then D shrinks (minimum 320). The scroll area ends at plate left. The wordmark, the warning and the demo-account
+  right, then D shrinks (minimum 320). The scroll area ends at plate left. The logo, the warning and the demo-account
   line share L, and the warning and demo line share the card width.
 - Card: white surface, `rounded.card` (16), `elevation.card` shadow
   (`0 8 24 0 #1F23382C`), padding 32, fields 20 apart, no border. Hard rule: the
@@ -235,4 +269,4 @@ AUTH SURFACE (Masuk and Daftar, implemented in `AuthViews.cs` as `AuthSurface`):
   animation.
 - Verified at 1360x940, 1040x720, 1283x780 and 1920x1080 by `--verify-ui` (AuthVerification):
   scrollbar within 24 of the card's right edge and not over it, scrollbar at least 24
-  from the plate, shadow room, clean wordmark band, toggle hover color and keyboard.
+  from the plate, shadow room, clean logo band, green logo with bitmap ratio, toggle hover color and keyboard.

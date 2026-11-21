@@ -18,6 +18,7 @@ namespace Replate.Desktop;
 internal sealed class CustomerTopBar : Border
 {
     internal const double BarHeight = 72;
+    internal const double LogoHeight = 36;
     internal const double SearchMaxWidth = 720;
     internal const double SearchMinWidth = 320;
     internal const string SearchPlaceholder = "Mulai cari menu atau restoran";
@@ -49,9 +50,12 @@ internal sealed class CustomerTopBar : Border
         }
     };
 
-    internal Button Wordmark { get; }
+    internal Button LogoButton { get; }
+    internal Image Logo { get; }
     internal TextBox SearchBox { get; }
     internal Button CartButton { get; }
+    internal Button SearchButton { get; }
+    internal Path SearchGlyph { get; }
     internal Path CartGlyph { get; }
     internal Border CartBadge { get; }
     internal Border CartIndicator { get; }
@@ -66,18 +70,17 @@ internal sealed class CustomerTopBar : Border
     internal Button OrdersItem { get; }
     internal Button SignOutItem { get; }
 
-    internal CustomerTopBar(Action home, Action cart, Action orders, Action signOut, Action searchChanged)
+    internal CustomerTopBar(Action home, Action cart, Action orders, Action signOut, Action<string> search)
     {
         Height = BarHeight; Background = Ui.Green; Padding = new Thickness(Ui.Spacing.Page, 0);
         AddStyles();
 
-        // Wordmark
-        var mark = Ui.Text("replate.", 36, Ui.OnPrimary, true);
-        mark.TextWrapping = TextWrapping.NoWrap;
-        Wordmark = Plain("bar-wordmark", mark, home);
-        Wordmark.Padding = default;
-        AutomationProperties.SetName(Wordmark, "Buka Jelajah");
-        ToolTip.SetTip(Wordmark, "Jelajah");
+        // Logo
+        Logo = Ui.Logo(Ui.LogoWhite, LogoHeight);
+        LogoButton = Plain("bar-logo", Logo, home);
+        LogoButton.Padding = default;
+        AutomationProperties.SetName(LogoButton, Ui.LogoName);
+        ToolTip.SetTip(LogoButton, "Jelajah");
 
         // Search
         SearchBox = new TextBox
@@ -86,7 +89,6 @@ internal sealed class CustomerTopBar : Border
             Foreground = Ui.Ink, PlaceholderForeground = Ui.Muted, BorderThickness = default, BorderBrush = Brushes.Transparent,
             TextWrapping = TextWrapping.NoWrap, MaxLength = 80, Padding = new Thickness(10, 5.5, 20, 5.5),
             VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Stretch,
-            InnerLeftContent = Glyph(SearchIcon, Ui.Muted, new Thickness(16, 0, 0, 0))
         };
         SearchBox.Classes.Add("bar-search");
         SearchRing = Ui.FocusRing(new CornerRadius(9999));
@@ -101,7 +103,21 @@ internal sealed class CustomerTopBar : Border
             if (e.Property == IsFocusedProperty) SearchRing.BorderBrush = SearchBox.IsFocused ? Ui.OnPrimary : Brushes.Transparent;
         };
         AutomationProperties.SetName(SearchBox, "Cari menu atau restoran");
-        SearchBox.TextChanged += (_, _) => searchChanged();
+        SearchGlyph = Glyph(SearchIcon, null, default);
+        SearchButton = Plain("bar-search-button", SearchGlyph, () => search(SearchBox.Text ?? ""));
+        SearchButton.Classes.Remove(Ui.OnPrimaryClass);
+        SearchButton.Width = SearchButton.Height = 40; SearchButton.Padding = default; SearchButton.Margin = new Thickness(8, 0, 0, 0);
+        SearchButton.CornerRadius = new CornerRadius(9999); SearchButton.Focusable = false; SearchButton.VerticalAlignment = VerticalAlignment.Center;
+        SearchGlyph[!Shape.StrokeProperty] = SearchButton[!TemplatedControl.ForegroundProperty];
+        AutomationProperties.SetName(SearchButton, "Cari");
+        ToolTip.SetTip(SearchButton, "Cari");
+        SearchBox.InnerLeftContent = SearchButton;
+        SearchBox.AddHandler(KeyDownEvent, (_, e) =>
+        {
+            if (e.Key != Key.Enter) return;
+            e.Handled = true;
+            search(SearchBox.Text ?? "");
+        }, RoutingStrategies.Tunnel);
 
         // Cart
         CartGlyph = Glyph(CartIcon, null, default);
@@ -170,8 +186,8 @@ internal sealed class CustomerTopBar : Border
         // Layout
         var actions = Ui.Row(16, CartButton, ProfileButton);
         actions.VerticalAlignment = VerticalAlignment.Center;
-        Wordmark.VerticalAlignment = VerticalAlignment.Center;
-        var grid = Ui.Columns("Auto,*,Auto", Wordmark, SearchFrame, actions);
+        LogoButton.VerticalAlignment = VerticalAlignment.Center;
+        var grid = Ui.Columns("Auto,*,Auto", LogoButton, SearchFrame, actions);
         Grid.SetColumn(ProfileMenu, 2); grid.Children.Add(ProfileMenu);
         Child = grid;
     }
@@ -239,7 +255,9 @@ internal sealed class CustomerTopBar : Border
     // Styles
     private void AddStyles()
     {
-        Styles.Add(State("bar-wordmark", x => x, Brushes.Transparent, null, Brushes.Transparent));
+        Styles.Add(State("bar-logo", x => x, Brushes.Transparent, null, Brushes.Transparent));
+        Styles.Add(State("bar-search-button", x => x, Brushes.Transparent, Ui.Muted, Brushes.Transparent));
+        Styles.Add(State("bar-search-button", x => x.Class(":pointerover"), Brushes.Transparent, Ui.Green));
         Styles.Add(State("bar-cart", x => x, Brushes.Transparent, Ui.OnPrimary, Brushes.Transparent));
         Styles.Add(State("bar-cart", x => x.Class(":pointerover"), Brushes.Transparent, Selection));
         Styles.Add(State("bar-profile", x => x, Ui.OnPrimary, Ui.Green, Brushes.Transparent));

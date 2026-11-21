@@ -45,18 +45,18 @@ public sealed class DemoSession
             "0274 555 0101", new TimeOnly(9, 0), new TimeOnly(21, 0));
         AddMenu(bumi, "Chicken rice bowl", "Nasi hangat, ayam panggang, dan sayuran segar.", "Makanan utama", 32000, 16000, 6, 50, 36);
         AddMenu(bumi, "Butter croissant", "Croissant berlapis dengan mentega, dipanggang hari ini.", "Roti & kue", 24000, 12000, 4, 30, 23);
-        AddMenu(bumi, "Garden salad", "Sayuran renyah dengan dressing wijen yang ringan.", "Vegetarian", 28000, 14000, 5, 26, 20);
+        AddMenu(bumi, "Garden salad", "Sayuran renyah dengan dressing wijen yang ringan.", MenuCategories.Produce, 28000, 14000, 5, 26, 20);
         AddMenu(bumi, "Beef teriyaki bowl", "Daging teriyaki, nasi, dan sayuran pelengkap.", "Makanan utama", 40000, 20000, 3, 40, 35);
         var sambal = AddRestaurant("Warung Sambal Ijo", "Jl. Gejayan No. 21, Yogyakarta", "Masakan rumahan dengan sambal ijo.",
             "0274 555 0202", new TimeOnly(10, 0), new TimeOnly(22, 0));
         AddMenu(sambal, "Nasi ayam geprek", "Ayam goreng tepung, sambal ijo, dan nasi putih.", "Makanan utama", 25000, 12000, 7, 60, 48);
-        AddMenu(sambal, "Gado-gado", "Sayuran rebus, tahu, tempe, dan bumbu kacang.", "Vegetarian", 22000, 11000, 4, 30, 24);
+        AddMenu(sambal, "Gado-gado", "Sayuran rebus, tahu, tempe, dan bumbu kacang.", MenuCategories.Produce, 22000, 11000, 4, 30, 24);
         AddMenu(sambal, "Soto ayam", "Kuah kuning, suwiran ayam, soun, dan perkedel.", "Makanan utama", 20000, 9000, 5, 45, 38);
         var pagi = AddRestaurant("Roti Pagi Kotabaru", "Jl. Suroto No. 8, Kotabaru, Yogyakarta", "Roti dan kue yang dipanggang setiap pagi.",
             "0274 555 0303", new TimeOnly(6, 0), new TimeOnly(18, 0));
         AddMenu(pagi, "Roti sobek cokelat", "Roti lembut isi cokelat, dipanggang pagi ini.", "Roti & kue", 18000, 8000, 6, 40, 31);
         AddMenu(pagi, "Bolu pandan", "Bolu pandan potong dengan aroma daun pandan asli.", "Roti & kue", 30000, 14000, 3, 20, 16);
-        AddMenu(pagi, "Lumpia sayur", "Lumpia goreng isi rebung, wortel, dan kol.", "Vegetarian", 15000, 7000, 8, 50, 40);
+        AddMenu(pagi, "Lumpia sayur", "Lumpia goreng isi rebung, wortel, dan kol.", MenuCategories.Produce, 15000, 7000, 8, 50, 40);
         Restaurant = bumi;
         DemoAccounts.Ensure(Users, Restaurants, Carts);
     }
@@ -266,6 +266,7 @@ public sealed class DemoSession
     public Menu SaveMenu(Menu? existing, string name, string description, string category, decimal normalPrice, decimal weight, MenuPhotoChange? photoChange = null)
     {
         EnsureWritable();
+        category = MenuCategories.Normalize(category);
         var restaurant = RequireOwnedRestaurant(existing?.RestaurantId ?? Restaurant.Id);
         var errors = ValidateMenu(existing, name, description, normalPrice, weight);
         if (errors.Count > 0) throw new InvalidOperationException(errors.First().Value);

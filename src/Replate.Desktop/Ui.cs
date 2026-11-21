@@ -3,8 +3,11 @@ using Avalonia.Controls;
 using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Templates;
+using Avalonia.Automation;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 using Avalonia.Styling;
 
 namespace Replate.Desktop;
@@ -16,6 +19,22 @@ internal static class Ui
     public static readonly IBrush Muted = Brush.Parse("#59675D");
     public static readonly IBrush Selection = Brush.Parse("#E0E9DF");
     public static readonly IBrush OnPrimary = Brushes.White;
+
+    // Logo
+    public const string LogoName = "Replate";
+    public static readonly Uri LogoGreenUri = new("avares://Replate.Desktop/Assets/logo-green.webp");
+    public static readonly Uri LogoWhiteUri = new("avares://Replate.Desktop/Assets/logo-white.webp");
+    private static readonly Lazy<Bitmap> GreenLogo = new(() => Load(LogoGreenUri));
+    private static readonly Lazy<Bitmap> WhiteLogo = new(() => Load(LogoWhiteUri));
+    public static Bitmap LogoGreen => GreenLogo.Value;
+    public static Bitmap LogoWhite => WhiteLogo.Value;
+    private static Bitmap Load(Uri uri) { using var stream = AssetLoader.Open(uri); return new Bitmap(stream); }
+    public static Image Logo(Bitmap source, double height)
+    {
+        var logo = new Image { Source = source, Height = height, Stretch = Stretch.Uniform, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
+        AutomationProperties.SetName(logo, LogoName);
+        return logo;
+    }
 
     // Spacing
     internal static class Spacing
