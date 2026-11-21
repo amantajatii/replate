@@ -93,7 +93,7 @@ internal static class AccountVerification
         ExpectFailure(() => session.ToggleMenu(bumiMenu));
         session.AsOwner();
         ExpectFailure(() => session.AddToCart(bumiListing, 1));
-        ExpectFailure(() => session.Checkout());
+        ExpectFailure(() => session.Checkout(bumiListing.Menu.RestaurantId));
         ExpectFailure(() => session.ChangeQuantity(bumiListing.Id, 0));
         session.AsCustomer();
         ExpectFailure(() => session.SaveMenu(null, "Menu pelanggan", "", "Makanan utama", 20000, .3m));
@@ -104,7 +104,7 @@ internal static class AccountVerification
         // Customer carts
         var demoCustomer = (Customer)session.CurrentUser!;
         session.AddToCart(bumiListing, 1);
-        var demoOrder = session.Checkout();
+        var demoOrder = session.Checkout(bumiListing.Menu.RestaurantId);
         session.AddToCart(bumiListing, 2);
         Ensure(demoOrder.CustomerId == demoCustomer.Id && session.CustomerOrders.Single() == demoOrder, "Checkout uses the signed-in customer");
         session.SignIn("sari@example.com", "kata-sandi-1");

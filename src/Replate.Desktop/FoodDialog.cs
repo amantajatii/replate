@@ -1,40 +1,28 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
-using Avalonia.Controls.Primitives;
-using Avalonia.Controls.Shapes;
-using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Replate.Domain.Entities;
-using Path = Avalonia.Controls.Shapes.Path;
 
 namespace Replate.Desktop;
 
-internal sealed class FoodDialog : Grid
+internal sealed class FoodDialog : ModalDialog
 {
     internal const double CardWidth = 760;
-    internal const double Inset = 32;
     internal const double PhotoSize = 300;
     internal const double StepperSize = QuantityStepper.ButtonSize;
     internal const string UnavailableText = "Penawaran tidak tersedia";
     internal const string FullText = "Sudah di keranjang dengan jumlah maksimal";
     internal const string AddLabel = "Tambah ke keranjang";
-    internal static readonly IBrush Scrim = Brush.Parse("#6623382C");
-    internal static readonly IBrush ErrorBrush = Brush.Parse("#9B3A25");
     internal static readonly IBrush DisabledFill = QuantityStepper.DisabledFill;
-    private static readonly Geometry CloseIcon = Geometry.Parse("M6 6L18 18 M18 6L6 18");
 
     private readonly DemoSession session;
     private readonly Func<SurplusListing, int, string?> add;
-    private readonly NavigationMethod focusMethod;
     private readonly DispatcherTimer timer = new() { Interval = TimeSpan.FromSeconds(15) };
-    private bool closed;
     internal SurplusListing Listing { get; }
     internal int Quantity { get; private set; } = 1;
-    internal Border ScrimLayer { get; }
-    internal Border Card { get; }
     internal ScrollViewer Scroll { get; }
     internal MenuPhotoView Photo { get; }
     internal TextBlock NameText { get; }
@@ -51,32 +39,23 @@ internal sealed class FoodDialog : Grid
     internal TextBlock ErrorText { get; }
     internal TextBlock TotalText { get; }
     internal Border Bar { get; }
-    internal Button CloseButton { get; }
     internal Button MinusButton => Stepper.MinusButton;
     internal Button PlusButton => Stepper.PlusButton;
     internal Button AddButton { get; }
-    internal event Action? Closed;
 
     internal int InCart => session.Cart.Items.Where(i => i.ListingId == Listing.Id).Sum(i => i.Quantity);
     internal int Limit => Math.Max(0, Listing.Quantity - InCart);
     internal bool Available => Listing.IsAvailable(DateTime.UtcNow) && Listing.Menu.IsActive;
 
-    internal FoodDialog(DemoSession session, SurplusListing listing, Func<SurplusListing, int, string?> add, bool keyboard)
+    internal FoodDialog(DemoSession session, SurplusListing listing, Func<SurplusListing, int, string?> add, bool keyboard) : base(keyboard)
     {
         this.session = session; this.add = add; Listing = listing;
-        focusMethod = keyboard ? NavigationMethod.Tab : NavigationMethod.Pointer;
         var menu = listing.Menu;
-
-        // Scrim
-        ScrimLayer = new Border { Background = Scrim };
-        ScrimLayer.PointerPressed += (_, e) => { e.Handled = true; Close(); };
-        Children.Add(ScrimLayer);
 
         // Details
         Photo = new MenuPhotoView(session.PhotoPath(menu.ImageUrl), PhotoSize, PhotoSize, placeholderSize: 14) { VerticalAlignment = VerticalAlignment.Top };
         NameText = Ui.Text(menu.Name, 28, Ui.Ink, true);
         NameText.FontWeight = FontWeight.Bold; NameText.VerticalAlignment = VerticalAlignment.Top;
-        CloseButton = IconButton();
         var header = Ui.Columns("*,Auto", NameText, CloseButton);
         CloseButton.Margin = new Thickness(Ui.Spacing.Related, -6, -6, 0);
         MetaText = Ui.Text($"{menu.Restaurant?.Name} · {menu.Category}", 14, Ui.Muted);
@@ -124,18 +103,11 @@ internal sealed class FoodDialog : Grid
         layout.Children.Add(Scroll);
         Grid.SetRow(ErrorText, 1); layout.Children.Add(ErrorText);
         Grid.SetRow(Bar, 2); layout.Children.Add(Bar);
-        Card = new Border
-        {
-            Width = CardWidth, Background = Brushes.White, CornerRadius = new CornerRadius(16), BoxShadow = MarketplaceView.CardShadow,
-            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Child = layout
-        };
-        AutomationProperties.SetName(Card, menu.Name);
-        KeyboardNavigation.SetTabNavigation(Card, KeyboardNavigationMode.Cycle);
-        Children.Add(new Panel { Margin = new Thickness(Inset), Children = { Card } });
+        SetCard(CardWidth, layout, menu.Name);
 
         Update();
         timer.Tick += (_, _) => Update();
-        AttachedToVisualTree += (_, _) => { timer.Start(); Dispatcher.UIThread.Post(() => CloseButton.Focus(focusMethod)); };
+        AttachedToVisualTree += (_, _) => timer.Start();
         DetachedFromVisualTree += (_, _) => timer.Stop();
     }
 
@@ -169,25 +141,5 @@ internal sealed class FoodDialog : Grid
         Update();
     }
 
-    internal void Close()
-    {
-        if (closed) return;
-        closed = true; timer.Stop();
-        Closed?.Invoke();
-    }
-
-    // Controls
-    private Button IconButton()
-    {
-        var glyph = new Path
-        {
-            Data = CloseIcon, Width = 24, Height = 24, Stretch = Stretch.None, StrokeThickness = 1.75,
-            StrokeLineCap = PenLineCap.Round, StrokeJoin = PenLineJoin.Round
-        };
-        var button = Ui.Round(Ui.Button("", Close), 36, true);
-        button.Content = glyph; button.VerticalAlignment = VerticalAlignment.Top;
-        glyph[!Shape.StrokeProperty] = button[!TemplatedControl.ForegroundProperty];
-        AutomationProperties.SetName(button, "Tutup"); ToolTip.SetTip(button, "Tutup");
-        return button;
-    }
+    protected override void OnClosing() => timer.Stop();
 }

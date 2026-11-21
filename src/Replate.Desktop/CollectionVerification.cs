@@ -148,14 +148,12 @@ internal static class CollectionVerification
         Ensure(window.Dialog is null && session.Cart.Items.Single().ListingId == first.Id && page2.Feed.Notice.IsVisible && bar.CartBadgeText.Text == "1" &&
             window.CurrentPage == page2, "Tambah ke keranjang on a collection page adds to the cart and stays on the page");
         Click(Add(other)); await Settle();
-        var rejected = window.Dialog!;
-        Click(rejected.AddButton); await Settle();
-        Ensure(session.Cart.Items.Count == 1 && session.Cart.Items.Single().ListingId == first.Id && window.Dialog == rejected &&
-            rejected.ErrorText.Text == ListingFeed.OneRestaurantMessage, "Tambah keeps one restaurant per cart");
-        rejected.Close(); await Settle();
+        Click(window.Dialog!.AddButton); await Settle();
+        Ensure(window.Dialog is null && session.Cart.Items.Select(i => i.ListingId).SequenceEqual([first.Id, other.Id]) &&
+            session.Cart.CountRestaurants() == 2 && bar.CartBadgeText.Text == "2", "Tambah adds a menu from another restaurant to the same cart");
         window.ShowMarketplace(); await Settle();
-        Ensure(session.Cart.Items.Single().ListingId == first.Id && bar.CartBadgeText.Text == "1", "The cart survives navigation");
-        session.ChangeQuantity(first.Id, 0); window.UpdateCartCount();
+        Ensure(session.Cart.Items.Count == 2 && bar.CartBadgeText.Text == "2", "The cart survives navigation");
+        session.ChangeQuantity(other.Id, 0); session.ChangeQuantity(first.Id, 0); window.UpdateCartCount();
 
         // Sizes
         foreach (var size in new[] { new Size(1040, 720), new Size(1920, 1080) })

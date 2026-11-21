@@ -11,7 +11,6 @@ namespace Replate.Desktop;
 
 internal sealed class ListingFeed
 {
-    internal const string OneRestaurantMessage = "Keranjang hanya berisi menu dari satu restoran. Kosongkan keranjang untuk memesan dari restoran lain.";
     internal const string StockMessage = "Jumlah di keranjang sudah mencapai stok yang tersedia.";
     private readonly MainWindow owner;
     private readonly DemoSession session;
@@ -107,9 +106,8 @@ internal sealed class ListingFeed
     // Cart
     internal string? Add(SurplusListing listing, int quantity = 1)
     {
-        var otherRestaurant = session.Cart.Items.Count > 0 && session.Cart.RestaurantId != listing.Menu.RestaurantId;
         try { session.AddToCart(listing, quantity); }
-        catch (InvalidOperationException) { return otherRestaurant ? OneRestaurantMessage : StockMessage; }
+        catch (InvalidOperationException) { return StockMessage; }
         Notice.Text = $"{listing.Menu.Name} ditambahkan ke keranjang.";
         Notice.Foreground = Ui.Green;
         Notice.IsVisible = true;

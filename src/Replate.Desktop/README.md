@@ -65,7 +65,7 @@ Akun demo tidak digandakan dan tidak menimpa akun yang sudah ada.
 | Pelanggan | Koleksi | Tautan Kembali ke Jelajah, judul koleksi dengan kalimat pengantar, kartu makanan terurut (harga atau batas pengambilan) atau tersaring per kategori |
 | Pelanggan | Hasil pencarian | Dibuka dengan Enter atau ikon kaca pembesar di bar atas; judul "Hasil untuk {kata}", semua kata harus cocok dengan nama menu, deskripsi, restoran, atau kategori |
 | Pelanggan | Pop up detail makanan | Dibuka dari tombol Tambah atau klik kartu makanan; foto, deskripsi, harga, stok, jadwal, pengatur jumlah porsi, tambah ke keranjang tanpa pindah halaman |
-| Pelanggan | Keranjang | Tautan Kembali ke Jelajah, kartu item dengan pengatur jumlah dan ikon hapus, kartu ringkasan (jumlah item, restoran, total) dengan tombol Pesan sekarang, keadaan kosong dengan tombol Jelajahi menu |
+| Pelanggan | Keranjang | Tautan Kembali ke Jelajah, kartu item dikelompokkan per restoran (nama, subtotal, tombol Pesan) dengan pengatur jumlah dan ikon hapus, pop up Konfirmasi pesanan (item, jendela pengambilan, total, Batal dan Pesan sekarang), keadaan kosong dengan tombol Jelajahi menu |
 | Pelanggan | Pesanan saya | Filter pesanan aktif, selesai, dibatalkan |
 | Pelanggan | Detail pesanan | Status, rincian, kode pengambilan, pembatalan |
 | Restoran | Dashboard | Periode 7/28 hari, surplus, penjualan selesai, rekomendasi |
@@ -81,7 +81,7 @@ Akun demo tidak digandakan dan tidak menimpa akun yang sudah ada.
 
 1. Di layar **Masuk**, masuk sebagai `pelanggan@replate.demo` / `replate123`.
 2. Klik **Tambah** pada kartu makanan, atur jumlah porsi di pop up, lalu
-   **Tambah ke keranjang**. Buka keranjang, lalu **Pesan sekarang**. Catat kode
+   **Tambah ke keranjang**. Buka keranjang, klik **Pesan** pada kelompok restoran, lalu **Pesan sekarang** di pop up konfirmasi. Catat kode
    pengambilan di detail pesanan.
 3. Lingkaran profil → **Keluar**, lalu masuk sebagai `dapur-bumi@replate.demo` / `replate123`
    (atau pemilik restoran tempat makanan dipesan) → **Pesanan** → **Lihat pesanan**.
@@ -106,6 +106,12 @@ belum dialokasikan. Prototipe memakai kategori makanan utama, roti & kue, vegeta
   Pada macOS, lokasi umumnya `~/Library/Application Support/Replate/state.json`.
 - Snapshot terpisah dari graf navigasi domain; penulisan berkas memakai penggantian atomik.
 - Keranjang, menu, penawaran, produksi, dan status pesanan bertahan setelah restart.
+- Satu keranjang boleh berisi menu dari beberapa restoran. Setiap restoran dipesan
+  terpisah: **Pesan** pada kelompok restoran membuka pop up konfirmasi, dan **Pesan
+  sekarang** membuat tepat satu pesanan untuk restoran itu dengan kode pengambilan
+  sendiri, hanya terlihat oleh pemilik restoran tersebut. Item restoran lain tetap di
+  keranjang. Pesanan disimpan ke PostgreSQL dalam satu transaksi; bila gagal, stok dan
+  keranjang tidak berubah dan tidak ada pesanan yang tersimpan.
 - Penawaran yang sudah melewati waktu pengambilan tidak muncul di marketplace.
   Item keranjang yang kedaluwarsa masih dapat dihapus, tetapi tidak dapat dipesan.
 - Stok dibatasi oleh surplus setelah penjualan reguler, porsi terselamatkan, dan
@@ -155,7 +161,7 @@ with `REPLATE_DB_CONNECTION_STRING` when the local PostgreSQL server requires au
 Alternatively, keep the connection string without a password and set only `REPLATE_DB_PASSWORD`.
 
 If PostgreSQL is unavailable, the application still opens and displays a warning; checkout reports the database
-failure instead of terminating the desktop process.
+failure instead of terminating the desktop process, and leaves stock, cart, and orders unchanged.
 
 Pemeriksaan state memakai berkas sementara terisolasi: muat ulang keranjang/status,
 timestamp, stok, pickup salah/benar, pembatalan berulang, kapasitas surplus, tanggal,

@@ -159,15 +159,15 @@ internal static class FoodDialogVerification
         Ensure(ColorOf(dialog.AddButton.Background) == Divider && ColorOf(dialog.AddButton.Foreground) == Muted, "Disabled Tambah ke keranjang looks disabled");
         dialog.Close(); await Settle();
 
-        // One restaurant
+        // Another restaurant
         var other = feed.Listings.First(l => l.Menu.RestaurantId != listing.Menu.RestaurantId);
         Click(feed.AddButton(other)); await Settle();
         dialog = window.Dialog!;
         Click(dialog.AddButton); await Settle();
-        Ensure(window.Dialog == dialog && dialog.ErrorText.IsVisible && dialog.ErrorText.Text == ListingFeed.OneRestaurantMessage &&
-            session.Cart.Items.Single().ListingId == listing.Id, "One restaurant per cart shows the message inside the open dialog without adding");
-        dialog.Close(); await Settle();
-        session.ChangeQuantity(listing.Id, 0); window.UpdateCartCount();
+        Ensure(window.Dialog is null && session.Cart.Items.Count == 2 && session.Cart.CountRestaurants() == 2 &&
+            session.Cart.Items.Single(i => i.ListingId == other.Id).Quantity == 1 && !dialog.ErrorText.IsVisible && string.IsNullOrEmpty(dialog.ErrorText.Text),
+            "A menu from another restaurant joins the same cart without a conflict message");
+        session.ChangeQuantity(other.Id, 0); session.ChangeQuantity(listing.Id, 0); window.UpdateCartCount();
 
         // Unavailable
         Click(feed.AddButton(other)); await Settle();
@@ -235,7 +235,7 @@ internal static class FoodDialogVerification
             }
             finally { frame.Close(); }
         }
-        Console.WriteLine("All Replate food dialog checks passed (open without adding, content, quantity and limit, adding, one restaurant, unavailable, Esc, X and scrim, focus trap and return, 1040x720 and 1920x1080).");
+        Console.WriteLine("All Replate food dialog checks passed (open without adding, content, quantity and limit, adding, another restaurant, unavailable, Esc, X and scrim, focus trap and return, 1040x720 and 1920x1080).");
     }
 
     private static bool Inside(FoodDialog dialog, IInputElement? element) => element is Visual visual && dialog.Card.IsVisualAncestorOf(visual);

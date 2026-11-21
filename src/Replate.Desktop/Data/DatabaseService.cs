@@ -4,7 +4,7 @@ using Replate.Domain.Entities;
 
 namespace Replate.Desktop.Data;
 
-internal sealed class DatabaseService
+internal sealed class DatabaseService : IOrderStore
 {
     private readonly string _connectionString = BuildConnectionString();
 

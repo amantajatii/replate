@@ -18,7 +18,7 @@ internal static class PickupCopyVerification
         async Task Settle() => await Task.Delay(350);
         var session = new DemoSession().AsCustomer();
         session.AddToCart(session.Listings[0], 1);
-        var order = session.Checkout();
+        var order = session.Checkout(session.Listings[0].Menu.RestaurantId);
         var window = new MainWindow(session) { Width = 1040, Height = 720 };
         try
         {
@@ -89,7 +89,7 @@ internal static class PickupCopyVerification
             order.PickupCode = savedCode;
             session.AsCustomer();
             session.AddToCart(session.Listings[0], 1);
-            var cancelled = session.Checkout(); session.CancelOrder(cancelled);
+            var cancelled = session.Checkout(session.Listings[0].Menu.RestaurantId); session.CancelOrder(cancelled);
             window.ShowOrder(cancelled, false);
             Ensure(((OrderDetailView)window.CurrentPage!).CopyCodeButton is null && ((OrderDetailView)window.CurrentPage!).PickupCodeText is null,
                 "Cancelled order keeps pickup code and copy button hidden");

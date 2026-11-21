@@ -1,4 +1,4 @@
-using Avalonia;
+﻿using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Animation.Easings;
 using Avalonia.Controls;
@@ -70,16 +70,52 @@ internal static class UiVerification
             for (var i = 0; i <= listing.Quantity; i++) market.Add(listing);
             Ensure(window.Session.Cart.Items.Single().Quantity == listing.Quantity, "Cart stock bound");
             window.ShowCart(); await Shot("cart");
-            var checkout = ((CartView)window.CurrentPage!).CheckoutButton!;
-            Ensure(checkout.Content as string == CartView.CheckoutLabel && checkout.IsEnabled, "Pesan sekarang is ready");
-            Click(checkout); await Settle();
-            Ensure(window.Session.LastOrder?.TotalPrice == 96000m, "Checkout total");
+            var cartPage = (CartView)window.CurrentPage!;
+            var orderButton = cartPage.Groups.Single().OrderButton;
+            Ensure(orderButton.Content as string == CartView.OrderLabel && orderButton.IsEnabled, "Pesan is ready");
+            var cartGroup = cartPage.Groups.Single();
+            Ensure(cartGroup.FooterRow.Children.Contains(orderButton) && !cartGroup.Header.GetVisualDescendants().Contains(orderButton) &&
+                !cartGroup.Header.GetVisualDescendants().Contains(cartGroup.TotalText) && cartGroup.TotalText.Text == DemoSession.Rupiah(96000m),
+                "Pesan and the total sit in the group footer, not in the heading");
+            Ensure(!cartPage.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text is { } text && (text.Contains("Ambil di restoran ini") || text.Contains("Reservasi tidak melibatkan pembayaran."))),
+                "Keranjang has no pickup note and no payment note");
+            orderButton.BringIntoView(); await Settle();
+            await PrimaryButton(orderButton, true, cartPage.ListScroll!, cartPage.ListScroll!, "Keranjang Pesan");
+            Click(orderButton); await Settle();
+            var confirmation = window.Confirmation ?? throw new InvalidOperationException("Pesan opens the confirmation");
+            Ensure(confirmation.TotalText.Text == DemoSession.Rupiah(96000m) && confirmation.Rows.Single().QuantityText.Text == $"{listing.Quantity} x {DemoSession.Rupiah(listing.RescuePrice)}",
+                "The confirmation shows the item and the total");
+            Click(confirmation.ConfirmButton); await Settle();
+            Ensure(window.Session.LastOrder!.TotalPrice == 96000m, "Checkout total");
             Ensure(listing.Quantity == 0 && window.Session.Cart.Items.Count == 0, "Stock reserved");
-            Ensure(window.CurrentPage is OrderDetailView && window.SuccessMessage == "Pesanan berhasil dibuat." && !window.TopBar.CartBadge.IsVisible,
-                "Pesan sekarang creates the order through the existing checkout, opens it and clears the badge");
+            Ensure(window.Confirmation is null && window.CurrentPage is OrderDetailView && window.SuccessMessage == CartView.CheckoutSuccess && !window.TopBar.CartBadge.IsVisible,
+                "Pesan sekarang creates the order, opens it and clears the badge when the cart becomes empty");
             await Shot("reservation");
             var order = window.Session.LastOrder!;
             window.ShowCustomerOrders(); await Shot("customer-orders");
+            var splitPicks = window.Session.Restaurants.Where(r => r.Name != "Dapur Bumi")
+                .Select(r => window.Session.Listings.First(l => l.Menu.RestaurantId == r.Id && l.IsAvailable(DateTime.UtcNow) && l.Menu.IsActive)).Take(2).ToList();
+            foreach (var pick in splitPicks) window.Session.AddToCart(pick, 1);
+            window.ShowCart(); await Settle();
+            var splitCart = (CartView)window.CurrentPage!;
+            Ensure(splitCart.Groups.Count == 2 && splitCart.Groups.All(g => g.OrderButton.IsEnabled), "Two restaurants show two groups, each with Pesan");
+            var splitOrders = new List<Replate.Domain.Entities.Order>();
+            Click(splitCart.Groups[0].OrderButton); await Settle();
+            Ensure(window.Confirmation?.RestaurantId == splitPicks[0].Menu.RestaurantId && window.Confirmation.Rows.Single().Item.ListingId == splitPicks[0].Id,
+                "Pesan opens the confirmation for that restaurant only");
+            Click(window.Confirmation!.ConfirmButton); await Settle();
+            splitOrders.Add(window.Session.LastOrder!);
+            var firstName = window.Session.FindRestaurant(splitPicks[0].Menu.RestaurantId)!.Name;
+            Ensure(window.CurrentPage is CartView { Groups.Count: 1 } rest && rest.Groups[0].RestaurantId == splitPicks[1].Menu.RestaurantId &&
+                window.SuccessMessage == CartView.RestaurantSuccess(firstName) && window.TopBar.CartBadgeText.Text == "1" &&
+                window.Session.Cart.Items.Single().ListingId == splitPicks[1].Id, "Ordering one restaurant keeps Keranjang open with the other restaurant and the notification");
+            Click(((CartView)window.CurrentPage!).Groups[0].OrderButton); await Settle();
+            Click(window.Confirmation!.ConfirmButton); await Settle();
+            splitOrders.Add(window.Session.LastOrder!);
+            Ensure(splitOrders.Select(o => o.RestaurantId).SequenceEqual(splitPicks.Select(p => p.Menu.RestaurantId)) && splitOrders.All(o => o.Items.Count == 1) &&
+                window.Session.Cart.Items.Count == 0, "Each restaurant is ordered separately as its own order");
+            Ensure(window.CurrentPage is OrderDetailView && window.SuccessMessage == CartView.CheckoutSuccess && !window.TopBar.CartBadge.IsVisible,
+                "Ordering the last restaurant opens its order with the existing message and an empty badge");
             await TopBarVerification.SignOut(window);
             await SignInWithForm(DemoAccounts.OwnerEmail("Dapur Bumi"));
             Ensure(window.Session.CurrentUser is Replate.Domain.Entities.RestaurantOwner && window.Session.Restaurant.Name == "Dapur Bumi" &&
@@ -157,7 +193,7 @@ internal static class UiVerification
             var cancellationListing = window.Session.Listings[1];
             window.Session.AsCustomer();
             window.Session.AddToCart(cancellationListing, 1);
-            var cancelledOrder = window.Session.Checkout();
+            var cancelledOrder = window.Session.Checkout(cancellationListing.Menu.RestaurantId);
             var reservedStock = cancellationListing.Quantity;
             window.ShowOrder(cancelledOrder, false); await Settle();
             Button FindButton(Control root, string text) => root.GetVisualDescendants().OfType<Button>()

@@ -1,8 +1,9 @@
-using Avalonia;
+﻿using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -16,7 +17,10 @@ internal static class CartVerification
     private static readonly Color Primary = Color.Parse("#245B43");
     private static readonly Color Divider = Color.Parse("#DDE3DA");
     private static readonly Color Muted = Color.Parse("#59675D");
+    private static readonly Color Ink = Color.Parse("#23382C");
     private static readonly Color Selection = Color.Parse("#E0E9DF");
+    private const string GroupNote = "Ambil di restoran ini";
+    private const string PaymentNote = "Reservasi tidak melibatkan pembayaran.";
 
     internal static async Task Run(MainWindow window)
     {
@@ -36,8 +40,8 @@ internal static class CartVerification
         // Empty
         window.ShowCart(); await Settle();
         var view = Page(window);
-        Ensure(view.EmptyState is { IsEffectivelyVisible: true } && view.Summary is null && view.CheckoutButton is null && view.Lines.Count == 0,
-            "An empty cart shows the empty state without a summary card");
+        Ensure(view.EmptyState is { IsEffectivelyVisible: true } && view.ListScroll is null && view.Groups.Count == 0 && view.Lines.Count == 0,
+            "An empty cart shows the empty state without groups or order buttons");
         var texts = Texts(view.EmptyState!);
         Ensure(texts.Contains(CartView.EmptyTitle) && texts.Contains(CartView.EmptyMessage) && view.EmptyButton?.Content as string == CartView.EmptyAction &&
             view.EmptyButton.Classes.Contains(Ui.PrimaryClass), "Empty state title, message and Jelajahi menu button");
@@ -58,12 +62,14 @@ internal static class CartVerification
             ColorOf(view.Subtitle.Foreground) == Muted, "Keranjang title at the Jelajahi Menu size with the muted restaurant line");
         Ensure(view.BackLink.Classes.Contains(CollectionView.BackLinkClass) && AutomationProperties.GetName(view.BackLink) == CollectionView.BackLabel &&
             ColorOf(view.BackLink.Foreground) == Primary && view.BackGlyph.StrokeThickness == 1.75, "Kembali ke Jelajah uses the collection back link");
-        var link = Rect(view.BackLink, window); var header = Rect(view.Header, window); var columns = Rect(view.Columns!, window);
-        Ensure(Math.Abs(header.Y - link.Bottom - Ui.Spacing.Related) <= 1 && Math.Abs(columns.Y - header.Bottom - Ui.Spacing.Related) <= 1,
+        var link = Rect(view.BackLink, window); var header = Rect(view.Header, window); var firstHeading = Rect(view.Groups[0].Header, window);
+        Ensure(Math.Abs(header.Y - link.Bottom - Ui.Spacing.Related) <= 1 && Math.Abs(firstHeading.Y - header.Bottom - Ui.Spacing.Related) <= 1,
             "Back link, header and content are 16 apart");
 
         // Items
-        Ensure(view.Lines.Count == 2 && view.ItemsPanel!.Children.Count == 2, "One card per cart item");
+        Ensure(view.Lines.Count == 2 && view.Groups.Count == 1 && view.ItemsPanel!.Children.Count == 1 && view.Groups[0].Lines.SequenceEqual(view.Lines),
+            "One restaurant group holding one card per cart item");
+        CheckGroup(window, view.Groups[0], restaurant.Name);
         foreach (var line in view.Lines)
         {
             var item = line.Item; var menu = item.Listing.Menu;
@@ -83,18 +89,17 @@ internal static class CartVerification
         var cards = view.Lines.Select(l => Rect(l.Card, window)).ToList();
         Ensure(Math.Abs(cards[1].Y - cards[0].Bottom - Ui.Spacing.Related) <= 1, "Item cards are 16 apart");
 
-        // Summary
-        var summary = view.Summary!;
-        Ensure(summary.Width == CartView.SummaryWidth && summary.CornerRadius == new CornerRadius(16) && ColorOf(summary.Background) == Colors.White &&
-            summary.BoxShadow.ToString() == MarketplaceView.CardShadow.ToString() && Texts(summary).Contains(CartView.SummaryTitle) && Texts(summary).Contains(CartView.PickupNote),
-            "Ringkasan pesanan card with title and pickup note");
+        // No summary
+        Ensure(!Texts(window).Contains("Ringkasan pesanan") && !window.GetVisualDescendants().OfType<Border>().Any(b => AutomationProperties.GetName(b) == "Ringkasan pesanan") &&
+            !window.GetVisualDescendants().OfType<Button>().Any(b => b.Content as string == CheckoutDialog.ConfirmLabel), "Keranjang has no summary card and no combined Pesan sekarang");
         CheckTotals(view, session, bar);
-        Ensure(view.RestaurantText!.Text == restaurant.Name, "Summary names the restaurant");
-        var checkout = view.CheckoutButton!;
-        Ensure(checkout.Content as string == CartView.CheckoutLabel && checkout.IsEnabled && checkout.Classes.Contains(Ui.PrimaryClass) &&
-            !checkout.Classes.Contains(Ui.CompactClass) && Math.Abs(checkout.Bounds.Width - (summary.Bounds.Width - 2 * CartView.SummaryPadding)) <= 1 &&
-            !view.CheckoutReason!.IsVisible, "Pesan sekarang is a full-width primary button, enabled without a reason");
-        Ensure(Math.Abs(Rect(summary, window).Y - cards[0].Y) <= 1, "The summary top lines up with the first item card");
+        CheckNoNotes(view);
+        Ensure(view.ListScroll!.Content == view.ItemsPanel && view.ItemsPanel!.Margin.Bottom == Ui.Spacing.Page,
+            "The list ends with the last group and keeps the page spacing at the bottom");
+        var order = view.Groups[0].OrderButton;
+        Ensure(order.Content as string == CartView.OrderLabel && order.IsEnabled && order.Classes.Contains(Ui.PrimaryClass) && order.Classes.Contains(Ui.CompactClass) &&
+            !view.Groups[0].ReasonText.IsVisible && AutomationProperties.GetName(order) == $"Pesan dari {restaurant.Name}", "Each group has a compact primary Pesan button");
+        await UiVerification.HoverShape(window, order, "Keranjang Pesan");
 
         // Quantity
         var line0 = view.Lines[0];
@@ -143,16 +148,45 @@ internal static class CartVerification
         var off = view.Lines[0];
         Ensure(off.PriceText.Text == CartView.UnavailableText && !off.Stepper.MinusButton.IsEnabled && !off.Stepper.PlusButton.IsEnabled && off.RemoveButton.IsEnabled,
             "An unavailable item keeps its card with the message, a disabled stepper and an active Hapus");
-        Ensure(!view.CheckoutButton!.IsEnabled && view.CheckoutReason!.IsVisible && view.CheckoutReason.Text == CartView.UnavailableReason,
-            "An unavailable item disables Pesan sekarang and gives the reason");
+        Ensure(!view.Groups[0].OrderButton.IsEnabled && view.Groups[0].ReasonText.IsVisible && view.Groups[0].ReasonText.Text == CartView.UnavailableReason &&
+            view.Groups[0].ReasonText.FontSize == 12 && ColorOf(view.Groups[0].ReasonText.Foreground) == Muted &&
+            ColorOf(view.Groups[0].OrderButton.Background) == Divider, "An unavailable item disables Pesan and gives the muted reason under the footer");
+        CheckReason(window, view.Groups[0]);
+        Click(view.Groups[0].OrderButton); await Settle();
+        Ensure(window.Confirmation is null, "A disabled Pesan opens no confirmation");
         first.Menu.Activate();
         var stock = first.Quantity;
         session.ChangeQuantity(first.Id, 2); first.UpdateStock(1);
         window.ShowCart(); await Settle();
         view = Page(window);
-        Ensure(!view.CheckoutButton!.IsEnabled && view.CheckoutReason!.Text == CartView.InvalidReason && !view.Lines[0].Stepper.PlusButton.IsEnabled,
-            "A cart above the stock disables Pesan sekarang with a short reason");
+        Ensure(!view.Groups[0].OrderButton.IsEnabled && view.Groups[0].ReasonText.Text == CartView.InvalidReason && !view.Lines[0].Stepper.PlusButton.IsEnabled,
+            "A group above the stock disables Pesan with a short reason");
         first.UpdateStock(stock); session.ChangeQuantity(first.Id, 1);
+
+        // Restaurant groups
+        var other = session.Listings.First(l => l.Menu.RestaurantId != restaurantId && l.IsAvailable(now) && l.Menu.IsActive && l.Quantity >= 2);
+        var otherRestaurant = session.FindRestaurant(other.Menu.RestaurantId)!;
+        session.AddToCart(other, 2);
+        window.ShowCart(); await Settle();
+        view = Page(window);
+        Ensure(view.Groups.Count == 2 && view.ItemsPanel!.Children.Count == 2 && view.Groups.Select(g => g.RestaurantId).SequenceEqual([restaurantId, other.Menu.RestaurantId]) &&
+            view.Groups[1].Lines.Single().Item.ListingId == other.Id, "Items are grouped per restaurant in the order they were first added");
+        CheckGroup(window, view.Groups[0], restaurant.Name);
+        CheckGroup(window, view.Groups[1], otherRestaurant.Name);
+        Ensure(view.Groups[1].TotalText.Text == DemoSession.Rupiah(other.RescuePrice * 2), "The second group shows its own total");
+        Ensure(Math.Abs(Rect(view.Groups[1].Panel, window).Y - Rect(view.Groups[0].Footer, window).Bottom - Ui.Spacing.Page) <= 1 &&
+            Math.Abs(Rect(view.Groups[1].Header, window).Y - Rect(view.Groups[0].Footer, window).Bottom - Ui.Spacing.Page) <= 1, "Restaurant groups are 32 apart, footer to next heading");
+        Ensure(view.Subtitle.IsVisible && view.Subtitle.Text == "2 restoran", "The header counts two restaurants");
+        CheckNoNotes(view);
+        CheckTotals(view, session, bar);
+        Ensure(view.Groups.All(g => g.OrderButton.IsEnabled && !g.ReasonText.IsVisible), "Both valid groups can be ordered");
+        other.Menu.Deactivate();
+        window.ShowCart(); await Settle();
+        view = Page(window);
+        Ensure(!view.Groups[1].OrderButton.IsEnabled && view.Groups[1].ReasonText.Text == CartView.UnavailableReason && view.Groups[1].ReasonText.IsVisible &&
+            view.Groups[0].OrderButton.IsEnabled && !view.Groups[0].ReasonText.IsVisible, "An unavailable item disables only the Pesan of its own group");
+        CheckReason(window, view.Groups[1]);
+        other.Menu.Activate();
 
         // Layout
         foreach (var listing in picks.Skip(1)) session.AddToCart(listing, 1);
@@ -163,43 +197,172 @@ internal static class CartVerification
             var market = Rect(window.Marketplace.Body, window);
             window.ShowCart(); await Settle();
             view = Page(window);
-            CheckLayout(window, view, market, $"{w:0}x{h:0}");
+            await CheckLayout(window, view, market, $"{w:0}x{h:0}");
         }
         Ensure(!Texts(window).Any(t => t.Contains('—')), "No em dash on Keranjang");
+
+        // Confirmation
+        window.ShowCart(); await Settle();
+        view = Page(window);
+        var otherGroup = view.Groups[1];
+        var cartItems = session.Cart.Items.Select(i => (i.ListingId, i.Quantity)).ToList();
+        var stocks = session.Cart.Items.Select(i => i.Listing.Quantity).ToList();
+        var ordersBefore = session.AllOrders.Count();
+        void Untouched(string label) => Ensure(session.Cart.Items.Select(i => (i.ListingId, i.Quantity)).SequenceEqual(cartItems) &&
+            session.Cart.Items.Select(i => i.Listing.Quantity).SequenceEqual(stocks) && session.AllOrders.Count() == ordersBefore, label);
+        async Task<CheckoutDialog> Open(CartView.Group group)
+        {
+            Click(group.OrderButton); await Settle();
+            return window.Confirmation ?? throw new InvalidOperationException("Pesan opens the confirmation");
+        }
+        var dialog = await Open(otherGroup);
+        var otherItems = session.Cart.FindGroup(otherRestaurant.Id)!.Items;
+        Ensure(dialog.RestaurantId == otherRestaurant.Id && dialog.Title.Text == CheckoutDialog.TitleText && dialog.Title.FontWeight >= FontWeight.Bold &&
+            dialog.QuestionTextBlock.Text == $"Pesan dari {otherRestaurant.Name}?", "The confirmation names the restaurant");
+        Ensure(dialog.Rows.Count == otherItems.Count && dialog.Rows.Zip(otherItems).All(p => p.First.NameText.Text == p.Second.Listing.Menu.Name &&
+            p.First.QuantityText.Text == $"{p.Second.Quantity} x {DemoSession.Rupiah(p.Second.UnitPrice)}" &&
+            p.First.SubtotalText.Text == DemoSession.Rupiah(p.Second.CalculateSubtotal())), "The confirmation lists only that restaurant's items with quantity, unit price and subtotal");
+        Ensure(dialog.TotalText.Text == DemoSession.Rupiah(other.RescuePrice * 2) && dialog.TotalText.FontWeight >= FontWeight.Bold && dialog.TotalText.FontSize >= 24 &&
+            dialog.PickupText.Text!.StartsWith("Pengambilan ") && !Texts(dialog).Any(t => t.Contains("Ambil langsung di restoran") || t.Contains(PaymentNote)),
+            "The confirmation shows the pickup window and the restaurant total without the pickup note");
+        Ensure(dialog.Card.Width == CheckoutDialog.CardWidth && dialog.Card.CornerRadius == new CornerRadius(16) && dialog.Card.BorderThickness == default &&
+            ColorOf(dialog.Card.Background) == Colors.White && dialog.Card.BoxShadow.ToString() == MarketplaceView.CardShadow.ToString() &&
+            dialog.ScrimLayer.Background == ModalDialog.Scrim, "The confirmation card uses the dialog surface, radius and shadow without a border over the scrim");
+        Ensure(dialog.CancelButton.Content as string == CheckoutDialog.CancelLabel && !dialog.CancelButton.Classes.Contains(Ui.PrimaryClass) &&
+            dialog.ConfirmButton.Content as string == CheckoutDialog.ConfirmLabel && dialog.ConfirmButton.Classes.Contains(Ui.PrimaryClass) && dialog.ConfirmButton.IsEnabled &&
+            Rect(dialog.CancelButton, window).Right <= Rect(dialog.ConfirmButton, window).X && !dialog.ErrorText.IsVisible,
+            "Batal and Pesan sekarang sit on the bottom row");
+        Ensure(!Texts(dialog).Any(t => t.Contains('—')), "No em dash in the confirmation");
+        Ensure(window.FocusManager?.GetFocusedElement() == dialog.CloseButton && KeyboardNavigation.GetTabNavigation(dialog.Card) == KeyboardNavigationMode.Cycle,
+            "Opening moves focus into the confirmation");
+        dialog.ConfirmButton.Focus(NavigationMethod.Tab);
+        for (var i = 0; i < 4; i++)
+        {
+            Press((Control)window.FocusManager!.GetFocusedElement()!, Avalonia.Input.Key.Tab); await Settle();
+            Ensure(InsideCard(dialog, window.FocusManager.GetFocusedElement()), $"Tab stays inside the confirmation ({window.FocusManager.GetFocusedElement()})");
+        }
+        for (var i = 0; i < 4; i++)
+        {
+            Press((Control)window.FocusManager!.GetFocusedElement()!, Avalonia.Input.Key.Tab, KeyModifiers.Shift); await Settle();
+            Ensure(InsideCard(dialog, window.FocusManager.GetFocusedElement()), "Shift+Tab stays inside the confirmation");
+        }
+        Click(dialog.CancelButton); await Settle();
+        Ensure(window.Confirmation is null && window.FocusManager?.GetFocusedElement() == otherGroup.OrderButton, "Batal closes and returns focus to Pesan");
+        Untouched("Batal creates no order");
+        dialog = await Open(otherGroup);
+        Press(dialog.CloseButton, Avalonia.Input.Key.Escape); await Settle();
+        Ensure(window.Confirmation is null && window.FocusManager?.GetFocusedElement() == otherGroup.OrderButton, "Esc closes and returns focus to Pesan");
+        Untouched("Esc creates no order");
+        dialog = await Open(otherGroup);
+        Click(dialog.CloseButton); await Settle();
+        Ensure(window.Confirmation is null, "X closes the confirmation");
+        Untouched("X creates no order");
+        dialog = await Open(otherGroup);
+        var corner = new Point(8, window.Bounds.Height - 8);
+        dialog.ScrimLayer.RaiseEvent(new PointerPressedEventArgs(dialog.ScrimLayer, new Pointer(126, PointerType.Mouse, true), window, corner, 0,
+            new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed), KeyModifiers.None));
+        await Settle();
+        Ensure(window.Confirmation is null && window.FocusManager?.GetFocusedElement() == otherGroup.OrderButton, "A click on the scrim closes the confirmation");
+        Untouched("The scrim creates no order");
+
+        // Confirmation failure
+        session.OrderStore = new GateStore(true);
+        dialog = await Open(otherGroup);
+        Click(dialog.ConfirmButton); await Settle();
+        Ensure(window.Confirmation == dialog && dialog.ErrorText.IsVisible && dialog.ErrorText.Text == CartView.CheckoutFailure && dialog.ConfirmButton.IsEnabled &&
+            Rect(dialog.ErrorText, window).Bottom <= Rect(dialog.ConfirmButton, window).Y + .5, "A failed save keeps the confirmation open with the existing message by the buttons");
+        Untouched("A failed save changes nothing");
+        dialog.Close(); await Settle();
+
+        // Confirmation order
+        var gate = new GateStore(false);
+        session.OrderStore = gate;
+        dialog = await Open(otherGroup);
+        Click(dialog.ConfirmButton); await Task.Delay(50);
+        Ensure(!dialog.ConfirmButton.IsEnabled && dialog.Submitting, "Pesan sekarang is disabled while the order is processed");
+        Click(dialog.ConfirmButton); await Task.Delay(50);
+        Ensure(gate.Calls == 1, "A second click does not order twice");
+        gate.Release(); await Settle();
+        session.OrderStore = null;
+        var placed = session.LastOrder!;
+        view = Page(window);
+        Ensure(window.Confirmation is null && session.AllOrders.Count() == ordersBefore + 1 && placed.RestaurantId == otherRestaurant.Id &&
+            placed.TotalPrice == other.RescuePrice * 2 && placed.Items.Single().ListingId == other.Id, "Pesan sekarang creates one order for that restaurant");
+        Ensure(other.Quantity == stocks[cartItems.FindIndex(c => c.ListingId == other.Id)] - 2 &&
+            session.Cart.Items.Select(i => (i.ListingId, i.Quantity)).SequenceEqual(cartItems.Where(c => c.ListingId != other.Id)) &&
+            session.Cart.Items.Select(i => i.Listing.Quantity).SequenceEqual(cartItems.Select((c, i) => (c, i)).Where(p => p.c.ListingId != other.Id).Select(p => stocks[p.i])),
+            "Only that restaurant's stock changes and the other items stay in the cart");
+        Ensure(view.Groups.Count == 1 && view.Groups[0].RestaurantId == restaurantId && window.SuccessMessage == CartView.RestaurantSuccess(otherRestaurant.Name) &&
+            bar.CartBadgeText.Text == session.Cart.Items.Sum(i => i.Quantity).ToString(), "Keranjang stays open with the remaining group, the badge and the notification");
+        session.CancelOrder(placed);
 
         // Restore
         window.Width = width; window.Height = height;
         Clear(session);
         foreach (var (listing, quantity) in saved) session.AddToCart(listing, quantity);
         window.ShowMarketplace(); await Settle();
-        Console.WriteLine("All Replate cart checks passed (header, item cards, summary, stepper and stock limit, Hapus, unavailable, empty state, 1040x720 and 1920x1080).");
+        Console.WriteLine("All Replate cart checks passed (header, restaurant groups with a divider and a footer total and Pesan, item cards, no summary card, stepper and stock limit, Hapus, unavailable per group, confirmation content, Batal, Esc, X and scrim, focus trap and return, failed save, single order per restaurant, empty state, 1040x720 and 1920x1080).");
     }
 
     // Checks
     private static void CheckTotals(CartView view, DemoSession session, CustomerTopBar bar)
     {
         var portions = session.Cart.Items.Sum(i => i.Quantity);
-        Ensure(view.CountText!.Text == $"{portions} porsi" && view.TotalText!.Text == DemoSession.Rupiah(session.Cart.Items.Sum(i => i.Quantity * i.UnitPrice)) &&
-            view.TotalText.FontWeight >= FontWeight.Bold && view.TotalText.FontSize > view.CountText.FontSize,
-            $"Summary shows {portions} porsi and the total ({view.CountText.Text}, {view.TotalText!.Text})");
         Ensure(bar.CartBadge.IsVisible == portions > 0 && (portions == 0 || bar.CartBadgeText.Text == portions.ToString()), "The cart badge follows the cart");
+        Ensure(view.Groups.All(g => g.TotalText.Text == DemoSession.Rupiah(g.Lines.Sum(l => l.Item.CalculateSubtotal()))), "Group footer totals follow the cart");
     }
 
-    private static void CheckLayout(MainWindow window, CartView view, Rect market, string size)
+    private static void CheckGroup(MainWindow window, CartView.Group group, string name)
+    {
+        Ensure(group.NameText.Text == name && group.NameText.FontSize == 18 && group.NameText.FontWeight >= FontWeight.Bold && ColorOf(group.NameText.Foreground) == Ink &&
+            group.Header.Children.SequenceEqual(new Control[] { group.NameText }) &&
+            !group.Header.GetVisualDescendants().Any(v => v == group.TotalText || v is Button),
+            $"{name}: heading holds only the bold name");
+        Ensure(group.Panel.Children.Count == group.Lines.Count + 3 && group.Panel.Children[^2] == group.DividerLine && group.Panel.Children[^1] == group.Footer &&
+            group.DividerLine.Height == 1 && group.DividerLine.BorderThickness == default && ColorOf(group.DividerLine.Background) == Divider,
+            $"{name}: a 1 px divider line and the footer follow the last item card");
+        Ensure(group.TotalLabel.Text == CartView.TotalLabelText && group.TotalLabel.FontSize == 12 && ColorOf(group.TotalLabel.Foreground) == Muted &&
+            group.TotalText.FontSize == CartView.TotalSize && group.TotalText.FontWeight >= FontWeight.Bold && ColorOf(group.TotalText.Foreground) == Primary &&
+            group.TotalText.Text == DemoSession.Rupiah(group.Lines.Sum(l => l.Item.CalculateSubtotal())),
+            $"{name}: footer total with the muted label above the large primary sum of the item subtotals");
+        Ensure(group.OrderButton.Content as string == CartView.OrderLabel && group.OrderButton.Classes.Contains(Ui.PrimaryClass) && group.OrderButton.Classes.Contains(Ui.CompactClass),
+            $"{name}: compact primary Pesan button");
+        var header = Rect(group.Header, window); var firstCard = Rect(group.Lines[0].Card, window); var lastCard = Rect(group.Lines[^1].Card, window);
+        var line = Rect(group.DividerLine, window); var row = Rect(group.FooterRow, window);
+        var total = Rect(group.TotalText, window); var block = Rect(group.TotalBlock, window); var button = Rect(group.OrderButton, window);
+        Ensure(Math.Abs(firstCard.Y - header.Bottom - Ui.Spacing.Related) <= 1 && Math.Abs(header.X - firstCard.X) <= 1,
+            $"{name}: heading aligned with its cards, 16 above the first card");
+        Ensure(Math.Abs(line.Y - lastCard.Bottom - Ui.Spacing.Related) <= 1 && line.Height <= 2 &&
+            Math.Abs(line.X - firstCard.X) <= 1 && Math.Abs(line.Right - firstCard.Right) <= 1 && Math.Abs(row.Y - line.Bottom - Ui.Spacing.Related) <= 1,
+            $"{name}: divider 16 under the last card, as wide as the group, footer 16 under it");
+        Ensure(Math.Abs(total.X - firstCard.X) <= 1 && Math.Abs(button.Right - firstCard.Right) <= 1 && button.X >= block.Right - .5 &&
+            Math.Abs(button.Center.Y - block.Center.Y) <= 1 && button.Height >= 32,
+            $"{name}: total on the left edge, Pesan on the right edge, vertically centered with the total ({total}, {button})");
+    }
+
+    private static void CheckNoNotes(CartView view) =>
+        Ensure(!Texts(view).Any(t => t.Contains(GroupNote) || t.Contains(PaymentNote)), "Keranjang has no pickup note and no payment note");
+
+    private static void CheckReason(MainWindow window, CartView.Group group)
+    {
+        var reason = Rect(group.ReasonText, window); var row = Rect(group.FooterRow, window);
+        Ensure(group.ReasonText.IsVisible && reason.Y >= row.Bottom - .5 && Math.Abs(reason.X - row.X) <= 1 && group.Footer.Children.IndexOf(group.ReasonText) == 1,
+            $"{group.NameText.Text}: the reason sits left-aligned under the footer row");
+    }
+
+    private static async Task CheckLayout(MainWindow window, CartView view, Rect market, string size)
     {
         var body = Rect(view.Body, window);
-        var summary = Rect(view.Summary!, window);
         var scroll = view.ListScroll!;
         Ensure(Math.Abs(body.X - market.X) <= 1 && Math.Abs(body.Right - market.Right) <= 1, $"{size}: Keranjang edges line up with Jelajah ({body} vs {market})");
-        Ensure(Math.Abs(summary.Right - body.Right) <= 1 && summary.Bottom <= window.Bounds.Height + .5 && summary.Width == CartView.SummaryWidth,
-            $"{size}: the summary sits at the right edge, fully visible ({summary})");
+        Ensure(!window.GetVisualDescendants().OfType<Border>().Any(b => AutomationProperties.GetName(b) == "Ringkasan pesanan"), $"{size}: no summary card");
         Ensure(scroll.Extent.Width <= scroll.Viewport.Width + .5 && window.GetVisualDescendants().OfType<ScrollViewer>().Where(s => s.IsEffectivelyVisible)
             .All(s => s.Extent.Width <= s.Viewport.Width + .5), $"{size}: no horizontal scrolling");
         foreach (var line in view.Lines)
         {
             var card = Rect(line.Card, window);
             if (card.Bottom > Rect(scroll, window).Bottom) continue;
-            Ensure(Math.Abs(card.X - body.X) <= 1 && card.Right <= summary.X - Ui.Spacing.Section + 1, $"{size}: {line.NameText.Text} card fills the left column without touching the summary");
+            Ensure(Math.Abs(card.X - body.X) <= 1 && Math.Abs(card.Right - body.Right) <= 1, $"{size}: {line.NameText.Text} card fills the content width");
             var parts = new Control[] { line.Photo, line.NameText, line.MetaText, line.PickupText, line.PriceText, line.Stepper, line.SubtotalText, line.RemoveButton }
                 .Select(c => (c, Rect(c, window))).ToList();
             Ensure(parts.All(p => Inside(p.Item2, card)), $"{size}: {line.NameText.Text} content stays inside its card");
@@ -207,8 +370,34 @@ internal static class CartVerification
             for (var i = 1; i < columns.Length; i++)
                 Ensure(columns[i].X >= columns[i - 1].Right - .5, $"{size}: {line.NameText.Text} columns do not overlap ({columns[i - 1]} and {columns[i]})");
         }
-        Ensure(Rect(view.Header, window).Bottom <= Rect(view.Columns!, window).Y + .5 && Rect(view.BackLink, window).Bottom <= Rect(view.Header, window).Y + .5,
+        foreach (var group in view.Groups)
+        {
+            var header = Rect(group.Header, window);
+            if (header.Bottom <= Rect(scroll, window).Bottom)
+                Ensure(Math.Abs(header.X - body.X) <= 1 && Math.Abs(header.Right - body.Right) <= 1 &&
+                    Inside(Rect(group.NameText, window), header), $"{size}: {group.NameText.Text} heading spans the content width without overlap");
+            group.Footer.BringIntoView(); await Settle();
+            var row = Rect(group.FooterRow, window); var visible = Rect(scroll, window);
+            Ensure(Inside(row, visible) && Math.Abs(row.X - body.X) <= 1 && Math.Abs(row.Right - body.Right) <= 1 &&
+                new Control[] { group.TotalLabel, group.TotalText, group.OrderButton }.All(c => Inside(Rect(c, window), row)) &&
+                Rect(group.OrderButton, window).X >= Rect(group.TotalBlock, window).Right - .5, $"{size}: {group.NameText.Text} footer is fully visible without overlap");
+            CheckGroup(window, group, group.NameText.Text!);
+        }
+        scroll.Offset = default; await Settle();
+        Ensure(Rect(view.Header, window).Bottom <= Rect(view.Groups[0].Header, window).Y + .5 && Rect(view.BackLink, window).Bottom <= Rect(view.Header, window).Y + .5,
             $"{size}: header parts do not overlap");
+
+        var group0 = view.Groups[0];
+        group0.OrderButton.BringIntoView(); await Settle();
+        Click(group0.OrderButton); await Settle();
+        var dialog = window.Confirmation ?? throw new InvalidOperationException($"{size}: Pesan opens the confirmation");
+        var card0 = Rect(dialog.Card, window); var bounds = window.Bounds;
+        Ensure(card0.X >= ModalDialog.Inset - .5 && card0.Y >= ModalDialog.Inset - .5 && card0.Right <= bounds.Width - ModalDialog.Inset + .5 &&
+            card0.Bottom <= bounds.Height - ModalDialog.Inset + .5 && Math.Abs(card0.X - (bounds.Width - card0.Right)) < 1 && Math.Abs(card0.Y - (bounds.Height - card0.Bottom)) < 1 &&
+            Math.Abs(card0.Width - CheckoutDialog.CardWidth) < .5, $"{size}: the confirmation is centered and fits inside the window ({card0})");
+        Ensure(Inside(Rect(dialog.ConfirmButton, window), card0) && Inside(Rect(dialog.CancelButton, window), card0) &&
+            dialog.Scroll.Extent.Width <= dialog.Scroll.Viewport.Width + .5, $"{size}: the confirmation buttons are not cut off and nothing scrolls sideways");
+        dialog.Close(); await Settle();
         Rect Union(CartView.Line line) => new[] { line.NameText, line.MetaText, line.PickupText, line.PriceText }.Select(t => Rect(t, window)).Aggregate((a, b) => a.Union(b));
     }
 
@@ -238,9 +427,28 @@ internal static class CartVerification
 
     private static void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
+    private static void Press(Control target, Key key, KeyModifiers modifiers = KeyModifiers.None) =>
+        target.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = key, KeyModifiers = modifiers, Source = target });
+
+    private static bool InsideCard(ModalDialog dialog, IInputElement? element) => element is Visual visual && dialog.Card.IsVisualAncestorOf(visual);
+
     private static async Task Settle()
     { await Task.Delay(250); await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Render); }
 
     private static void Ensure(bool condition, string message)
     { if (!condition) throw new InvalidOperationException(message); }
+
+    private sealed class GateStore(bool fail) : Data.IOrderStore
+    {
+        private readonly TaskCompletionSource gate = new();
+        internal int Calls { get; private set; }
+
+        public Task SaveOrderAsync(Order order)
+        {
+            Calls++;
+            return fail ? Task.FromException(new InvalidOperationException("PostgreSQL tidak tersedia.")) : gate.Task;
+        }
+
+        internal void Release() => gate.SetResult();
+    }
 }

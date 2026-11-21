@@ -16,16 +16,19 @@ namespace Replate.Desktop;
 public sealed class CartView : UserControl
 {
     internal const string TitleText = "Keranjang";
-    internal const double SummaryWidth = 340;
     internal const double PhotoSize = 72;
     internal const double CardPadding = 20;
-    internal const double SummaryPadding = 24;
     internal const double ShadowInset = 24;
     internal const double RemoveSize = 36;
     internal const string RemoveClass = "cart-remove";
-    internal const string SummaryTitle = "Ringkasan pesanan";
-    internal const string CheckoutLabel = "Pesan sekarang";
-    internal const string PickupNote = "Ambil langsung di restoran. Reservasi tidak melibatkan pembayaran.";
+    internal const string OrderLabel = "Pesan";
+    internal const string TotalLabelText = "Total";
+    internal const double TotalSize = 28;
+    internal const string MissingRestaurant = "Restoran tidak ditemukan";
+    internal static string SubtitleText(int restaurants, string? name) => restaurants > 1 ? $"{restaurants} restoran" : $"Pesanan dari {name}";
+    internal const string CheckoutSuccess = "Pesanan berhasil dibuat.";
+    internal static string RestaurantSuccess(string restaurant) => $"Pesanan dari {restaurant} berhasil dibuat.";
+    internal const string CheckoutFailure = "Pesanan belum dapat dibuat. Periksa koneksi PostgreSQL lalu coba lagi.";
     internal const string UnavailableText = "Penawaran tidak tersedia. Hapus untuk melanjutkan.";
     internal const string UnavailableReason = "Hapus penawaran yang tidak tersedia untuk melanjutkan.";
     internal const string InvalidReason = "Periksa jumlah pesanan untuk melanjutkan.";
@@ -38,25 +41,20 @@ public sealed class CartView : UserControl
     private readonly MainWindow host;
     private readonly DemoSession session;
     private readonly List<Line> lines = [];
+    private readonly List<Group> groups = [];
     internal Button BackLink { get; }
     internal Path BackGlyph { get; }
     internal TextBlock Title { get; }
     internal TextBlock Subtitle { get; }
     internal StackPanel Header { get; }
     internal Grid Body { get; }
-    internal Grid? Columns { get; }
     internal StackPanel? ItemsPanel { get; }
     internal ScrollViewer? ListScroll { get; }
-    internal Border? Summary { get; }
-    internal TextBlock? CountText { get; }
-    internal TextBlock? RestaurantText { get; }
-    internal TextBlock? TotalText { get; }
-    internal TextBlock? CheckoutReason { get; }
-    internal Button? CheckoutButton { get; }
     internal StackPanel? EmptyState { get; }
     internal Path? EmptyIcon { get; }
     internal Button? EmptyButton { get; }
     internal IReadOnlyList<Line> Lines => lines;
+    internal IReadOnlyList<Group> Groups => groups;
 
     internal CartView(MainWindow host, DemoSession session)
     {
@@ -71,9 +69,11 @@ public sealed class CartView : UserControl
         // Header
         Title = Ui.Text(TitleText, MarketplaceView.TitleSize, Ui.Ink, true);
         Title.FontWeight = FontWeight.Bold; Title.TextWrapping = TextWrapping.NoWrap; Title.HorizontalAlignment = HorizontalAlignment.Left;
-        var restaurant = session.FindRestaurant(session.Cart.RestaurantId);
-        Subtitle = Ui.Text(restaurant is null ? "" : $"Pesanan dari {restaurant.Name}", 14, Ui.Muted);
-        Subtitle.IsVisible = session.Cart.Items.Count > 0 && restaurant is not null;
+        var cartGroups = session.Cart.GroupByRestaurant();
+        var restaurantCount = cartGroups.Count;
+        var firstName = restaurantCount == 1 ? session.FindRestaurant(cartGroups[0].RestaurantId)?.Name : null;
+        Subtitle = Ui.Text(restaurantCount > 1 || firstName is not null ? SubtitleText(restaurantCount, firstName) : "", 14, Ui.Muted);
+        Subtitle.IsVisible = restaurantCount > 1 || firstName is not null;
         Header = Ui.Stack(CollectionView.IntroGap, Title, Subtitle);
 
         // Layout
@@ -108,51 +108,18 @@ public sealed class CartView : UserControl
         }
 
         // Items
-        ItemsPanel = Ui.Stack(Ui.Spacing.Related);
-        ItemsPanel.Margin = new Thickness(ShadowInset, 8, ShadowInset, Ui.Spacing.Page);
-        foreach (var item in session.Cart.Items)
+        ItemsPanel = Ui.Stack(Ui.Spacing.Page);
+        foreach (var cartGroup in cartGroups)
         {
-            var line = new Line(this, item);
-            lines.Add(line);
-            ItemsPanel.Children.Add(line.Card);
+            var group = new Group(this, cartGroup);
+            groups.Add(group);
+            lines.AddRange(group.Lines);
+            ItemsPanel.Children.Add(group.Panel);
         }
+        ItemsPanel.Margin = new Thickness(ShadowInset, 8, ShadowInset, Ui.Spacing.Page);
         ListScroll = Ui.Scroll(ItemsPanel);
         ListScroll.Margin = new Thickness(-ShadowInset, -8, -ShadowInset, 0);
-
-        // Summary
-        CountText = Value("");
-        RestaurantText = Value(restaurant?.Name ?? "");
-        RestaurantText.TextAlignment = TextAlignment.Right;
-        TotalText = Ui.Text("", 24, Ui.Green, true);
-        TotalText.FontWeight = FontWeight.Bold; TotalText.HorizontalAlignment = HorizontalAlignment.Right;
-        CheckoutButton = Ui.FullWidth(Ui.Button(CheckoutLabel, async () =>
-        {
-            await host.RunAsync(async () =>
-            {
-                await session.CheckoutAsync();
-                host.ShowOrder(session.LastOrder!, false);
-            }, "Pesanan berhasil dibuat.", "Pesanan belum dapat dibuat. Periksa koneksi PostgreSQL lalu coba lagi.");
-        }, true));
-        CheckoutButton.HorizontalContentAlignment = HorizontalAlignment.Center;
-        CheckoutReason = Ui.Text("", 12, Ui.Muted);
-        var total = Ui.Columns("Auto,*", Ui.Text("Total", 16, Ui.Ink, true), TotalText);
-        var summary = Ui.Stack(Ui.Spacing.Related,
-            Ui.Text(SummaryTitle, 20, Ui.Ink, true),
-            Ui.Stack(12, Row("Jumlah item", CountText), Row("Restoran", RestaurantText)),
-            Ui.Divider(), total,
-            Ui.Text(PickupNote, 12, Ui.Muted),
-            Ui.Stack(8, CheckoutButton, CheckoutReason));
-        Summary = new Border
-        {
-            Child = summary, Width = SummaryWidth, Padding = new Thickness(SummaryPadding), VerticalAlignment = VerticalAlignment.Top,
-            Background = Brushes.White, CornerRadius = new CornerRadius(16), BoxShadow = MarketplaceView.CardShadow
-        };
-        AutomationProperties.SetName(Summary, SummaryTitle);
-
-        Columns = new Grid { ColumnDefinitions = ColumnDefinitions.Parse($"*,{SummaryWidth}"), ColumnSpacing = Ui.Spacing.Section };
-        Columns.Children.Add(ListScroll);
-        Grid.SetColumn(Summary, 1); Columns.Children.Add(Summary);
-        Grid.SetRow(Columns, 2); Body.Children.Add(Columns);
+        Grid.SetRow(ListScroll, 2); Body.Children.Add(ListScroll);
         Refresh();
     }
 
@@ -161,13 +128,7 @@ public sealed class CartView : UserControl
     {
         var now = DateTime.UtcNow;
         foreach (var line in lines) line.Update(now);
-        var cart = session.Cart;
-        CountText!.Text = $"{cart.Items.Sum(i => i.Quantity)} porsi";
-        TotalText!.Text = DemoSession.Rupiah(cart.CalculateSubtotal());
-        var unavailable = cart.Items.Any(i => !Available(i, now));
-        CheckoutButton!.IsEnabled = cart.ValidateCart(now) && cart.Items.All(i => i.Listing.Menu.IsActive);
-        CheckoutReason!.Text = CheckoutButton.IsEnabled ? "" : unavailable ? UnavailableReason : InvalidReason;
-        CheckoutReason.IsVisible = !CheckoutButton.IsEnabled;
+        foreach (var group in groups) group.Update(now);
     }
 
     internal static bool Available(CartItem item, DateTime now) => item.Listing.IsAvailable(now) && item.Listing.Menu.IsActive;
@@ -175,24 +136,97 @@ public sealed class CartView : UserControl
     private void Change(CartItem item, int quantity) =>
         host.Run(() => session.ChangeQuantity(item.ListingId, quantity), quantity == 0 ? host.ShowCart : Refresh);
 
+    // Checkout
+    internal void Order(Group group)
+    {
+        Refresh();
+        if (!group.OrderButton.IsEnabled || session.Cart.FindGroup(group.RestaurantId) is not { } cartGroup) return;
+        var method = group.OrderButton.Classes.Contains(":focus-visible") ? NavigationMethod.Tab : NavigationMethod.Pointer;
+        var name = group.NameText.Text ?? "";
+        host.ShowCheckoutDialog(cartGroup, () => Submit(group.RestaurantId, name), method == NavigationMethod.Tab,
+            () => group.OrderButton.Focus(method));
+    }
+
+    private async Task<string?> Submit(Guid restaurantId, string restaurant)
+    {
+        Order order;
+        try { order = await session.CheckoutAsync(restaurantId); }
+        catch (Exception) { return CheckoutFailure; }
+        if (session.Cart.Items.Count == 0)
+        {
+            host.ShowOrder(order, false);
+            host.ShowSuccess(CheckoutSuccess);
+        }
+        else
+        {
+            host.ShowCart();
+            host.ShowSuccess(RestaurantSuccess(restaurant));
+        }
+        return null;
+    }
+
     // Controls
-    private static TextBlock Value(string text)
-    {
-        var value = Ui.Text(text, 14, Ui.Ink, true);
-        value.HorizontalAlignment = HorizontalAlignment.Right;
-        return value;
-    }
-
-    private static Grid Row(string label, TextBlock value)
-    {
-        var row = Ui.Columns("Auto,*", Ui.Text(label, 14, Ui.Muted), value);
-        value.Margin = new Thickness(Ui.Spacing.Related, 0, 0, 0);
-        return row;
-    }
-
     private void AddStyles()
     {
         Styles.Add(new Style(x => x.OfType<Button>().Class(RemoveClass).Not(y => y.Class(":pointerover")).Not(y => y.Class(":pressed"))) { Setters = { new Setter(TemplatedControl.ForegroundProperty, Ui.Muted) } });
+    }
+
+    // Restaurant group
+    internal sealed class Group
+    {
+        private readonly CartRestaurantGroup source;
+        internal Guid RestaurantId => source.RestaurantId;
+        internal IReadOnlyList<CartItem> Items => source.Items;
+        internal StackPanel Panel { get; }
+        internal StackPanel Header { get; }
+        internal TextBlock NameText { get; }
+        internal Border DividerLine { get; }
+        internal StackPanel Footer { get; }
+        internal Grid FooterRow { get; }
+        internal StackPanel TotalBlock { get; }
+        internal TextBlock TotalLabel { get; }
+        internal TextBlock TotalText { get; }
+        internal TextBlock ReasonText { get; }
+        internal Button OrderButton { get; }
+        internal IReadOnlyList<Line> Lines { get; }
+
+        internal Group(CartView view, CartRestaurantGroup group)
+        {
+            source = group;
+
+            // Heading
+            NameText = Ui.Text(view.session.FindRestaurant(group.RestaurantId)?.Name ?? MissingRestaurant, 18, Ui.Ink, true);
+            NameText.FontWeight = FontWeight.Bold;
+            Header = Ui.Stack(children: [NameText]);
+            AutomationProperties.SetName(Header, NameText.Text);
+
+            // Footer
+            DividerLine = Ui.Divider();
+            TotalLabel = Ui.Text(TotalLabelText, 12, Ui.Muted);
+            TotalText = Ui.Text("", TotalSize, Ui.Green, true);
+            TotalText.FontWeight = FontWeight.Bold; TotalText.TextWrapping = TextWrapping.NoWrap;
+            TotalBlock = Ui.Stack(4, TotalLabel, TotalText);
+            TotalBlock.VerticalAlignment = VerticalAlignment.Center; TotalBlock.HorizontalAlignment = HorizontalAlignment.Left;
+            OrderButton = Ui.Button(OrderLabel, () => view.Order(this), true);
+            OrderButton.VerticalAlignment = VerticalAlignment.Center; OrderButton.HorizontalAlignment = HorizontalAlignment.Right;
+            AutomationProperties.SetName(OrderButton, $"Pesan dari {NameText.Text}");
+            FooterRow = Ui.Columns("*,Auto", TotalBlock, OrderButton);
+            ReasonText = Ui.Text("", 12, Ui.Muted);
+            ReasonText.HorizontalAlignment = HorizontalAlignment.Left;
+            Footer = Ui.Stack(8, FooterRow, ReasonText);
+
+            Lines = group.Items.Select(item => new Line(view, item)).ToList();
+            Panel = Ui.Stack(Ui.Spacing.Related, [Header, .. Lines.Select(line => (Control)line.Card), DividerLine, Footer]);
+        }
+
+        internal void Update(DateTime now)
+        {
+            TotalText.Text = DemoSession.Rupiah(source.CalculateSubtotal());
+            var valid = source.Validate(now);
+            QuantityStepper.SetEnabled(OrderButton, valid);
+            ReasonText.Text = valid ? "" : Items.Any(i => !Available(i, now)) ? UnavailableReason : InvalidReason;
+            ReasonText.IsVisible = !valid;
+        }
     }
 
     // Item card

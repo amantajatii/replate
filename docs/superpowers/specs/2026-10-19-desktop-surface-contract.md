@@ -240,7 +240,7 @@ FOOD DIALOG (customer only, `FoodDialog.cs`, opened by `MainWindow.ShowFoodDialo
 - Any navigation (Render or a public page) dismisses an open dialog.
 - Verified by `--verify-ui` (FoodDialogVerification): Tambah opens without adding;
   content; plus/minus and total; limit and disabled plus; adding the chosen quantity
-  and closing; one restaurant message inside the dialog; expired offer; Esc, X and
+  and closing; a menu from another restaurant joins the same cart; expired offer; Esc, X and
   scrim close without adding; no state write on open/close; focus trap and return
   (pointer and keyboard); collection and search pages; centered and not cut off at
   1040x720 and 1920x1080.
@@ -251,11 +251,25 @@ customer role guard):
   aligned with Jelajah). Rhythm from `Ui.Spacing`: 24 from the top bar, then 16 between
   the "Kembali ke Jelajah" link (the collection page link, `CollectionView.CreateBackLink`),
   the header ("Keranjang", 32 bold ink; "Pesanan dari {restoran}" 14 muted, 8 under it,
-  only with items) and the content.
-- Two columns, 24 apart: item cards on the left (rest of the width, vertical scroll
-  only, 24 inner inset so shadows are not cut), the summary card on the right (340, top
-  aligned with the first card, not scrolled, so it stays put while the list scrolls).
-  Both columns stay side by side at 1040x720; no horizontal scroll.
+  only with items; "{n} restoran" when the cart holds several restaurants) and the
+  content.
+- Restaurant groups (`CartView.Group`, from `Cart.GroupByRestaurant`): one per
+  restaurant in the order its first item was added, 32 apart (`Ui.Spacing.Page`, from
+  one group's footer to the next heading). Each group: a heading aligned with the card
+  edges (only the restaurant name 18 bold ink; no subtotal, no button), its item cards
+  16 under it and 16 apart, then 16
+  under the last card a 1 px `divider` line as wide as the group, and 16 under the line
+  the footer row: on the left, aligned with the card edge, "Total" (12 muted) above the
+  group total (28 bold primary, Rupiah); on the right, aligned with the card edge and
+  vertically centered with the total, the compact primary "Pesan" button (standard
+  height). When the group is not valid (`CartRestaurantGroup.Validate()` fails) only its
+  own Pesan is disabled (divider fill, muted text) and a 12 muted line, 8 under the
+  footer row and aligned left, reads "Hapus penawaran yang tidak tersedia untuk
+  melanjutkan." for unavailable items, otherwise "Periksa jumlah pesanan untuk
+  melanjutkan.".
+- One column: the groups use the full content width (edges aligned with Jelajah),
+  vertical scroll only, 24 inner inset so shadows are not cut; the list ends 32 under
+  the last group (`Ui.Spacing.Page`). No summary card; no horizontal scroll at 1040x720.
 - Item card (white, radius 16, card shadow, no border, padding 20, 16 apart): photo or
   placeholder (72), name (18 semibold), "Restoran · Kategori", "Pengambilan
   HH:mm–HH:mm", "Rp… / porsi"; the shared `QuantityStepper` (same component as the food
@@ -264,28 +278,46 @@ customer role guard):
   muted at rest, a selection circle with a primary icon on hover, no box, shadow or
   scale, name and tooltip "Hapus {menu}", shared focus ring).
   Quantity changes go through `DemoSession.ChangeQuantity` and update the subtotal, the
-  summary and the badge in place; Hapus calls `ChangeQuantity(id, 0)` and rebuilds.
+  group total, the Pesan state and the badge in place; Hapus calls `ChangeQuantity(id, 0)` and rebuilds.
 - Unavailable item (expired, sold out, inactive menu): the card stays, the unit price
   line reads "Penawaran tidak tersedia. Hapus untuk melanjutkan.", the stepper is
   disabled, Hapus stays active.
-- Summary card (white, radius 16, card shadow, padding 24): "Ringkasan pesanan";
-  "Jumlah item" (N porsi); "Restoran"; divider; "Total" (24 bold primary, Rupiah);
-  "Ambil langsung di restoran. Reservasi tidak melibatkan pembayaran."; full-width
-  primary "Pesan sekarang". Disabled when `Cart.ValidateCart()` fails or a menu is
-  inactive, with a 12 muted reason under it: "Hapus penawaran yang tidak tersedia untuk
-  melanjutkan." for unavailable items, otherwise "Periksa jumlah pesanan untuk
-  melanjutkan.". It calls the existing `CheckoutAsync` through `MainWindow.RunAsync`
-  with the same success and failure messages and opens the new order.
+- Checkout confirmation (`CheckoutDialog.cs`, on the shared `ModalDialog` overlay with
+  the food dialog: scrim, centered white card radius 16, card shadow, no border, width
+  520, at least 32 from every window edge; Esc, a click on the scrim, the X, or "Batal"
+  closes it; Tab cycles inside the card; closing returns focus to the Pesan that opened
+  it). Content, 16 apart: "Konfirmasi pesanan" (22 bold) with the X; "Pesan dari
+  {restoran}?"; one row per item of that restaurant only (menu name, "{jumlah} x
+  {harga satuan}" 13 muted, item subtotal right); "Pengambilan HH:mm–HH:mm"; divider;
+  "Total" with the group total (24 bold primary, Rupiah); bottom row: secondary "Batal" and
+  primary "Pesan sekarang". Pesan sekarang calls `DemoSession.CheckoutAsync(restaurantId)`
+  and is disabled while it runs (no double order). On success the pop up closes: with
+  items left Keranjang is rebuilt (groups, badge) with "Pesanan dari {restoran} berhasil
+  dibuat."; with an empty cart the new order opens with "Pesanan berhasil dibuat.". On
+  failure the pop up stays open with "Pesanan belum dapat dibuat. Periksa koneksi
+  PostgreSQL lalu coba lagi." above the buttons and nothing changes.
 - Empty cart: back link and title only, then centered: 72 primary line cart icon,
   "Keranjangmu masih kosong", "Mulai jelajahi menu dan selamatkan makanan hari ini." and
-  the primary "Jelajahi menu" button (opens Jelajah). No summary card.
-- Verified by `--verify-ui` (CartVerification): header, back link and rhythm; item card
-  content and style; summary count, restaurant and total; plus and minus update the
-  subtotal, total and badge; plus disabled at the stock limit; Hapus; unavailable item
-  disables Pesan sekarang with the reason; invalid quantity reason; empty state and its
-  button; edges aligned with Jelajah, no overlap and no horizontal scroll at 1040x720 and
-  1920x1080. UiVerification checks that Pesan sekarang creates the order through the
-  existing checkout.
+  the primary "Jelajahi menu" button (opens Jelajah). No groups.
+- Verified by `--verify-ui` (CartVerification): header, back link and rhythm; restaurant
+  groups in first-added order, 32 apart from footer to heading; a heading with only the
+  name and note, 16 above the cards; a divider 16 under the last card as wide as the
+  group and the footer 16 under it, with the large primary total (the sum of the item
+  subtotals) on the left card edge and Pesan on the right card edge, vertically
+  centered; the reason left under the footer; every footer fully visible; no summary card; the payment note under the list; item card content and
+  style; plus and minus update the subtotal, group total and badge; plus disabled at
+  the stock limit; Hapus; an unavailable item disables only the Pesan of its group with
+  the reason; invalid quantity reason; the confirmation lists only that restaurant's
+  items and total; Batal, Esc, X and the scrim close it without an order; focus trapped
+  and returned to Pesan; a failed save keeps it open with the message; Pesan sekarang is
+  disabled while saving and creates one order, reduces only that restaurant's stock and
+  keeps the other items with the notification; empty state and its button; edges
+  aligned with Jelajah, no overlap, no horizontal scroll and the confirmation fully
+  visible at 1040x720 and 1920x1080. UiVerification checks that ordering the only
+  restaurant opens the new order with "Pesanan berhasil dibuat." and an empty badge, and
+  that two restaurants are ordered one at a time, staying on Keranjang after the first,
+  and that Pesan and the total sit in the group footer, not the heading, with the shared
+  primary button states.
 
 COLLECTION AND SEARCH PAGES (customer only, `CollectionView.cs`):
 - One view for the five collections (`ShowCollection(name)`) and for search results
@@ -314,8 +346,8 @@ COLLECTION AND SEARCH PAGES (customer only, `CollectionView.cs`):
 - Verified by `--verify-ui` (CollectionVerification): each card opens its page with the
   right title; ordering and category filtering; search by menu name, restaurant name
   and words out of order; unknown words empty state; blank search stays; back link,
-  logo, cart and orders clear the field; Tambah opens the food dialog, which adds and
-  keeps one restaurant per cart; rhythm
+  logo, cart and orders clear the field; Tambah opens the food dialog, which adds, also
+  from a second restaurant into the same cart; rhythm
   and alignment; no horizontal scrolling at 1040x720 and 1920x1080; role guards.
 
 AUTH SURFACE (Masuk and Daftar, implemented in `AuthViews.cs` as `AuthSurface`):

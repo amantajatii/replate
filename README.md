@@ -42,7 +42,8 @@ berakhir, Makanan utama, Roti & kue, Buah & sayur) yang masing-masing membuka ha
 sendiri, dan daftar semua makanan berbentuk kartu. Enter atau ikon kaca pembesar di
 kolom cari membuka halaman hasil pencarian.
 Pelanggan dapat mencari makanan, mengatur keranjang, melakukan simulasi reservasi,
-dan memantau pesanan. Restoran dapat mengelola menu dan penawaran, mencatat produksi,
+dan memantau pesanan. Satu keranjang boleh berisi menu dari beberapa restoran;
+setiap restoran dipesan terpisah dari keranjang (satu pesanan per restoran) melalui pop up konfirmasi, secara atomik. Restoran dapat mengelola menu dan penawaran, mencatat produksi,
 mengonfirmasi pesanan, serta memverifikasi kode pengambilan. Dashboard menampilkan
 analisis surplus dan rekomendasi produksi berdasarkan model domain yang ada.
 

@@ -53,7 +53,7 @@ internal static class SessionStore
                 o.TotalPrice, o.Status, o.PreparationDuration, o.EstimatedReadyTime, o.OrderedAt, o.CompletedAt,
                 o.Items.Select(i => new ItemState(i.ListingId, i.MenuName, i.Quantity, i.UnitPrice)).ToList()))).ToList(),
             session.Users.Select(u => new UserState(u.Id, u.Name, u.Email, u.PasswordHash, u.Role)).ToList(),
-            session.Carts.Select(c => new CartState(c.Id, c.CustomerId, c.RestaurantId,
+            session.Carts.Select(c => new CartState(c.Id, c.CustomerId, c.GroupByRestaurant().FirstOrDefault()?.RestaurantId ?? Guid.Empty,
                 c.Items.Select(i => new CartItemState(i.ListingId, i.Quantity, i.UnitPrice)).ToList())).ToList());
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
         var temporary = path + ".tmp";
@@ -120,7 +120,7 @@ internal static class SessionStore
                 r.RegularSoldQuantity > r.ProducedQuantity || r.RescuedQuantity < 0 || r.RescuedQuantity > r.CalculateSurplus()) ||
             orders.Any(o => !Enum.IsDefined(o.Status) || o.Items.Count == 0 ||
                 o.Items.Any(i => i.Quantity <= 0 || i.UnitPrice <= 0) || o.TotalPrice != o.Items.Sum(i => i.CalculateSubtotal())) ||
-            carts.Any(c => c.Items.Any(i => i.Quantity <= 0 || i.UnitPrice <= 0 || i.Listing.Menu.RestaurantId != c.RestaurantId)) ||
+            carts.Any(c => c.Items.Any(i => i.Quantity <= 0 || i.UnitPrice <= 0)) ||
             users.Select(u => u.Id).Distinct().Count() != users.Count ||
             users.Any(u => string.IsNullOrWhiteSpace(u.Email) || string.IsNullOrWhiteSpace(u.PasswordHash)) ||
             users.Select(u => Replate.Domain.Services.AccountService.NormalizeEmail(u.Email)).Distinct().Count() != users.Count)

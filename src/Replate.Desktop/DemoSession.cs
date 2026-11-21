@@ -16,6 +16,7 @@ public sealed class DemoSession
     public List<User> Users { get; private set; } = [];
     public List<SurplusListing> Listings { get; private set; } = [];
     public Order? LastOrder { get; private set; }
+    internal IOrderStore? OrderStore { get; set; }
     public User? CurrentUser { get; private set; }
     public bool IsSignedIn => CurrentUser is not null;
     public static string Rupiah(decimal value) => "Rp" + value.ToString("N0", CultureInfo.GetCultureInfo("id-ID"));
@@ -171,39 +172,52 @@ public sealed class DemoSession
             (l.Menu.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
              l.Menu.Restaurant?.Name.Contains(query, StringComparison.OrdinalIgnoreCase) == true));
 
-    public Order Checkout()
+    public Order Checkout(Guid restaurantId)
     {
-        var order = PrepareCheckout();
-        if (StorePath == DefaultStorePath)
-        {
-            new DatabaseService().SaveOrderAsync(order).GetAwaiter().GetResult();
-        }
-        Persist();
-        return order;
+        var order = PrepareCheckout(restaurantId);
+        try { OrderStoreForCheckout()?.SaveOrderAsync(order).GetAwaiter().GetResult(); }
+        finally { checkingOut = false; }
+        return CommitCheckout(order);
     }
 
-    public async Task<Order> CheckoutAsync()
+    public async Task<Order> CheckoutAsync(Guid restaurantId)
     {
-        var order = PrepareCheckout();
-        if (StorePath == DefaultStorePath)
-        {
-            await new DatabaseService().SaveOrderAsync(order);
-        }
-        Persist();
-        return order;
+        var order = PrepareCheckout(restaurantId);
+        try { if (OrderStoreForCheckout() is { } store) await store.SaveOrderAsync(order); }
+        finally { checkingOut = false; }
+        return CommitCheckout(order);
     }
 
-    private Order PrepareCheckout()
+    private bool checkingOut;
+
+    private IOrderStore? OrderStoreForCheckout() => OrderStore ?? (StorePath == DefaultStorePath ? new DatabaseService() : null);
+
+    private void EnsureNotCheckingOut()
+    {
+        if (checkingOut) throw new InvalidOperationException("Pesanan sedang diproses. Tunggu sampai selesai.");
+    }
+
+    private Order PrepareCheckout(Guid restaurantId)
     {
         EnsureWritable();
         RequireCustomer();
-        if (Cart.Items.Any(i => !i.Listing.Menu.IsActive)) throw new InvalidOperationException("Ada menu yang sudah tidak aktif. Hapus menu tersebut dari keranjang.");
-        var restaurant = FindRestaurant(Cart.RestaurantId);
-        if (restaurant is null && Cart.Items.Count > 0)
+        EnsureNotCheckingOut();
+        var group = Cart.FindGroup(restaurantId) ?? throw new InvalidOperationException("Restoran ini tidak ada di keranjang.");
+        if (group.Items.Any(i => !i.Listing.Menu.IsActive)) throw new InvalidOperationException("Ada menu yang sudah tidak aktif. Hapus menu tersebut dari keranjang.");
+        if (FindRestaurant(restaurantId) is null)
             throw new InvalidOperationException("Restoran untuk keranjang ini tidak ditemukan. Kosongkan keranjang lalu pilih makanan lagi.");
-        LastOrder = new CheckoutService(new StockService()).CreateOrder(Cart);
-        restaurant!.Orders.Add(LastOrder);
-        return LastOrder;
+        var order = new CheckoutService(new StockService()).PrepareOrder(Cart, restaurantId);
+        checkingOut = true;
+        return order;
+    }
+
+    private Order CommitCheckout(Order order)
+    {
+        new CheckoutService(new StockService()).CommitOrder(Cart, order);
+        FindRestaurant(order.RestaurantId)!.Orders.Add(order);
+        LastOrder = order;
+        Persist();
+        return order;
     }
 
     internal void Restore(List<Restaurant> restaurants, List<Cart> carts, List<User> users, List<SurplusListing> listings)
@@ -227,6 +241,7 @@ public sealed class DemoSession
     {
         EnsureWritable();
         RequireCustomer();
+        EnsureNotCheckingOut();
         if (!listing.Menu.IsActive) throw new InvalidOperationException("Menu ini sudah tidak aktif.");
         Cart.AddItem(listing, quantity); Persist();
     }
@@ -235,6 +250,7 @@ public sealed class DemoSession
     {
         EnsureWritable();
         RequireCustomer();
+        EnsureNotCheckingOut();
         if (quantity == 0) Cart.RemoveItem(listingId); else Cart.UpdateQuantity(listingId, quantity);
         Persist();
     }

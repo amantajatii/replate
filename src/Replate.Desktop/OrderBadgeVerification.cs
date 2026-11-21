@@ -55,7 +55,7 @@ internal static class OrderBadgeVerification
             {
                 session.AsCustomer();
                 session.AddToCart(listing, 1);
-                var order = session.Checkout(); orders.Add(order);
+                var order = session.Checkout(listing.Menu.RestaurantId); orders.Add(order);
                 session.AsOwner();
                 window.ShowOrder(order, true); await Settle(); CheckDetail(window, order);
                 if (target is OrderStatus.Confirmed or OrderStatus.ReadyForPickup or OrderStatus.Completed)
