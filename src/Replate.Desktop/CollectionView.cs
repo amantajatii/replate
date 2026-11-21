@@ -20,9 +20,9 @@ public sealed class CollectionView : UserControl
     internal const string SearchPrefix = "Hasil untuk ";
     internal const string CollectionEmpty = "Belum ada menu di sini";
     internal const string SearchEmpty = "Tidak ada menu yang cocok";
-    internal const string BackLinkClass = "back-link";
+    internal const string TextLinkClass = "text-link";
     internal const double BackIconSize = 16;
-    internal const double BackLinkMinHeight = 32;
+    internal const double TextLinkMinHeight = 32;
     internal const double IntroSize = 16;
     internal const double IntroGap = 8;
     private static readonly Geometry BackIcon = Geometry.Parse("M13 8H3 M7.5 3.5L3 8L7.5 12.5");
@@ -53,7 +53,7 @@ public sealed class CollectionView : UserControl
     {
         Collection = collection; Query = query;
         Feed = new ListingFeed(owner, session, source, () => ListingFeed.EmptyState(emptyTitle, emptyMessage, owner.ShowMarketplace));
-        AddBackLinkStyles(Styles);
+        AddTextLinkStyles(Styles);
 
         // Back link
         BackLink = CreateBackLink(owner.ShowMarketplace, out var glyph);
@@ -92,7 +92,7 @@ public sealed class CollectionView : UserControl
 
     internal void Refresh() => Feed.Refresh();
 
-    // Back link
+    // Text link
     internal static Button CreateBackLink(Action back, out Path glyph, string text = BackLabel)
     {
         glyph = new Path
@@ -100,25 +100,31 @@ public sealed class CollectionView : UserControl
             Data = BackIcon, Width = BackIconSize, Height = BackIconSize, Stretch = Stretch.None, StrokeThickness = 1.75,
             StrokeLineCap = PenLineCap.Round, StrokeJoin = PenLineJoin.Round, VerticalAlignment = VerticalAlignment.Center
         };
-        var label = new TextBlock { Text = text, FontSize = 14, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
-        var link = new Button
-        {
-            Content = Ui.Row(8, glyph, label), Padding = new Thickness(8, 6), Margin = new Thickness(-8, 0, 0, 0),
-            MinHeight = BackLinkMinHeight, VerticalContentAlignment = VerticalAlignment.Center,
-            CornerRadius = new CornerRadius(6), BorderThickness = default, HorizontalAlignment = HorizontalAlignment.Left,
-            Cursor = new Cursor(StandardCursorType.Hand)
-        };
-        link.Classes.Add(BackLinkClass);
-        glyph[!Shape.StrokeProperty] = link[!TemplatedControl.ForegroundProperty];
-        AutomationProperties.SetName(link, text);
-        link.Click += (_, _) => back();
+        var link = CreateTextLink(text, back, glyph);
+        link.Margin = new Thickness(-8, 0, 0, 0); link.HorizontalAlignment = HorizontalAlignment.Left;
         return link;
     }
 
-    internal static void AddBackLinkStyles(Styles styles)
+    internal static Button CreateTextLink(string text, Action action, Path? glyph = null)
+    {
+        var label = new TextBlock { Text = text, FontSize = 14, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+        var link = new Button
+        {
+            Content = glyph is null ? label : Ui.Row(8, glyph, label), Padding = new Thickness(8, 6),
+            MinHeight = TextLinkMinHeight, VerticalContentAlignment = VerticalAlignment.Center,
+            CornerRadius = new CornerRadius(6), BorderThickness = default, Cursor = new Cursor(StandardCursorType.Hand)
+        };
+        link.Classes.Add(TextLinkClass);
+        if (glyph is not null) glyph[!Shape.StrokeProperty] = link[!TemplatedControl.ForegroundProperty];
+        AutomationProperties.SetName(link, text);
+        link.Click += (_, _) => action();
+        return link;
+    }
+
+    internal static void AddTextLinkStyles(Styles styles)
     {
         Style State(Func<Selector, Selector> state, IBrush foreground) =>
-            new(x => state(x.OfType<Button>().Class(BackLinkClass)))
+            new(x => state(x.OfType<Button>().Class(TextLinkClass)))
             {
                 Setters =
                 {
@@ -127,7 +133,7 @@ public sealed class CollectionView : UserControl
                 }
             };
         Style Face(Func<Selector, Selector> state, IBrush foreground) =>
-            new(x => state(x.OfType<Button>().Class(BackLinkClass)).Template().OfType<ContentPresenter>().Name("PART_ContentPresenter"))
+            new(x => state(x.OfType<Button>().Class(TextLinkClass)).Template().OfType<ContentPresenter>().Name("PART_ContentPresenter"))
             {
                 Setters =
                 {

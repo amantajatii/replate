@@ -55,6 +55,7 @@ internal static class UiVerification
             Ensure(window.Session.CurrentUser?.Email == DemoAccounts.CustomerEmail && window.CurrentPage is MarketplaceView, "Customer sign-in opens marketplace");
             await Shot("marketplace");
             await TopBarVerification.Run(window);
+            NavbarCart(window);
             await MarketplaceVerification.Run(window);
             var market = window.Marketplace;
             Ensure(market.VisibleCount == 10, "Initial listings from all restaurants");
@@ -342,7 +343,7 @@ internal static class UiVerification
         }
         window.Width = width; window.Height = height; window.ShowOrder(order, false); await Settle();
     }
-    private static async Task PrimaryButton(Button button, bool compact, ScrollViewer scroll, Visual clipRoot, string label, Palette? palette = null)
+    private static async Task PrimaryButton(Button button, bool compact, Visual scroll, Visual clipRoot, string label, Palette? palette = null)
     {
         var p = palette ?? PrimaryPalette;
         await Hold(button, ":pointerover", false);
@@ -371,7 +372,7 @@ internal static class UiVerification
             $"{label}: hover scale is {hovered:0.###} ({(compact ? "compact, 1.03" : "full width, no scale")})");
         Ensure(button.Bounds == bounds && neighbours.Select(Place).SequenceEqual(before),
             $"{label}: hover leaves the surrounding layout in place ({bounds} to {button.Bounds}; {string.Join(", ", before)} to {string.Join(", ", neighbours.Select(Place))})");
-        Ensure(scroll.Extent.Width <= scroll.Viewport.Width + .5, $"{label}: no horizontal scrolling while hovered");
+        Ensure(scroll is not ScrollViewer viewer || Fits(viewer), $"{label}: no horizontal scrolling while hovered");
         if (compact)
         {
             var clips = button.GetVisualAncestors().TakeWhile(a => a != clipRoot).Where(a => a.ClipToBounds).Append(clipRoot).ToList();
@@ -487,19 +488,19 @@ internal static class UiVerification
     internal static async Task TextLink(Window window, Button link, Func<bool> fits, string label, string text = CollectionView.BackLabel)
     {
         var presenter = Presenter(link);
-        var glyph = link.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Path>().Single();
+        var glyph = link.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Path>().SingleOrDefault();
         var caption = link.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == text);
-        Ensure(link.Classes.Contains(CollectionView.BackLinkClass) && link.Bounds.Height >= CollectionView.BackLinkMinHeight - .5,
+        Ensure(link.Classes.Contains(CollectionView.TextLinkClass) && link.Bounds.Height >= CollectionView.TextLinkMinHeight - .5,
             $"{label}: {text} uses the shared text link and is {link.Bounds.Height:0.#} high");
         void Colors(Color foreground, string state) =>
             Ensure(Fill(presenter.Background) == Avalonia.Media.Colors.Transparent && Fill(presenter.BorderBrush) == Avalonia.Media.Colors.Transparent &&
                 Fill(link.Background) == Avalonia.Media.Colors.Transparent && presenter.BoxShadow.Count == 0 && Math.Abs(Scale(link) - 1) <= .005 &&
-                Fill(presenter.Foreground) == foreground && Fill(caption.Foreground) == foreground && Fill(glyph.Stroke) == foreground &&
+                Fill(presenter.Foreground) == foreground && Fill(caption.Foreground) == foreground && (glyph is null || Fill(glyph.Stroke) == foreground) &&
                 caption.TextDecorations is null or { Count: 0 },
-                $"{label} {state}: transparent with {Fill(presenter.Foreground)} text and {Fill(glyph.Stroke)} arrow, expected {foreground} ({Fill(presenter.Background)} fill)");
+                $"{label} {state}: transparent with {Fill(presenter.Foreground)} text and {Fill(glyph?.Stroke)} arrow, expected {foreground} ({Fill(presenter.Background)} fill)");
         var box = new Rect(link.Bounds.Size).TransformToAABB(link.TransformToVisual(window)!.Value);
         Rect Inner(Visual visual) => new Rect(visual.Bounds.Size).TransformToAABB(visual.TransformToVisual(window)!.Value).Inflate(1);
-        var (marks, icon) = (Inner(caption), Inner(glyph));
+        var (marks, icon) = (Inner(caption), glyph is null ? default : Inner(glyph));
         var points = new List<(int X, int Y)>();
         for (var y = (int)Math.Ceiling(box.Y) + 1; y < (int)Math.Floor(box.Bottom) - 1; y++)
             for (var x = (int)Math.Ceiling(box.X) + 1; x < (int)Math.Floor(box.Right) - 1; x++)
@@ -539,6 +540,64 @@ internal static class UiVerification
         Ensure(ring.BorderBrush is ISolidColorBrush { Color: var color } && color == Primary && ring.IsVisible && ring.BorderThickness.Left > 0,
             $"{label}: :focus-visible shows the primary focus ring");
         await Hold(link, ":focus-visible", false);
+    }
+    // Filter empty button
+    internal static async Task FilterEmptyButton(Window window, OrdersView page, Func<bool> fits, string label)
+    {
+        await Settle();
+        var button = page.EmptyButton ?? throw new InvalidOperationException($"{label}: Lihat semua pesanan is shown");
+        var presenter = Presenter(button);
+        Ensure(button.Content as string == OrdersView.FilterEmptyAction && button.Classes.Contains(Ui.PrimaryClass) && button.Classes.Contains(Ui.CompactClass) &&
+            !button.Classes.Contains(CollectionView.TextLinkClass) && button.CornerRadius == new CornerRadius(6) && button.Padding == new Thickness(16, 11) &&
+            button.FontSize == 13 && button.FontWeight == FontWeight.SemiBold,
+            $"{label}: Lihat semua pesanan uses the shared compact primary button of Jelajahi menu");
+        Ensure(Fill(presenter.Background) != Colors.Transparent && Fill(button.Background) == Primary, $"{label}: Lihat semua pesanan is a filled box ({Fill(presenter.Background)})");
+        Ensure(button.Bounds.Height >= 40 - .5, $"{label}: Lihat semua pesanan is {button.Bounds.Height:0.#} high, expected at least 40");
+        Rect Box(Visual visual) => new Rect(visual.Bounds.Size).TransformToAABB(visual.TransformToVisual(window)!.Value);
+        var (box, heading, state) = (Box(button), Box(page.EmptyHeading!), Box(page.EmptyState!));
+        Ensure(Math.Abs(box.Y - heading.Bottom - Ui.Spacing.Section) <= .5 && box.Width < state.Width - .5 && Math.Abs(box.Center.X - state.Center.X) <= 1,
+            $"{label}: Lihat semua pesanan sits {box.Y - heading.Bottom:0.#} under the title, centered ({box.Center.X:0.#} vs {state.Center.X:0.#})");
+        await PrimaryButton(button, true, page.EmptyState!, window, label);
+        await HoverShape(window, button, label);
+        Ensure(fits(), $"{label}: no horizontal scrolling");
+    }
+    // Navbar cart
+    private static void NavbarCart(MainWindow window)
+    {
+        var bar = window.TopBar;
+        var glyph = bar.CartGlyph;
+        Ensure(ReferenceEquals(glyph.Data, CustomerTopBar.CartIcon) && glyph.Width == 24 && glyph.Height == 24 && glyph.Stretch == Stretch.None &&
+            glyph.StrokeThickness == 1.75 && glyph.StrokeLineCap == PenLineCap.Round && glyph.StrokeJoin == PenLineJoin.Round && glyph.Fill is null,
+            "Navbar cart keeps its original 24 line icon with stroke 1.75");
+        Ensure(bar.CartButton.Width == 44 && bar.CartButton.Height == 44 && bar.CartBadge.Parent == glyph.Parent && bar.CartIndicator.Parent == glyph.Parent,
+            "Navbar cart keeps its 44 hit area with the badge and indicator");
+    }
+    // Empty icons
+    internal static async Task EmptyIcon(Window window, Avalonia.Controls.Shapes.Path? icon, Control state, Func<bool> fits, string label)
+    {
+        await Settle();
+        Ensure(icon is { IsEffectivelyVisible: true }, $"{label}: the empty icon is shown");
+        var size = Ui.EmptyIconSize;
+        Ensure(size is >= 72 and <= 96 && icon!.Width == size && icon.Height == size && Math.Abs(icon.Bounds.Width - size) < .5 && Math.Abs(icon.Bounds.Height - size) < .5,
+            $"{label}: the empty icon is {icon!.Bounds.Width:0.#}x{icon.Bounds.Height:0.#}, expected {size}");
+        Ensure(Math.Abs(icon.StrokeThickness - size * Ui.EmptyIconStroke) < .01 && icon.StrokeLineCap == PenLineCap.Round && icon.StrokeJoin == PenLineJoin.Round && icon.Fill is null,
+            $"{label}: the empty icon is a {icon.StrokeThickness:0.##} thick outline with round caps and joins and no fill");
+        Ensure(Fill(icon.Stroke) == Primary && ReferenceEquals(icon.Stroke, Ui.EmptyIconBrush), $"{label}: the empty icon uses the primary token ({Fill(icon.Stroke)})");
+        var ink = icon.Data!.GetRenderBounds(new Pen(icon.Stroke, icon.StrokeThickness, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round));
+        Ensure(ink.X >= -.5 && ink.Y >= -.5 && ink.Right <= size + .5 && ink.Bottom <= size + .5, $"{label}: the empty icon strokes stay inside its {size} box ({ink})");
+        var box = new Rect(icon.Bounds.Size).TransformToAABB(icon.TransformToVisual(window)!.Value);
+        var area = new Rect(state.Bounds.Size).TransformToAABB(state.TransformToVisual(window)!.Value);
+        Ensure(new Rect(window.Bounds.Size).Contains(box) && area.Contains(box) && icon.GetVisualAncestors().OfType<Visual>().Where(v => v.ClipToBounds)
+            .All(v => v.TransformToVisual(window) is { } m && new Rect(v.Bounds.Size).TransformToAABB(m).Contains(box)), $"{label}: the empty icon is not cut off ({box})");
+        Ensure(Math.Abs(box.Center.X - area.Center.X) <= 1 && Math.Abs((box.X + ink.Center.X) - area.Center.X) <= size * .05,
+            $"{label}: the empty icon is centered in the empty state ({box.Center.X:0.#} vs {area.Center.X:0.#})");
+        var pixels = Snapshot(window);
+        var painted = 0;
+        for (var y = (int)box.Y; y < (int)box.Bottom; y++)
+            for (var x = (int)box.X; x < (int)box.Right; x++)
+                if (Near(pixels(x, y), Primary)) painted++;
+        Ensure(painted > size * size * .08, $"{label}: the empty icon renders in primary ({painted} pixels)");
+        Ensure(fits(), $"{label}: no horizontal scrolling");
     }
     private static bool Near(Color a, Color b) => Math.Abs(a.R - b.R) <= 3 && Math.Abs(a.G - b.G) <= 3 && Math.Abs(a.B - b.B) <= 3;
     private static Func<int, int, Color> Snapshot(Window window)

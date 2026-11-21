@@ -45,8 +45,13 @@ internal static class CartVerification
         var texts = Texts(view.EmptyState!);
         Ensure(texts.Contains(CartView.EmptyTitle) && texts.Contains(CartView.EmptyMessage) && view.EmptyButton?.Content as string == CartView.EmptyAction &&
             view.EmptyButton.Classes.Contains(Ui.PrimaryClass), "Empty state title, message and Jelajahi menu button");
-        Ensure(view.EmptyIcon is { } icon && ColorOf(icon.Stroke) == Primary && icon.Fill is null && icon.Bounds.Width >= 64,
-            "Empty state shows a large primary line cart icon");
+        foreach (var (w, h) in new[] { (1040d, 720d), (1920d, 1080d) })
+        {
+            window.Width = w; window.Height = h; await Settle();
+            await UiVerification.EmptyIcon(window, Page(window).EmptyIcon, Page(window).EmptyState!, () => Fits(window), $"{w:0}x{h:0} Keranjang kosong");
+        }
+        window.Width = width; window.Height = height; await Settle();
+        view = Page(window);
         Ensure(view.Title.Text == CartView.TitleText && !view.Subtitle.IsVisible && view.BackLink.IsEffectivelyVisible, "Empty cart keeps the title and back link, no subtitle");
         var emptyBox = Rect(view.EmptyState!, window); var bodyBox = Rect(view.Body, window);
         Ensure(Math.Abs(emptyBox.Center.X - bodyBox.Center.X) <= 1 && emptyBox.Y > Rect(view.Header, window).Bottom, "The empty state is centered under the header");
@@ -60,7 +65,7 @@ internal static class CartVerification
         Ensure(view.Title.Text == CartView.TitleText && view.Title.FontSize == MarketplaceView.TitleSize && view.Title.FontWeight >= FontWeight.Bold &&
             view.Subtitle.IsVisible && view.Subtitle.Text == $"Pesanan dari {restaurant.Name}" && view.Subtitle.FontSize < view.Title.FontSize &&
             ColorOf(view.Subtitle.Foreground) == Muted, "Keranjang title at the Jelajahi Menu size with the muted restaurant line");
-        Ensure(view.BackLink.Classes.Contains(CollectionView.BackLinkClass) && AutomationProperties.GetName(view.BackLink) == CollectionView.BackLabel &&
+        Ensure(view.BackLink.Classes.Contains(CollectionView.TextLinkClass) && AutomationProperties.GetName(view.BackLink) == CollectionView.BackLabel &&
             ColorOf(view.BackLink.Foreground) == Primary && view.BackGlyph.StrokeThickness == 1.75, "Kembali ke Jelajah uses the collection back link");
         var link = Rect(view.BackLink, window); var header = Rect(view.Header, window); var firstHeading = Rect(view.Groups[0].Header, window);
         Ensure(Math.Abs(header.Y - link.Bottom - Ui.Spacing.Related) <= 1 && Math.Abs(firstHeading.Y - header.Bottom - Ui.Spacing.Related) <= 1,
@@ -410,6 +415,9 @@ internal static class CartVerification
     private static CartView Page(MainWindow window) => window.CurrentPage as CartView ?? throw new InvalidOperationException("Keranjang is open");
 
     private static List<string> Texts(Visual root) => root.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text ?? "").ToList();
+
+    private static bool Fits(MainWindow window) => window.CurrentPage is { } page && page.Bounds.Width <= window.Bounds.Width + .5 &&
+        window.GetVisualDescendants().OfType<ScrollViewer>().Where(s => s.IsEffectivelyVisible).All(s => s.Extent.Width <= s.Viewport.Width + .5);
 
     private static bool Inside(Rect inner, Rect outer) =>
         inner.X >= outer.X - .5 && inner.Y >= outer.Y - .5 && inner.Right <= outer.Right + .5 && inner.Bottom <= outer.Bottom + .5;

@@ -46,6 +46,34 @@ internal static class Ui
         return logo;
     }
 
+    // Outline icons
+    public const double OutlineGrid = 24;
+    public const double EmptyIconSize = 80;
+    public const double EmptyIconStroke = .08;
+    public static readonly IBrush EmptyIconBrush = Green;
+    public const string CartOutline =
+        "M2 3.5H3.4C4.2 3.5 4.9 4.1 5.1 4.9L5.4 6.5 " +
+        "M5.4 6.5H20.6C21.2 6.5 21.6 7 21.5 7.6L20.2 13.2C20.1 13.7 19.6 14 19.1 14H8.2C7.7 14 7.3 13.7 7.2 13.2Z " +
+        "M6.4 10.25H20.9 M9.4 6.5L10.4 14 M13.4 6.5V14 M17.4 6.5L16.6 14 " +
+        "M7.2 13.2L7.7 16.2C7.8 16.7 8.2 17 8.7 17H19.5 " +
+        "M9.6 19.1A1.3 1.3 0 1 1 9.6 21.7A1.3 1.3 0 1 1 9.6 19.1Z M17.6 19.1A1.3 1.3 0 1 1 17.6 21.7A1.3 1.3 0 1 1 17.6 19.1Z";
+    public const string ReceiptOutline =
+        "M4 21.5V5.5C4 4.1 5.1 3 6.5 3H17.5C18.9 3 20 4.1 20 5.5V8H16 " +
+        "M17.5 3C16.6 3 16 4 16 5.5V21.5L14 19L12 21.5L10 19L8 21.5L6 19L4 21.5 " +
+        "M7.5 9H12.5 M7.5 12.5H12.5 M7.5 16H11";
+    public static Avalonia.Controls.Shapes.Path OutlineIcon(string data, double size, double strokeRatio, IBrush? stroke)
+    {
+        var geometry = Geometry.Parse(data);
+        geometry.Transform = new ScaleTransform(size / OutlineGrid, size / OutlineGrid);
+        return new Avalonia.Controls.Shapes.Path
+        {
+            Data = geometry, Width = size, Height = size, Stretch = Stretch.None, Stroke = stroke, StrokeThickness = size * strokeRatio,
+            StrokeLineCap = PenLineCap.Round, StrokeJoin = PenLineJoin.Round, Fill = null,
+            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, IsHitTestVisible = false
+        };
+    }
+    public static Avalonia.Controls.Shapes.Path EmptyIcon(string data) => OutlineIcon(data, EmptyIconSize, EmptyIconStroke, EmptyIconBrush);
+
     // Spacing
     internal static class Spacing
     {

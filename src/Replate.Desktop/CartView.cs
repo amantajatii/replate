@@ -59,7 +59,7 @@ public sealed class CartView : UserControl
     internal CartView(MainWindow host, DemoSession session)
     {
         this.host = host; this.session = session;
-        CollectionView.AddBackLinkStyles(Styles);
+        CollectionView.AddTextLinkStyles(Styles);
         AddStyles();
 
         // Back link
@@ -90,11 +90,7 @@ public sealed class CartView : UserControl
         // Empty
         if (session.Cart.Items.Count == 0)
         {
-            EmptyIcon = new Path
-            {
-                Data = CustomerTopBar.CartIcon, Width = 72, Height = 72, Stretch = Stretch.Uniform, StrokeThickness = 2,
-                StrokeLineCap = PenLineCap.Round, StrokeJoin = PenLineJoin.Round, Stroke = Ui.Green, HorizontalAlignment = HorizontalAlignment.Center
-            };
+            EmptyIcon = Ui.EmptyIcon(Ui.CartOutline);
             var heading = Ui.Text(EmptyTitle, 22, Ui.Ink, true);
             var message = Ui.Text(EmptyMessage, 15, Ui.Muted);
             heading.TextAlignment = message.TextAlignment = TextAlignment.Center;

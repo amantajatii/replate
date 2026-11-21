@@ -102,8 +102,9 @@ CUSTOMER TOP BAR (every customer route, implemented in `CustomerTopBar.cs`):
   items; Esc or a click outside closes it. Pesanan saya opens the orders page; Keluar
   signs out. Opened with the mouse, Pesanan saya takes focus without looking focused;
   opened with Enter or Space it shows the keyboard focus fill.
-- Icons are Path geometry on a 24 grid, stroke 1.75, round caps and joins. Every control
-  is a Tab stop with the shared keyboard focus style (white ring on the bar).
+- Icons are Path geometry on a 24 grid, stroke 1.75, round caps and joins. The cart keeps
+  its own line geometry (`CustomerTopBar.CartIcon`); the bold outline cart is only for the
+  empty states. Every control is a Tab stop with the shared keyboard focus style (white ring on the bar).
 - Verified by `--verify-ui` (TopBarVerification): primary fill without rule, white
   logo and icons with contrast at least 4.5 (logo) and 3 (icons), logo ratio equal to the
   bitmap ratio (within 1%), bar height unchanged at 72, search colors and
@@ -159,13 +160,14 @@ PRIMARY BUTTONS (whole app, shared style `Ui.UsePrimaryButtons` in `Ui.cs`):
   (rendered with the button hidden), the inside to show the hover fill, round buttons
   to be square with half-size radius, no shadow or scale on round and icon buttons,
   and the compact shadow to show below the button inside every clipping container.
-- Text link (`CollectionView.AddBackLinkStyles`, class `back-link`, the only text link):
-  every "Kembali ke Jelajah" (collection, search results, Keranjang). Transparent fill and
+- Text link (`CollectionView.AddTextLinkStyles` and `CreateTextLink`, class `text-link`):
+  every "Kembali ke Jelajah" (collection, search results, Keranjang, Pesanan saya), "Kembali
+  ke Pesanan saya", and, without the arrow, "Lihat detail" on order cards. Transparent fill and
   border in every state, set on the Button and on PART_ContentPresenter so Fluent adds no
   fill; rest and pressed `primary`, hover `primary-hover` #357F5D (about 4.6:1 on the
   canvas); no shadow, scale (Fluent's pressed scale is reset), or underline; at least 32
   high; the shared focus ring. `UiVerification.TextLinks` checks it at 1040x720 and
-  1920x1080: the pixels around the arrow and text match the canvas (rendered with the
+  1920x1080 (CustomerOrdersVerification for the order links): the pixels around the arrow and text match the canvas (rendered with the
   link hidden) on hover and press, the label repaints on hover, the colors and contrast,
   the height, `:focus-visible`, and no horizontal scrolling.
 
@@ -305,7 +307,8 @@ customer role guard):
   dibuat."; with an empty cart the new order opens with "Pesanan berhasil dibuat.". On
   failure the pop up stays open with "Pesanan belum dapat dibuat. Periksa koneksi
   PostgreSQL lalu coba lagi." above the buttons and nothing changes.
-- Empty cart: back link and title only, then centered: 72 primary line cart icon,
+- Empty cart: back link and title only, then centered: 80 primary bold outline cart icon
+  (`Ui.EmptyIcon`, stroke 8% of the width, round caps and joins, no fill),
   "Keranjangmu masih kosong", "Mulai jelajahi menu dan selamatkan makanan hari ini." and
   the primary "Jelajahi menu" button (opens Jelajah). No groups.
 - Verified by `--verify-ui` (CartVerification): header, back link and rhythm; restaurant
@@ -349,12 +352,14 @@ restaurant order pages keep their table, dropdown and detail layout):
   HH:mm–HH:mm" (13 muted); up to three rows "menu" with "{jumlah} x" right, then
   "+{N} menu lainnya" (13 muted); on Aktif orders only "Kode ambil" with the code (18
   bold, fixed-width font), no copy button; a divider; "Total" (12 muted) above the order
-  total (22 bold primary) on the left and the secondary "Lihat detail" on the right,
-  which opens `ShowOrder(order, false)`.
-- Empty: no orders at all shows a 72 primary receipt line icon, "Belum ada pesanan",
+  total (22 bold primary) on the left and the "Lihat detail" text link on the right (its
+  text on the content edge, centered with Total), which opens `ShowOrder(order, false)`.
+- Empty: no orders at all shows an 80 primary bold outline receipt icon
+  (`Ui.EmptyIcon`, the same size and stroke as the empty cart icon), "Belum ada pesanan",
   "Pesananmu akan muncul di sini setelah kamu memesan." and the primary "Jelajahi menu"
   (opens Jelajah), with no filter row; a filter without orders shows "Tidak ada pesanan
-  di sini" and the secondary "Lihat semua pesanan" (selects Semua).
+  di sini" and, 24 under it and centered, the compact primary "Lihat semua pesanan" (the
+  same shared button as "Jelajahi menu" on the empty cart; selects Semua).
 - Checkout is unchanged: ordering the last restaurant opens the new order with
   "Pesanan berhasil dibuat."; every restaurant order is its own card at the top of the
   list.
@@ -372,7 +377,9 @@ restaurant order pages keep their table, dropdown and detail layout):
   below: restaurant name and address, Pengambilan, Dipesan, Nomor pesanan. Aktif orders
   keep "Batalkan pesanan" (DANGER BUTTON) with the unchanged confirmation window under it.
 - Verified by `--verify-ui` (CustomerOrdersVerification): rhythm, title and content column;
-  the empty state and its button; filter-empty states and Lihat semua pesanan; one card per
+  the empty state and its button; filter-empty states and the primary Lihat semua pesanan
+  (`UiVerification.FilterEmptyButton`: filled, at least 40 high, primary hover, 24 under
+  the title, no horizontal scroll at 1040x720 and 1920x1080); one card per
   order with name, badge, three item rows and "+N menu lainnya", the right total and Lihat
   detail; the pickup code only on Aktif cards; each filter follows the mapping, the
   selected pill uses the selection token, the pills share one row and the focus ring;

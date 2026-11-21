@@ -47,6 +47,8 @@ internal static class CustomerOrdersVerification
                     page.EmptyIcon is { Stroke: ISolidColorBrush { Color: var stroke } } && stroke == Primary,
                     "No history shows the icon, Belum ada pesanan, its sentence and the primary Jelajahi menu button without filters");
                 Inside(window, page.EmptyState, "Empty state");
+                await UiVerification.EmptyIcon(window, page.EmptyIcon, page.EmptyState!, () => page.Bounds.Width <= window.Bounds.Width + .5 &&
+                    window.GetVisualDescendants().OfType<ScrollViewer>().Where(s => s.IsEffectivelyVisible).All(s => s.Extent.Width <= s.Viewport.Width + .5), $"{w:0}x{h:0} Pesanan saya kosong");
                 Shot($"customer-orders-empty-{w:0}x{h:0}");
             }
             Click(Page().EmptyButton!); await Settle();
@@ -66,19 +68,25 @@ internal static class CustomerOrdersVerification
             }
             var large = await Place(bumi, 4);
             Ensure(large.Items.Count == 4, "Dapur Bumi order holds four menus");
-            window.ShowCustomerOrders(); await Settle();
-            foreach (var filter in new[] { OrdersView.Done, OrdersView.Cancelled })
+            foreach (var (w, h) in Sizes)
             {
-                Click(FilterButton(Page(), filter)); await Settle();
-                var page = Page();
-                Ensure(page.SelectedFilter == filter && page.Cards.Count == 0 && page.FilterRow!.IsVisible && page.EmptyHeading?.Text == OrdersView.FilterEmptyTitle &&
-                    page.EmptyButton?.Content as string == OrdersView.FilterEmptyAction && !page.EmptyButton.Classes.Contains(Ui.PrimaryClass),
-                    $"{filter} without results shows Tidak ada pesanan di sini with the secondary Lihat semua pesanan");
-                Inside(window, page.EmptyState!, $"{filter} empty state");
-                Shot($"customer-orders-filter-empty-{filter}");
-                Click(page.EmptyButton); await Settle();
-                Ensure(Page().SelectedFilter == OrdersView.All && Page().Cards.Count == 1 && FilterButton(Page(), OrdersView.All).Classes.Contains(OrdersView.SelectedClass),
-                    "Lihat semua pesanan returns to Semua");
+                await Size(w, h); window.ShowCustomerOrders(); await Settle();
+                foreach (var filter in new[] { OrdersView.Done, OrdersView.Cancelled })
+                {
+                    Click(FilterButton(Page(), filter)); await Settle();
+                    var page = Page();
+                    Ensure(page.SelectedFilter == filter && page.Cards.Count == 0 && page.FilterRow!.IsVisible && page.EmptyHeading?.Text == OrdersView.FilterEmptyTitle &&
+                        page.EmptyButton?.Content as string == OrdersView.FilterEmptyAction && page.EmptyButton.Classes.Contains(Ui.PrimaryClass) &&
+                        !page.EmptyButton.Classes.Contains(CollectionView.TextLinkClass), $"{w:0}x{h:0} {filter} without results shows Tidak ada pesanan di sini with the primary Lihat semua pesanan button");
+                    Inside(window, page.EmptyState!, $"{w:0}x{h:0} {filter} empty state");
+                    Shot($"customer-orders-filter-empty-{filter}-{w:0}x{h:0}");
+                    await UiVerification.FilterEmptyButton(window, page, () => page.Bounds.Width <= window.Bounds.Width + .5 &&
+                        window.GetVisualDescendants().OfType<ScrollViewer>().Where(s => s.IsEffectivelyVisible).All(s => s.Extent.Width <= s.Viewport.Width + .5),
+                        $"{w:0}x{h:0} {filter} Lihat semua pesanan");
+                    Click(page.EmptyButton!); await Settle();
+                    Ensure(Page().SelectedFilter == OrdersView.All && Page().Cards.Count == 1 && FilterButton(Page(), OrdersView.All).Classes.Contains(OrdersView.SelectedClass),
+                        "Lihat semua pesanan returns to Semua");
+                }
             }
 
             // Orders from several restaurants
@@ -129,7 +137,8 @@ internal static class CustomerOrdersVerification
                 Ensure(large4.ItemRows.Count == OrdersView.SummaryRows && large4.MoreLine?.Text == "+1 menu lainnya", $"{size}: four menus show three rows and +1 menu lainnya");
                 await UiVerification.TextLink(window, all.BackLink!, () => all.ListScroll!.Extent.Width <= all.ListScroll.Viewport.Width + .5, $"{size} Pesanan saya");
                 foreach (var button in all.FilterButtons.Take(2)) await UiVerification.HoverShape(window, button, $"{size} filter {button.Content}");
-                await UiVerification.HoverShape(window, all.Cards[0].DetailButton, $"{size} Lihat detail");
+                await UiVerification.TextLink(window, all.Cards[0].DetailButton, () => all.ListScroll!.Extent.Width <= all.ListScroll.Viewport.Width + .5,
+                    $"{size} Lihat detail", OrdersView.DetailLabel);
                 foreach (var button in all.FilterButtons)
                 {
                     var ring = TopBarVerification.FocusRing(button);
@@ -171,7 +180,7 @@ internal static class CustomerOrdersVerification
     // Checks
     private static void CheckHeader(Window window, OrdersView page, string label)
     {
-        Ensure(page.BackLink!.Classes.Contains(CollectionView.BackLinkClass) &&
+        Ensure(page.BackLink!.Classes.Contains(CollectionView.TextLinkClass) &&
             page.BackLink.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == CollectionView.BackLabel), $"{label}: Kembali ke Jelajah uses the shared text link");
         Ensure(page.Title!.Text == OrdersView.TitleText && page.Title.FontSize == MarketplaceView.TitleSize && page.Title.FontWeight == FontWeight.Bold,
             $"{label}: Pesanan saya is 32 bold like Keranjang");
@@ -222,18 +231,21 @@ internal static class CustomerOrdersVerification
         Ensure(card.TotalText.Text == DemoSession.Rupiah(order.Items.Sum(i => i.CalculateSubtotal())) && card.TotalText.Text == DemoSession.Rupiah(order.TotalPrice) &&
             card.TotalText.FontSize == OrdersView.TotalSize && card.TotalText.FontWeight == FontWeight.Bold && Fill(card.TotalText.Foreground) == Primary &&
             card.TotalLabel.Text == CartView.TotalLabelText, $"{label}: Total with the right large primary amount");
-        Ensure(card.DetailButton.Content as string == OrdersView.DetailLabel && !card.DetailButton.Classes.Contains(Ui.PrimaryClass) &&
-            card.FooterRow.Children.Contains(card.DetailButton), $"{label}: secondary Lihat detail in the footer");
+        Ensure(card.DetailButton.Content is TextBlock { Text: OrdersView.DetailLabel } && card.DetailButton.Classes.Contains(CollectionView.TextLinkClass) &&
+            !card.DetailButton.Classes.Contains(Ui.PrimaryClass) && card.FooterRow.Children.Contains(card.DetailButton), $"{label}: Lihat detail text link in the footer");
         if (!card.Card.IsEffectivelyVisible || card.Card.Bounds.Height == 0) return;
         var box = Rect(card.Card, window);
         var list = Rect(page.ListScroll!, window);
-        Ensure(box.X >= 0 && box.Right <= window.Bounds.Width - Ui.Spacing.Page + 1 && Rect(card.DetailButton, window).Right <= box.Right - OrdersView.CardPadding + 1 &&
+        var detail = Rect((TextBlock)card.DetailButton.Content!, window);
+        Ensure(Math.Abs(detail.Right - (box.Right - OrdersView.CardPadding)) < 1.5 && Math.Abs(Rect(card.DetailButton, window).Center.Y - Rect(card.TotalText.Parent as Control ?? card.TotalText, window).Center.Y) < 1.5,
+            $"{label}: Lihat detail ends on the card content edge, centered with Total ({detail})");
+        Ensure(box.X >= 0 && box.Right <= window.Bounds.Width - Ui.Spacing.Page + 1 && Rect(card.DetailButton, window).Right <= box.Right - OrdersView.CardPadding + 8 + 1 &&
             Rect(card.DividerLine, window).Width > box.Width - 2 * OrdersView.CardPadding - 1 && box.X >= list.X, $"{label}: the card and its footer are not cut off sideways");
     }
 
     private static void CheckDetail(Window window, DemoSession session, OrderDetailView view, Order order, string label)
     {
-        Ensure(view.BackLink!.Classes.Contains(CollectionView.BackLinkClass) &&
+        Ensure(view.BackLink!.Classes.Contains(CollectionView.TextLinkClass) &&
             view.BackLink.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == OrderDetailView.BackText), $"{label}: Kembali ke Pesanan saya");
         Ensure(view.Title!.Text == OrderDetailView.TitleText && view.Title.FontSize == MarketplaceView.TitleSize && view.Badge!.Status == order.Status &&
             window.GetVisualDescendants().OfType<OrderStatusBadge>().Count() == 1 && Rect(view.Badge, window).X > Rect(view.Title, window).Right &&
