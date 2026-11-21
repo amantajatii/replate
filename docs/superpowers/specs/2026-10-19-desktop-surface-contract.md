@@ -122,8 +122,8 @@ KEYBOARD FOCUS (customer routes, shared `Ui.FocusStyles` in `Ui.cs`):
   ComboBox uses a `primary` border on `:focus-visible`. Text fields keep their own
   focus border, except the top bar search (white ring above).
 - No blur, glow, gradient or animation, except the Jelajah collection card hover
-  (scale 1.03, 120 ms ease-out, see JELAJAH) and the compact primary button hover
-  (scale 1.03, 120 ms ease-out, see PRIMARY BUTTONS).
+  (scale 1.03, 120 ms ease-out, see JELAJAH) and the compact primary and danger button
+  hover (scale 1.03, 120 ms ease-out, see PRIMARY BUTTONS and DANGER BUTTON).
 
 PRIMARY BUTTONS (whole app, shared style `Ui.UsePrimaryButtons` in `Ui.cs`):
 - `Ui.Button(..., primary: true)` adds the `primary` and `compact` classes;
@@ -159,6 +159,15 @@ PRIMARY BUTTONS (whole app, shared style `Ui.UsePrimaryButtons` in `Ui.cs`):
   (rendered with the button hidden), the inside to show the hover fill, round buttons
   to be square with half-size radius, no shadow or scale on round and icon buttons,
   and the compact shadow to show below the button inside every clipping container.
+- Text link (`CollectionView.AddBackLinkStyles`, class `back-link`, the only text link):
+  every "Kembali ke Jelajah" (collection, search results, Keranjang). Transparent fill and
+  border in every state, set on the Button and on PART_ContentPresenter so Fluent adds no
+  fill; rest and pressed `primary`, hover `primary-hover` #357F5D (about 4.6:1 on the
+  canvas); no shadow, scale (Fluent's pressed scale is reset), or underline; at least 32
+  high; the shared focus ring. `UiVerification.TextLinks` checks it at 1040x720 and
+  1920x1080: the pixels around the arrow and text match the canvas (rendered with the
+  link hidden) on hover and press, the label repaints on hover, the colors and contrast,
+  the height, `:focus-visible`, and no horizontal scrolling.
 
 JELAJAH (customer marketplace, `MarketplaceView.cs` and `MarketplaceBanner.cs`):
 - One vertical ScrollViewer under the top bar, no horizontal scrolling. Content is at
@@ -319,13 +328,89 @@ customer role guard):
   and that Pesan and the total sit in the group footer, not the heading, with the shared
   primary button states.
 
+PESANAN SAYA AND ORDER DETAIL (customer only, `OrdersView` and `OrderDetailView`, customer
+parts in `CustomerOrdersView.cs`, opened by `MainWindow.ShowCustomerOrders` and
+`MainWindow.ShowOrder(order, false)` with the unchanged customer role and ownership guards; the
+restaurant order pages keep their table, dropdown and detail layout):
+- Pesanan saya: same top bar; in the Keranjang content column (at most 1200, centered,
+  inset 32). Rhythm from `Ui.Spacing`: 24 from the top bar, then 16 between the shared
+  "Kembali ke Jelajah" link, the title "Pesanan saya" (32 bold ink), the status filter
+  and the list. Only the list scrolls (vertical only, 24 shadow inset, 32 under the last
+  card).
+- Status filter: four pill buttons in one row, 8 apart: Semua (default), Aktif, Selesai,
+  Dibatalkan; pick one. 36 high, radius 18, no border; rest transparent with muted text,
+  hover sidebar fill with ink text, pressed divider; selected selection fill with semibold
+  primary text. Fills are painted on the pill only: no box outside it, no shadow, scale or
+  transition; shared focus ring. Mapping of `OrderStatus`: Aktif = Reserved, Confirmed,
+  ReadyForPickup; Selesai = Completed; Dibatalkan = Cancelled. Hidden with no orders.
+- Order card (white, radius 16, card shadow, no border, padding 20, 16 apart), one per
+  order from `DemoSession.CustomerOrders` (newest first): restaurant name (18 bold) left
+  and `OrderStatusBadge` right; "Dipesan dd MMM yyyy, HH:mm · Pengambilan dd MMM,
+  HH:mm–HH:mm" (13 muted); up to three rows "menu" with "{jumlah} x" right, then
+  "+{N} menu lainnya" (13 muted); on Aktif orders only "Kode ambil" with the code (18
+  bold, fixed-width font), no copy button; a divider; "Total" (12 muted) above the order
+  total (22 bold primary) on the left and the secondary "Lihat detail" on the right,
+  which opens `ShowOrder(order, false)`.
+- Empty: no orders at all shows a 72 primary receipt line icon, "Belum ada pesanan",
+  "Pesananmu akan muncul di sini setelah kamu memesan." and the primary "Jelajahi menu"
+  (opens Jelajah), with no filter row; a filter without orders shows "Tidak ada pesanan
+  di sini" and the secondary "Lihat semua pesanan" (selects Semua).
+- Checkout is unchanged: ordering the last restaurant opens the new order with
+  "Pesanan berhasil dibuat."; every restaurant order is its own card at the top of the
+  list.
+- Detail pesanan: same content column, one vertical scroll. The shared text link
+  "Kembali ke Pesanan saya" (opens Pesanan saya); "Detail pesanan" (32 bold) with the
+  status badge 16 beside it and the status sentence 8 under it; two columns 24 apart
+  (`3*,2*`, about 60/40, never stacked: 1040 already fits). Cards: white, radius 16, card
+  shadow, no border, padding 24, 16 apart. Left "Item pesanan": per item the name,
+  "{jumlah} x {harga satuan}" and the subtotal right, a divider, then "Total" above the
+  total (28 bold primary, left, as in Keranjang). Right top "Kode ambil": the code (36
+  bold, fixed-width font, primary), the existing copy button beside it (now the shared 44
+  icon button; same tooltip, name, clipboard text and notifications) and "Tunjukkan kode
+  ini di restoran."; the copy rule is unchanged (not cancelled and a non-empty code). A
+  cancelled order still shows the code, without the copy button or the sentence. Right
+  below: restaurant name and address, Pengambilan, Dipesan, Nomor pesanan. Aktif orders
+  keep "Batalkan pesanan" (DANGER BUTTON) with the unchanged confirmation window under it.
+- Verified by `--verify-ui` (CustomerOrdersVerification): rhythm, title and content column;
+  the empty state and its button; filter-empty states and Lihat semua pesanan; one card per
+  order with name, badge, three item rows and "+N menu lainnya", the right total and Lihat
+  detail; the pickup code only on Aktif cards; each filter follows the mapping, the
+  selected pill uses the selection token, the pills share one row and the focus ring;
+  newest first; two restaurants as two cards; hover follows the shape on the pills, Lihat
+  detail and the copy button; the shared text links; the detail columns, code card, copy
+  rule, item rows, subtotals and total; no horizontal scroll and nothing cut off at
+  1040x720 and 1920x1080. UiVerification checks that a two-restaurant checkout lists both
+  orders as separate cards on top; PickupCopyVerification keeps the clipboard checks.
+
+DANGER BUTTON (whole app, registered with the primary style in `Ui.cs`):
+- `Ui.DangerButton(text, action)` adds the `danger` and `compact` classes, with the
+  compact primary shape (radius 6, padding 11 by 16, semibold 13). Used only by
+  "Batalkan pesanan" (customer detail and, through the same `CancelButton`, the
+  restaurant owner's order detail). Text and cancellation logic are unchanged.
+- Tokens: `danger` `#B3261E`, `danger-tint` `#FBE4E1`, `danger-pressed` `#F6D3CE`,
+  `elevation.button-danger-hover` `0 4 12 0 #4DB3261E`.
+- Fill and text set on `PART_ContentPresenter` in every enabled state. Normal: `danger`
+  fill, white text (about 6.5:1), flat. Hover: `danger-tint` fill, `danger` text (about
+  5.4:1), the red hover shadow, scale 1.03 from the center, ZIndex 1, 120 ms ease-out.
+  Pressed: `danger-pressed` fill, `danger` text (about 4.7:1), the same shadow. Disabled:
+  the primary disabled treatment, no hover, press, shadow or scale. Hover follows the
+  shape; the `:focus-visible` ring is unchanged and stays on top.
+- Not applied to "Ya, batalkan pesanan", Kembali, Batal or any Hapus action.
+- Verified at 1040x720 and 1920x1080 by `--verify-ui` (UiVerification.DangerButtons on
+  the customer order detail): class and shape, normal, hover and pressed colors with
+  contrast at least 4.5, the red hover shadow, scale 1.03 (within 0.005), unchanged
+  neighbour layout, no clipping of the button or its shadow, the focus ring on top,
+  disabled without effect, the `HoverShape` pixel check, and no horizontal scrolling.
+
 COLLECTION AND SEARCH PAGES (customer only, `CollectionView.cs`):
 - One view for the five collections (`ShowCollection(name)`) and for search results
   (`ShowSearch(query)`). Both use the customer role guard: any other role is signed out
   and sent to Masuk; an unknown collection name is ignored. Cart and session survive.
 - Same top bar; in the Jelajah content column (at most 1200, inset 32), no banner:
   "Kembali ke Jelajah" link (16 left arrow, stroke 1.75, 8 from the 14 text, centered,
-  at least 32 high, primary, hover selection fill, primary focus ring), then the title
+  at least 32 high, primary, transparent in every state; hover only turns the arrow and
+  text primary-hover #357F5D, about 4.6:1 on the canvas, pressed returns to primary; no
+  fill, border, shadow, scale or underline; primary focus ring), then the title
   (32 bold ink, one line), then on collection pages with listings an intro sentence 8
   under it (16, muted, wrapping; exact copy in DESIGN.md), then listing cards 16 below.
   Search results and empty states have no intro. Rhythm from

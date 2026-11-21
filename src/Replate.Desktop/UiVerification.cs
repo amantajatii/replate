@@ -63,6 +63,7 @@ internal static class UiVerification
             Ensure(market.VisibleCount == 10 && window.TopBar.SearchBox.Text == "", "Jelajah is back with every listing and an empty search");
             await FoodDialogVerification.Run(window);
             await PrimaryButtons(window);
+            await TextLinks(window);
             await CartVerification.Run(window);
             market = window.Marketplace;
             var listing = window.Session.Listings[0];
@@ -116,6 +117,11 @@ internal static class UiVerification
                 window.Session.Cart.Items.Count == 0, "Each restaurant is ordered separately as its own order");
             Ensure(window.CurrentPage is OrderDetailView && window.SuccessMessage == CartView.CheckoutSuccess && !window.TopBar.CartBadge.IsVisible,
                 "Ordering the last restaurant opens its order with the existing message and an empty badge");
+            window.ShowCustomerOrders(); await Settle();
+            var ordersPage = (OrdersView)window.CurrentPage!;
+            Ensure(ordersPage.Cards.Take(2).Select(c => c.Order).SequenceEqual(splitOrders.AsEnumerable().Reverse()) &&
+                ordersPage.Cards.Take(2).Select(c => c.NameText.Text).Distinct().Count() == 2 && window.SuccessMessage == CartView.CheckoutSuccess,
+                "Both new orders are separate cards at the top of Pesanan saya, newest first, while the success message stays");
             await TopBarVerification.SignOut(window);
             await SignInWithForm(DemoAccounts.OwnerEmail("Dapur Bumi"));
             Ensure(window.Session.CurrentUser is Replate.Domain.Entities.RestaurantOwner && window.Session.Restaurant.Name == "Dapur Bumi" &&
@@ -196,6 +202,7 @@ internal static class UiVerification
             var cancelledOrder = window.Session.Checkout(cancellationListing.Menu.RestaurantId);
             var reservedStock = cancellationListing.Quantity;
             window.ShowOrder(cancelledOrder, false); await Settle();
+            await DangerButtons(window, cancelledOrder);
             Button FindButton(Control root, string text) => root.GetVisualDescendants().OfType<Button>()
                 .Single(b => b.Content as string == text);
             Click(FindButton(window, "Batalkan pesanan")); await Settle();
@@ -268,7 +275,7 @@ internal static class UiVerification
             await DashboardVerification.Run(output);
             await FormLayoutVerification.Run(output);
             await PickupCopyVerification.Run(output);
-            await OrdersEmptyVerification.Run(output);
+            await CustomerOrdersVerification.Run(output);
             await AuthVerification.Run(output);
             await AuthVerification.CheckSizes(window, output);
             Console.WriteLine($"All Replate desktop UI checks passed. Screenshots: {output}"); desktop.Shutdown();
@@ -282,6 +289,12 @@ internal static class UiVerification
     private static readonly Color Primary = Color.Parse("#245B43");
     private static readonly Color Selection = Color.Parse("#E0E9DF");
     private static readonly Color DividerColor = Color.Parse("#DDE3DA");
+    private static readonly Color Danger = Color.Parse("#B3261E");
+    private static readonly Color DangerTint = Color.Parse("#FBE4E1");
+    private static readonly Color DangerPressed = Color.Parse("#F6D3CE");
+    private sealed record Palette(string Kind, Color Rest, Color Hover, Color Pressed, Color Accent, BoxShadows Shadow);
+    private static readonly Palette PrimaryPalette = new(Ui.PrimaryClass, Primary, Selection, DividerColor, Primary, Ui.PrimaryButtonHoverShadow);
+    private static readonly Palette DangerPalette = new(Ui.DangerClass, Danger, DangerTint, DangerPressed, Danger, Ui.DangerButtonHoverShadow);
     private static async Task PrimaryButtons(MainWindow window)
     {
         var (width, height) = (window.Width, window.Height);
@@ -309,8 +322,29 @@ internal static class UiVerification
         }
         window.Width = width; window.Height = height; window.ShowMarketplace(); await Settle();
     }
-    private static async Task PrimaryButton(Button button, bool compact, ScrollViewer scroll, Visual clipRoot, string label)
+    private static async Task DangerButtons(MainWindow window, Replate.Domain.Entities.Order order)
     {
+        var (width, height) = (window.Width, window.Height);
+        foreach (var (w, h) in new[] { (1040d, 720d), (1920d, 1080d) })
+        {
+            window.Width = w; window.Height = h; window.ShowOrder(order, false); await Settle();
+            var size = $"{w:0}x{h:0}";
+            var view = (OrderDetailView)window.CurrentPage!;
+            var cancel = view.CancelOrderButton ?? throw new InvalidOperationException($"{size}: Batalkan pesanan is shown on an active order");
+            Ensure(cancel.Content as string == "Batalkan pesanan" && cancel.Classes.Contains(Ui.DangerClass) && !cancel.Classes.Contains(Ui.PrimaryClass) &&
+                cancel.CornerRadius == new CornerRadius(6) && cancel.Padding == new Thickness(16, 11) && cancel.FontSize == 13,
+                $"{size}: Batalkan pesanan uses the shared danger button with the compact primary shape");
+            view.Scroll!.ScrollToEnd(); await Settle();
+            await PrimaryButton(cancel, true, view.Scroll, view.Scroll, $"{size} Batalkan pesanan", DangerPalette);
+            await DisabledPrimary(cancel, $"{size} Batalkan pesanan", DangerPalette);
+            await HoverShape(window, cancel, $"{size} Batalkan pesanan");
+            Ensure(view.Scroll.Extent.Width <= view.Scroll.Viewport.Width + .5, $"{size}: no horizontal scrolling on Detail pesanan");
+        }
+        window.Width = width; window.Height = height; window.ShowOrder(order, false); await Settle();
+    }
+    private static async Task PrimaryButton(Button button, bool compact, ScrollViewer scroll, Visual clipRoot, string label, Palette? palette = null)
+    {
+        var p = palette ?? PrimaryPalette;
         await Hold(button, ":pointerover", false);
         var presenter = Presenter(button);
         var neighbours = (button.GetVisualParent() as Panel)?.Children.Where(c => c != button).ToList() ?? [];
@@ -318,20 +352,20 @@ internal static class UiVerification
         var before = neighbours.Select(Place).ToList();
         var bounds = button.Bounds;
         var duration = Ui.PrimaryHoverDuration;
-        Ensure(duration == TimeSpan.FromMilliseconds(120) && button.Classes.Contains(Ui.PrimaryClass) && button.Classes.Contains(Ui.CompactClass) == compact &&
+        Ensure(duration == TimeSpan.FromMilliseconds(120) && button.Classes.Contains(p.Kind) && button.Classes.Contains(Ui.CompactClass) == compact &&
             presenter.Transitions is { Count: 3 } faces && faces.All(t => t is TransitionBase { Easing: CubicEaseOut } b && b.Duration == duration) &&
             (!compact || button.Transitions is { Count: 1 } own && own[0] is TransformOperationsTransition { Easing: CubicEaseOut } scale &&
                 scale.Duration == duration && button.RenderTransformOrigin == RelativePoint.Center),
             $"{label}: color, shadow{(compact ? " and scale" : "")} use one 120 ms ease-out transition");
-        Face(button, Primary, Colors.White, $"{label} at rest");
+        Face(button, p.Rest, Colors.White, $"{label} at rest");
         Ensure(presenter.BoxShadow.Count == 0 && Math.Abs(Scale(button) - 1) <= .005, $"{label}: at rest the button is flat at scale 1");
 
         await Hold(button, ":pointerover", true);
-        Face(button, Selection, Primary, $"{label} hover");
+        Face(button, p.Hover, p.Accent, $"{label} hover");
         var shadow = presenter.BoxShadow;
         Ensure(shadow.Count == 1 && shadow[0].OffsetX == 0 && shadow[0].OffsetY == 4 && shadow[0].Blur == 12 && shadow[0].Spread == 0 &&
-            shadow[0].Color.R == Primary.R && shadow[0].Color.G == Primary.G && shadow[0].Color.B == Primary.B && Math.Abs(shadow[0].Color.A / 255d - .30) < .01 &&
-            shadow.ToString() == Ui.PrimaryButtonHoverShadow.ToString(), $"{label}: hover adds the soft primary shadow ({shadow})");
+            shadow[0].Color.R == p.Accent.R && shadow[0].Color.G == p.Accent.G && shadow[0].Color.B == p.Accent.B && Math.Abs(shadow[0].Color.A / 255d - .30) < .01 &&
+            shadow.ToString() == p.Shadow.ToString(), $"{label}: hover adds the soft {p.Kind} shadow ({shadow})");
         var hovered = Scale(button);
         Ensure(compact ? Math.Abs(hovered - Ui.PrimaryHoverScale) <= .005 && Math.Abs(Ui.PrimaryHoverScale - 1.03) <= .005 && button.ZIndex > 0 : Math.Abs(hovered - 1) <= .005,
             $"{label}: hover scale is {hovered:0.###} ({(compact ? "compact, 1.03" : "full width, no scale")})");
@@ -353,15 +387,16 @@ internal static class UiVerification
         }
 
         await Hold(button, ":pressed", true);
-        Face(button, DividerColor, Primary, $"{label} pressed");
-        Ensure(TopBarVerification.Contrast(Colors.White, DividerColor) > TopBarVerification.Contrast(Colors.White, Selection), $"{label}: pressed is one step darker than hover");
+        Face(button, p.Pressed, p.Accent, $"{label} pressed");
+        Ensure(TopBarVerification.Contrast(Colors.White, p.Pressed) > TopBarVerification.Contrast(Colors.White, p.Hover), $"{label}: pressed is one step darker than hover");
         await Hold(button, ":pressed", false);
         await Hold(button, ":pointerover", false);
-        Face(button, Primary, Colors.White, $"{label} after leave");
+        Face(button, p.Rest, Colors.White, $"{label} after leave");
         Ensure(presenter.BoxShadow.Count == 0 && Math.Abs(Scale(button) - 1) <= .005 && button.ZIndex == 0, $"{label}: leaving returns to flat, scale 1");
     }
-    private static async Task DisabledPrimary(Button button, string label)
+    private static async Task DisabledPrimary(Button button, string label, Palette? palette = null)
     {
+        var p = palette ?? PrimaryPalette;
         var presenter = Presenter(button);
         (Color, Color, int, double) State() => (Fill(presenter.Background), Fill(presenter.Foreground), presenter.BoxShadow.Count, Scale(button));
         button.IsEnabled = false; await Hold(button, ":pointerover", false);
@@ -372,7 +407,7 @@ internal static class UiVerification
         var pressed = State();
         await Hold(button, ":pressed", false); await Hold(button, ":pointerover", false);
         button.IsEnabled = true; await Hold(button, ":pointerover", false);
-        Ensure(rest == hover && rest == pressed && rest.Item1 != Selection && rest.Item3 == 0 && Math.Abs(rest.Item4 - 1) <= .005,
+        Ensure(rest == hover && rest == pressed && rest.Item1 != p.Hover && rest.Item3 == 0 && Math.Abs(rest.Item4 - 1) <= .005,
             $"{label}: disabled has no hover or press effect ({rest} vs {hover})");
     }
     private static void Face(Button button, Color background, Color foreground, string label)
@@ -426,6 +461,84 @@ internal static class UiVerification
         Ensure(!Near(shaded(bx, by), surface(bx, by)), $"{label}: the hover shadow shows below the button ({shaded(bx, by)} on {surface(bx, by)})");
         Ensure(button.GetVisualAncestors().OfType<Visual>().Where(v => v.ClipToBounds).All(v => v.TransformToVisual(window) is { } m && new Rect(v.Bounds.Size).TransformToAABB(m).Contains(reach)),
             $"{label}: no container clips the hover shadow ({reach})");
+    }
+    // Text links
+    private static readonly Color PrimaryHover = Color.Parse("#357F5D");
+    private static async Task TextLinks(MainWindow window)
+    {
+        var (width, height) = (window.Width, window.Height);
+        foreach (var (w, h) in new[] { (1040d, 720d), (1920d, 1080d) })
+        {
+            window.Width = w; window.Height = h;
+            var size = $"{w:0}x{h:0}";
+            window.ShowCollection(MarketplaceView.Cheapest); await Settle();
+            var collection = (CollectionView)window.CurrentPage!;
+            await TextLink(window, collection.BackLink, () => Fits(collection.Scroll), $"{size} collection");
+            window.ShowSearch("roti"); await Settle();
+            var search = (CollectionView)window.CurrentPage!;
+            await TextLink(window, search.BackLink, () => Fits(search.Scroll), $"{size} search");
+            window.ShowCart(); await Settle();
+            var cart = (CartView)window.CurrentPage!;
+            await TextLink(window, cart.BackLink, () => (cart.ListScroll is not { } list || Fits(list)) && cart.Bounds.Width <= window.Bounds.Width + .5, $"{size} cart");
+        }
+        window.Width = width; window.Height = height; window.ShowMarketplace(); await Settle();
+    }
+    private static bool Fits(ScrollViewer scroll) => scroll.Extent.Width <= scroll.Viewport.Width + .5;
+    internal static async Task TextLink(Window window, Button link, Func<bool> fits, string label, string text = CollectionView.BackLabel)
+    {
+        var presenter = Presenter(link);
+        var glyph = link.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Path>().Single();
+        var caption = link.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == text);
+        Ensure(link.Classes.Contains(CollectionView.BackLinkClass) && link.Bounds.Height >= CollectionView.BackLinkMinHeight - .5,
+            $"{label}: {text} uses the shared text link and is {link.Bounds.Height:0.#} high");
+        void Colors(Color foreground, string state) =>
+            Ensure(Fill(presenter.Background) == Avalonia.Media.Colors.Transparent && Fill(presenter.BorderBrush) == Avalonia.Media.Colors.Transparent &&
+                Fill(link.Background) == Avalonia.Media.Colors.Transparent && presenter.BoxShadow.Count == 0 && Math.Abs(Scale(link) - 1) <= .005 &&
+                Fill(presenter.Foreground) == foreground && Fill(caption.Foreground) == foreground && Fill(glyph.Stroke) == foreground &&
+                caption.TextDecorations is null or { Count: 0 },
+                $"{label} {state}: transparent with {Fill(presenter.Foreground)} text and {Fill(glyph.Stroke)} arrow, expected {foreground} ({Fill(presenter.Background)} fill)");
+        var box = new Rect(link.Bounds.Size).TransformToAABB(link.TransformToVisual(window)!.Value);
+        Rect Inner(Visual visual) => new Rect(visual.Bounds.Size).TransformToAABB(visual.TransformToVisual(window)!.Value).Inflate(1);
+        var (marks, icon) = (Inner(caption), Inner(glyph));
+        var points = new List<(int X, int Y)>();
+        for (var y = (int)Math.Ceiling(box.Y) + 1; y < (int)Math.Floor(box.Bottom) - 1; y++)
+            for (var x = (int)Math.Ceiling(box.X) + 1; x < (int)Math.Floor(box.Right) - 1; x++)
+                if (!marks.Contains(new Point(x + .5, y + .5)) && !icon.Contains(new Point(x + .5, y + .5))) points.Add((x, y));
+        var opacity = link.Opacity; link.Opacity = 0;
+        await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Render);
+        var surface = Snapshot(window);
+        link.Opacity = opacity;
+        await Hold(link, ":pointerover", false);
+        Colors(Primary, "at rest");
+        var rest = Snapshot(window);
+
+        await Hold(link, ":pointerover", true);
+        Colors(PrimaryHover, "hover");
+        var hovered = Snapshot(window);
+        var canvas = surface((int)box.X + 2, (int)box.Center.Y);
+        var contrast = TopBarVerification.Contrast(PrimaryHover, canvas);
+        Ensure(PrimaryHover != Primary && contrast >= 4.5 && Fill(Ui.PrimaryHover) == PrimaryHover,
+            $"{label}: hover color {PrimaryHover} differs from {Primary} at {contrast:0.0}:1 on the canvas {canvas}");
+        var tinted = points.FirstOrDefault(p => !Near(hovered(p.X, p.Y), surface(p.X, p.Y)));
+        Ensure(points.Count > 0 && points.All(p => Near(hovered(p.X, p.Y), surface(p.X, p.Y))),
+            $"{label}: hover keeps the canvas behind the link ({hovered(tinted.X, tinted.Y)} at {tinted}, canvas {surface(tinted.X, tinted.Y)})");
+        Ensure(Enumerable.Range((int)marks.X, (int)marks.Width).Any(x => Enumerable.Range((int)marks.Y, (int)marks.Height).Any(y => rest(x, y) != hovered(x, y))),
+            $"{label}: the label is drawn in a new color on hover");
+        Ensure(fits(), $"{label}: no horizontal scrolling while hovered");
+
+        await Hold(link, ":pressed", true);
+        Colors(Primary, "pressed");
+        var pressed = Snapshot(window);
+        Ensure(points.All(p => Near(pressed(p.X, p.Y), surface(p.X, p.Y))), $"{label}: pressed keeps the canvas behind the link");
+        await Hold(link, ":pressed", false);
+        await Hold(link, ":pointerover", false);
+        Colors(Primary, "after leave");
+
+        var ring = TopBarVerification.FocusRing(link);
+        await Hold(link, ":focus-visible", true);
+        Ensure(ring.BorderBrush is ISolidColorBrush { Color: var color } && color == Primary && ring.IsVisible && ring.BorderThickness.Left > 0,
+            $"{label}: :focus-visible shows the primary focus ring");
+        await Hold(link, ":focus-visible", false);
     }
     private static bool Near(Color a, Color b) => Math.Abs(a.R - b.R) <= 3 && Math.Abs(a.G - b.G) <= 3 && Math.Abs(a.B - b.B) <= 3;
     private static Func<int, int, Color> Snapshot(Window window)

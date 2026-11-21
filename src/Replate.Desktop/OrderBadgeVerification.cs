@@ -99,16 +99,26 @@ internal static class OrderBadgeVerification
                 if (restaurant) session.AsOwner(); else session.AsCustomer();
                 if (restaurant) window.ShowRestaurantOrders(); else window.ShowCustomerOrders();
                 await Settle();
-                var filter = window.GetVisualDescendants().OfType<ComboBox>().Single();
-                Ensure(window.GetVisualDescendants().OfType<OrderStatusBadge>().Count() == 3, "Active filter preserved");
-                filter.SelectedIndex = 1; await Settle();
+                void Filter(int index, string label)
+                {
+                    if (restaurant) window.GetVisualDescendants().OfType<ComboBox>().Single().SelectedIndex = index;
+                    else ((OrdersView)window.CurrentPage!).Select(label);
+                }
+                if (restaurant) Ensure(window.GetVisualDescendants().OfType<OrderStatusBadge>().Count() == 3, "Active filter preserved");
+                else
+                {
+                    Ensure(((OrdersView)window.CurrentPage!).SelectedFilter == OrdersView.All, "Customer orders open on Semua");
+                    Filter(0, OrdersView.Active); await Settle();
+                    Ensure(window.GetVisualDescendants().OfType<OrderStatusBadge>().Count() == 3, "Aktif holds the three open orders");
+                }
+                Filter(1, OrdersView.All); await Settle();
                 var badges = window.GetVisualDescendants().OfType<OrderStatusBadge>().ToList();
                 Ensure(badges.Count == 5, "All five badges present in order list");
                 foreach (var status in expected.Keys) CheckBadge(badges.Single(b => b.Status == status), status);
                 Shot(window, $"badges-{area}-list-all");
-                filter.SelectedIndex = 2; await Settle();
+                Filter(2, OrdersView.Done); await Settle();
                 CheckBadge(window.GetVisualDescendants().OfType<OrderStatusBadge>().Single(), OrderStatus.Completed);
-                filter.SelectedIndex = 3; await Settle();
+                Filter(3, OrdersView.Cancelled); await Settle();
                 CheckBadge(window.GetVisualDescendants().OfType<OrderStatusBadge>().Single(), OrderStatus.Cancelled);
                 foreach (var order in customerOrders)
                 {

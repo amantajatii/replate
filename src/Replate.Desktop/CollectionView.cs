@@ -1,11 +1,13 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Media.Transformation;
 using Avalonia.Styling;
 using Replate.Domain.Entities;
 using Path = Avalonia.Controls.Shapes.Path;
@@ -91,14 +93,14 @@ public sealed class CollectionView : UserControl
     internal void Refresh() => Feed.Refresh();
 
     // Back link
-    internal static Button CreateBackLink(Action back, out Path glyph)
+    internal static Button CreateBackLink(Action back, out Path glyph, string text = BackLabel)
     {
         glyph = new Path
         {
             Data = BackIcon, Width = BackIconSize, Height = BackIconSize, Stretch = Stretch.None, StrokeThickness = 1.75,
             StrokeLineCap = PenLineCap.Round, StrokeJoin = PenLineJoin.Round, VerticalAlignment = VerticalAlignment.Center
         };
-        var label = new TextBlock { Text = BackLabel, FontSize = 14, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+        var label = new TextBlock { Text = text, FontSize = 14, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
         var link = new Button
         {
             Content = Ui.Row(8, glyph, label), Padding = new Thickness(8, 6), Margin = new Thickness(-8, 0, 0, 0),
@@ -108,24 +110,39 @@ public sealed class CollectionView : UserControl
         };
         link.Classes.Add(BackLinkClass);
         glyph[!Shape.StrokeProperty] = link[!TemplatedControl.ForegroundProperty];
-        AutomationProperties.SetName(link, BackLabel);
+        AutomationProperties.SetName(link, text);
         link.Click += (_, _) => back();
         return link;
     }
 
     internal static void AddBackLinkStyles(Styles styles)
     {
-        Style State(Func<Selector, Selector> state, IBrush background, IBrush foreground) =>
+        Style State(Func<Selector, Selector> state, IBrush foreground) =>
             new(x => state(x.OfType<Button>().Class(BackLinkClass)))
             {
-                Setters = { new Setter(TemplatedControl.BackgroundProperty, background), new Setter(TemplatedControl.ForegroundProperty, foreground) }
+                Setters =
+                {
+                    new Setter(TemplatedControl.BackgroundProperty, Brushes.Transparent), new Setter(TemplatedControl.BorderBrushProperty, Brushes.Transparent),
+                    new Setter(TemplatedControl.ForegroundProperty, foreground), new Setter(Visual.RenderTransformProperty, TransformOperations.Identity)
+                }
             };
-        styles.Add(State(x => x, Brushes.Transparent, Ui.Green));
-        styles.Add(State(x => x.Class(":pointerover"), Ui.Selection, Ui.Green));
-        styles.Add(new Style(x => x.OfType<Button>().Class(BackLinkClass).Class(":pointerover").Template().OfType<Avalonia.Controls.Presenters.ContentPresenter>().Name("PART_ContentPresenter"))
+        Style Face(Func<Selector, Selector> state, IBrush foreground) =>
+            new(x => state(x.OfType<Button>().Class(BackLinkClass)).Template().OfType<ContentPresenter>().Name("PART_ContentPresenter"))
+            {
+                Setters =
+                {
+                    new Setter(ContentPresenter.BackgroundProperty, Brushes.Transparent), new Setter(ContentPresenter.BorderBrushProperty, Brushes.Transparent),
+                    new Setter(ContentPresenter.ForegroundProperty, foreground)
+                }
+            };
+        foreach (var (state, foreground) in new (Func<Selector, Selector>, IBrush)[]
         {
-            Setters = { new Setter(Avalonia.Controls.Presenters.ContentPresenter.BackgroundProperty, Ui.Selection), new Setter(Avalonia.Controls.Presenters.ContentPresenter.ForegroundProperty, Ui.Green) }
-        });
+            (x => x, Ui.Green), (x => x.Class(":pointerover"), Ui.PrimaryHover), (x => x.Class(":pressed"), Ui.Green), (x => x.Class(":disabled"), Ui.Green)
+        })
+        {
+            styles.Add(State(state, foreground));
+            styles.Add(Face(state, foreground));
+        }
     }
 }
 

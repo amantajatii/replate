@@ -18,11 +18,17 @@ namespace Replate.Desktop;
 internal static class Ui
 {
     public static readonly IBrush Green = Brush.Parse("#245B43");
+    public static readonly IBrush PrimaryHover = Brush.Parse("#357F5D");
     public static readonly IBrush Ink = Brush.Parse("#23382C");
     public static readonly IBrush Muted = Brush.Parse("#59675D");
     public static readonly IBrush Selection = Brush.Parse("#E0E9DF");
     public static readonly IBrush OnPrimary = Brushes.White;
     public static readonly IBrush DividerFill = Brush.Parse("#DDE3DA");
+    public static readonly IBrush Sidebar = Brush.Parse("#F1F3EE");
+    public static readonly IBrush Danger = Brush.Parse("#B3261E");
+    public static readonly IBrush DangerTint = Brush.Parse("#FBE4E1");
+    public static readonly IBrush DangerPressed = Brush.Parse("#F6D3CE");
+    public static readonly FontFamily CodeFont = new("Cascadia Mono, Consolas, Menlo, monospace");
 
     // Logo
     public const string LogoName = "Replate";
@@ -68,7 +74,7 @@ internal static class Ui
     public static Panel FocusFrame(Control face, CornerRadius radius) => new() { Children = { face, FocusRing(radius) } };
     private static ContentPresenter PrimaryFill(Button button, ContentPresenter presenter)
     {
-        if (button.Classes.Contains(PrimaryClass))
+        if (button.Classes.Contains(PrimaryClass) || button.Classes.Contains(DangerClass))
             presenter.Bind(ContentPresenter.BackgroundProperty, button.GetObservable(TemplatedControl.BackgroundProperty), Avalonia.Data.BindingPriority.Template);
         else presenter[!ContentPresenter.BackgroundProperty] = button[!TemplatedControl.BackgroundProperty];
         return presenter;
@@ -145,6 +151,13 @@ internal static class Ui
         if (primary) button.Classes.AddRange([PrimaryClass, CompactClass]);
         button.Click += (_, _) => action(); return button;
     }
+    public static Button DangerButton(string text, Action action)
+    {
+        var button = Button(text, action);
+        button.Background = Danger; button.Foreground = OnPrimary;
+        button.Classes.AddRange([DangerClass, CompactClass]);
+        return button;
+    }
     public static Button Round(Button button, double size, bool icon = false)
     {
         button.Classes.Remove(CompactClass);
@@ -166,15 +179,17 @@ internal static class Ui
     public const string CompactClass = "compact";
     public const string RoundClass = "round";
     public const string IconClass = "icon";
+    public const string DangerClass = "danger";
     public const double PrimaryHoverScale = 1.03;
     public static readonly TimeSpan PrimaryHoverDuration = TimeSpan.FromMilliseconds(120);
     public static readonly BoxShadows PrimaryButtonHoverShadow = BoxShadows.Parse("0 4 12 0 #4D245B43");
+    public static readonly BoxShadows DangerButtonHoverShadow = BoxShadows.Parse("0 4 12 0 #4DB3261E");
     public static void UsePrimaryButtons(Application app) { app.Styles.Add(PrimaryStyles()); app.Styles.Add(IconStyles()); }
     private static Styles PrimaryStyles()
     {
         var ease = new CubicEaseOut();
-        Style Face(Func<Selector, Selector> state, IBrush background, IBrush foreground, BoxShadows shadow) =>
-            new(x => state(x.OfType<Button>().Class(PrimaryClass).Not(y => y.Class(":disabled"))).Template().OfType<ContentPresenter>().Name("PART_ContentPresenter"))
+        Style Face(string kind, Func<Selector, Selector> state, IBrush background, IBrush foreground, BoxShadows shadow) =>
+            new(x => state(x.OfType<Button>().Class(kind).Not(y => y.Class(":disabled"))).Template().OfType<ContentPresenter>().Name("PART_ContentPresenter"))
             {
                 Setters =
                 {
@@ -183,8 +198,8 @@ internal static class Ui
                     new Setter(ContentPresenter.BoxShadowProperty, shadow)
                 }
             };
-        Style Scale(Func<Selector, Selector> state, double scale, int z) =>
-            new(x => state(x.OfType<Button>().Class(PrimaryClass)))
+        Style Scale(string kind, Func<Selector, Selector> state, double scale, int z) =>
+            new(x => state(x.OfType<Button>().Class(kind)))
             {
                 Setters =
                 {
@@ -192,9 +207,9 @@ internal static class Ui
                     new Setter(Visual.ZIndexProperty, z)
                 }
             };
-        return new Styles
-        {
-            new Style(x => x.OfType<Button>().Class(PrimaryClass).Template().OfType<ContentPresenter>().Name("PART_ContentPresenter"))
+        Style[] Motion(string kind) =>
+        [
+            new Style(x => x.OfType<Button>().Class(kind).Template().OfType<ContentPresenter>().Name("PART_ContentPresenter"))
             {
                 Setters =
                 {
@@ -206,7 +221,7 @@ internal static class Ui
                     })
                 }
             },
-            new Style(x => x.OfType<Button>().Class(PrimaryClass).Class(CompactClass))
+            new Style(x => x.OfType<Button>().Class(kind).Class(CompactClass))
             {
                 Setters =
                 {
@@ -216,20 +231,36 @@ internal static class Ui
                         new TransformOperationsTransition { Property = Visual.RenderTransformProperty, Duration = PrimaryHoverDuration, Easing = ease }
                     })
                 }
-            },
-            Face(x => x, Green, OnPrimary, default),
-            Face(x => x.Class(":pointerover"), Selection, Green, PrimaryButtonHoverShadow),
-            Face(x => x.Class(":pressed"), DividerFill, Green, PrimaryButtonHoverShadow),
-            Face(x => x.Class(":pressed").Not(y => y.Class(":pointerover")), DividerFill, Green, default),
-            Face(x => x.Class(RoundClass).Class(":pointerover"), Selection, Green, default),
-            Face(x => x.Class(RoundClass).Class(":pressed"), DividerFill, Green, default),
-            new Style(x => x.OfType<Button>().Class(PrimaryClass).Class(":disabled").Template().OfType<Panel>().Child().OfType<ContentPresenter>().Name("PART_ContentPresenter"))
+            }
+        ];
+        Style[] States(string kind, IBrush rest, IBrush hover, IBrush pressed, IBrush text, BoxShadows shadow) =>
+        [
+            Face(kind, x => x, rest, OnPrimary, default),
+            Face(kind, x => x.Class(":pointerover"), hover, text, shadow),
+            Face(kind, x => x.Class(":pressed"), pressed, text, shadow),
+            Face(kind, x => x.Class(":pressed").Not(y => y.Class(":pointerover")), pressed, text, default)
+        ];
+        Style[] Rest(string kind) =>
+        [
+            new Style(x => x.OfType<Button>().Class(kind).Class(":disabled").Template().OfType<Panel>().Child().OfType<ContentPresenter>().Name("PART_ContentPresenter"))
             {
                 Setters = { new Setter(ContentPresenter.BackgroundProperty, new Avalonia.Data.TemplateBinding(TemplatedControl.BackgroundProperty)) }
             },
-            Scale(x => x, 1, 0),
-            Scale(x => x.Class(CompactClass).Class(":pointerover").Not(y => y.Class(":disabled")), PrimaryHoverScale, 1)
-        };
+            Scale(kind, x => x, 1, 0),
+            Scale(kind, x => x.Class(CompactClass).Class(":pointerover").Not(y => y.Class(":disabled")), PrimaryHoverScale, 1)
+        ];
+        var styles = new Styles();
+        // Primary
+        styles.AddRange(Motion(PrimaryClass));
+        styles.AddRange(States(PrimaryClass, Green, Selection, DividerFill, Green, PrimaryButtonHoverShadow));
+        styles.Add(Face(PrimaryClass, x => x.Class(RoundClass).Class(":pointerover"), Selection, Green, default));
+        styles.Add(Face(PrimaryClass, x => x.Class(RoundClass).Class(":pressed"), DividerFill, Green, default));
+        styles.AddRange(Rest(PrimaryClass));
+        // Danger
+        styles.AddRange(Motion(DangerClass));
+        styles.AddRange(States(DangerClass, Danger, DangerTint, DangerPressed, Danger, DangerButtonHoverShadow));
+        styles.AddRange(Rest(DangerClass));
+        return styles;
     }
 
     // Icon button

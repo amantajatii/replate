@@ -98,11 +98,20 @@ internal static class FormLayoutVerification
                     if (restaurant) { session.AsOwner(); window.ShowRestaurantOrders(); }
                     else { session.AsCustomer(); window.ShowCustomerOrders(); }
                     await Settle();
-                    var filter = window.GetVisualDescendants().OfType<ComboBox>().Single();
-                    Ensure(filter.Bounds.Width >= 280 && filter.Bounds.Width <= 360 && filter.FontSize >= 14,
-                        "Order status dropdown has readable font and compact width in both areas");
-                    Ensure(window.CurrentPage!.Bounds.Width > filter.Bounds.Width, "Orders page remains full width");
-                    filter.SelectedIndex = 1; await Settle();
+                    if (restaurant)
+                    {
+                        var filter = window.GetVisualDescendants().OfType<ComboBox>().Single();
+                        Ensure(filter.Bounds.Width >= 280 && filter.Bounds.Width <= 360 && filter.FontSize >= 14,
+                            "Order status dropdown has readable font and compact width");
+                        Ensure(window.CurrentPage!.Bounds.Width > filter.Bounds.Width, "Orders page remains full width");
+                        filter.SelectedIndex = 1; await Settle();
+                    }
+                    else
+                    {
+                        var orders = (OrdersView)window.CurrentPage!;
+                        Ensure(!window.CurrentPage!.GetVisualDescendants().OfType<ComboBox>().Any() && orders.FilterButtons.All(b => b.FontSize >= 14) &&
+                            orders.Bounds.Width > orders.FilterRow!.Bounds.Width, "Customer status filters are readable pills on a full-width page");
+                    }
                     Shot($"form-order-filter-{(restaurant ? "restaurant" : "customer")}-{size}");
                 }
             }

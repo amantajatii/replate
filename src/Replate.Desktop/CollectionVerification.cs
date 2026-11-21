@@ -14,7 +14,6 @@ namespace Replate.Desktop;
 internal static class CollectionVerification
 {
     private static readonly Color Primary = Color.Parse("#245B43");
-    private static readonly Color Selection = Color.Parse("#E0E9DF");
 
     internal static async Task Run(MainWindow window)
     {
@@ -55,7 +54,8 @@ internal static class CollectionVerification
             AutomationProperties.GetName(link) == CollectionView.BackLabel && ColorOf(link.Foreground) == Primary && ColorOf(link.Background) == Colors.Transparent &&
             ColorOf(collection.BackGlyph.Stroke) == Primary && collection.BackGlyph.StrokeThickness == 1.75, "Kembali ke Jelajah is a primary text link with a left arrow");
         await Pseudo(link, ":pointerover", true);
-        Ensure(ColorOf(link.Background) == Selection, "Back link hover uses the selection fill");
+        Ensure(ColorOf(link.Background) == Colors.Transparent && ColorOf(link.Foreground) == Color.Parse("#357F5D") && ColorOf(collection.BackGlyph.Stroke) == Color.Parse("#357F5D"),
+            "Back link hover only changes the text and arrow color");
         await Pseudo(link, ":pointerover", false);
         var ring = TopBarVerification.FocusRing(link);
         await Pseudo(link, ":focus-visible", true);
