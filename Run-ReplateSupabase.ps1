@@ -22,15 +22,34 @@ if ($RootCertificate) {
     $RootCertificate = (Resolve-Path -LiteralPath $RootCertificate).ProviderPath
 }
 
-$password = Read-Host 'Password database Supabase' -AsSecureString
-$credential = [System.Net.NetworkCredential]::new($DatabaseUser, $password)
+$databasePassword = $null
+$envPath = Join-Path $PSScriptRoot '.env'
+if (Test-Path -LiteralPath $envPath -PathType Leaf) {
+    foreach ($line in Get-Content -LiteralPath $envPath -Encoding UTF8) {
+        if ($line -cmatch '^REPLATE_DB_PASSWORD=(.*)$') {
+            $databasePassword = $Matches[1]
+            break
+        }
+    }
+}
+
+if ([string]::IsNullOrWhiteSpace($databasePassword)) {
+    $password = Read-Host 'Password database Supabase' -AsSecureString
+    try {
+        $databasePassword = [System.Net.NetworkCredential]::new($DatabaseUser, $password).Password
+    }
+    finally {
+        $password.Dispose()
+    }
+}
+
 $previousConnection = $env:REPLATE_DB_CONNECTION_STRING
 $previousPassword = $env:REPLATE_DB_PASSWORD
 $previousRootCertificate = $env:PGSSLROOTCERT
 
 try {
     $env:REPLATE_DB_CONNECTION_STRING = "Host=$DatabaseHost;Port=$DatabasePort;Database=postgres;Username=$DatabaseUser;SSL Mode=VerifyFull;Timeout=10"
-    $env:REPLATE_DB_PASSWORD = $credential.Password
+    $env:REPLATE_DB_PASSWORD = $databasePassword
     if ($RootCertificate) {
         $env:PGSSLROOTCERT = $RootCertificate
     }
@@ -43,5 +62,4 @@ finally {
     $env:REPLATE_DB_CONNECTION_STRING = $previousConnection
     $env:REPLATE_DB_PASSWORD = $previousPassword
     $env:PGSSLROOTCERT = $previousRootCertificate
-    $password.Dispose()
 }
