@@ -3,7 +3,7 @@ using Replate.Domain.Entities;
 
 namespace Replate.Desktop.Data;
 
-internal sealed class DatabaseService
+internal sealed class DatabaseService : IOrderStore
 {
     private readonly string _connectionString = BuildConnectionString();
 
@@ -63,6 +63,7 @@ internal sealed class DatabaseService
         {
             await using var connection = CreateConnection();
             await connection.OpenAsync();
+            await using var transaction = await connection.BeginTransactionAsync();
 
             const string sql = """
             INSERT INTO orders
@@ -72,7 +73,7 @@ internal sealed class DatabaseService
             ON CONFLICT (id) DO NOTHING;
             """;
 
-            await using var command = new NpgsqlCommand(sql, connection);
+            await using var command = new NpgsqlCommand(sql, connection, transaction);
             command.Parameters.AddWithValue("id", order.Id);
             command.Parameters.AddWithValue("customer_id", order.CustomerId);
             command.Parameters.AddWithValue("restaurant_id", order.RestaurantId);
@@ -80,8 +81,9 @@ internal sealed class DatabaseService
             command.Parameters.AddWithValue("total_price", order.TotalPrice);
             command.Parameters.AddWithValue("status", order.Status.ToString());
             command.Parameters.AddWithValue("ordered_at", order.OrderedAt);
-
             await command.ExecuteNonQueryAsync();
+
+            await transaction.CommitAsync();
         }
         catch (NpgsqlException e)
         {

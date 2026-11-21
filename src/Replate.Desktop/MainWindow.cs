@@ -27,7 +27,9 @@ public sealed class MainWindow : Window
     private readonly ContentControl customerArea = new();
     private readonly DockPanel customerShell = new();
     private readonly Panel dialogLayer = new();
-    internal FoodDialog? Dialog { get; private set; }
+    private ModalDialog? modal;
+    internal FoodDialog? Dialog => modal as FoodDialog;
+    internal CheckoutDialog? Confirmation => modal as CheckoutDialog;
     internal string SearchText => TopBar.SearchBox.Text?.Trim() ?? "";
 
     public MainWindow(DemoSession? session = null, string? startupError = null)
@@ -57,9 +59,9 @@ public sealed class MainWindow : Window
         Content = new Panel { Children = { shell, dialogLayer } };
         AddHandler(KeyDownEvent, (_, e) =>
         {
-            if (e.Key != Key.Escape || Dialog is null) return;
+            if (e.Key != Key.Escape || modal is null) return;
             e.Handled = true;
-            Dialog.Close();
+            modal.Close();
         }, RoutingStrategies.Tunnel);
         successTimer.Tick += (_, _) => { successTimer.Stop(); successBanner.IsVisible = false; };
         Closed += (_, _) => successTimer.Stop();
@@ -181,22 +183,31 @@ public sealed class MainWindow : Window
     // Dialog
     internal void ShowFoodDialog(SurplusListing listing, Func<SurplusListing, int, string?> add, bool keyboard, Action? focusBack)
     {
-        if (Session.CurrentUser is not Customer) return;
+        if (Session.CurrentUser is Customer) ShowModal(new FoodDialog(Session, listing, add, keyboard), focusBack);
+    }
+
+    internal void ShowCheckoutDialog(CartRestaurantGroup group, Func<Task<string?>> submit, bool keyboard, Action? focusBack)
+    {
+        if (Session.CurrentUser is not Customer || Session.FindRestaurant(group.RestaurantId) is not { } restaurant) return;
+        ShowModal(new CheckoutDialog(restaurant.Name, group, submit, keyboard), focusBack);
+    }
+
+    private void ShowModal(ModalDialog dialog, Action? focusBack)
+    {
         DismissDialog();
-        var dialog = new FoodDialog(Session, listing, add, keyboard);
         dialog.Closed += () =>
         {
-            if (Dialog != dialog) return;
+            if (modal != dialog) return;
             DismissDialog();
             focusBack?.Invoke();
         };
-        Dialog = dialog;
+        modal = dialog;
         dialogLayer.Children.Add(dialog);
     }
 
     private void DismissDialog()
     {
-        Dialog = null;
+        modal = null;
         dialogLayer.Children.Clear();
     }
 
@@ -230,7 +241,7 @@ public sealed class MainWindow : Window
         }
     }
 
-    private void ShowSuccess(string message)
+    internal void ShowSuccess(string message)
     {
         successTimer.Stop();
         successText.Text = message;

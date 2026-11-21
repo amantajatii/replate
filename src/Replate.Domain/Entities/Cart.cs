@@ -4,8 +4,6 @@ public sealed class Cart
 {
     public Guid Id { get; init; } = Guid.NewGuid();
     public Guid CustomerId { get; set; }
-    [System.Text.Json.Serialization.JsonInclude]
-    public Guid RestaurantId { get; private set; }
     public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
     [System.Text.Json.Serialization.JsonInclude]
     public DateTime UpdatedAt { get; private set; } = DateTime.UtcNow;
@@ -19,16 +17,9 @@ public sealed class Cart
             throw new InvalidOperationException("Listing stock is unavailable.");
         }
 
-        var listingRestaurantId = listing.Menu.RestaurantId;
-        if (Items.Count > 0 && RestaurantId != listingRestaurantId)
-        {
-            throw new InvalidOperationException("A cart can only contain items from one restaurant.");
-        }
-
         var item = Items.SingleOrDefault(candidate => candidate.ListingId == listing.Id);
         if (item is null)
         {
-            RestaurantId = listingRestaurantId;
             Items.Add(new CartItem
             {
                 CartId = Id,
@@ -54,11 +45,6 @@ public sealed class Cart
     public void RemoveItem(Guid listingId)
     {
         Items.RemoveAll(item => item.ListingId == listingId);
-        if (Items.Count == 0)
-        {
-            RestaurantId = Guid.Empty;
-        }
-
         UpdatedAt = DateTime.UtcNow;
     }
 
@@ -78,19 +64,18 @@ public sealed class Cart
     public void ClearCart()
     {
         Items.Clear();
-        RestaurantId = Guid.Empty;
         UpdatedAt = DateTime.UtcNow;
     }
 
     public decimal CalculateSubtotal() => Items.Sum(item => item.CalculateSubtotal());
 
-    public bool ValidateCart(DateTime? now = null)
-    {
-        var currentTime = now ?? DateTime.UtcNow;
-        return Items.Count > 0
-            && Items.All(item => item.Quantity > 0
-                && item.Quantity <= item.Listing.Quantity
-                && item.Listing.IsAvailable(currentTime)
-                && item.Listing.Menu.RestaurantId == RestaurantId);
-    }
+    public IReadOnlyList<CartRestaurantGroup> GroupByRestaurant() =>
+        Items.GroupBy(item => item.Listing.Menu.RestaurantId)
+            .Select(group => new CartRestaurantGroup(group.Key, [.. group]))
+            .ToList();
+
+    public CartRestaurantGroup? FindGroup(Guid restaurantId) =>
+        GroupByRestaurant().FirstOrDefault(group => group.RestaurantId == restaurantId);
+
+    public int CountRestaurants() => Items.Select(item => item.Listing.Menu.RestaurantId).Distinct().Count();
 }

@@ -15,7 +15,7 @@ internal static class StateVerification
         session = new DemoSession(path).AsCustomer();
         Ensure(session.StorageError is null && session.Cart.Items.Single().Quantity == 2, "Cart survives restart");
         var listing = session.Listings.Single(l => l.Id == listingId);
-        var order = session.Checkout();
+        var order = session.Checkout(listing.Menu.RestaurantId);
         Ensure(order.TotalPrice == 32000 && listing.Quantity == 4, "Checkout snapshots and reserves stock");
         session.AsOwner();
         ExpectFailure(() => session.ConfirmOrder(order, -1));
@@ -37,7 +37,7 @@ internal static class StateVerification
         Ensure(order.Items.Single().Listing.Menu.Name == "Chicken rice bowl", "Navigation references restored");
         listing = session.Listings.Single(l => l.Id == listingId);
         session.AddToCart(listing, 1);
-        var cancelled = session.Checkout(); session.CancelOrder(cancelled);
+        var cancelled = session.Checkout(listing.Menu.RestaurantId); session.CancelOrder(cancelled);
         ExpectFailure(() => session.CancelOrder(cancelled));
         Ensure(listing.Quantity == 4, "Cancellation restores stock exactly once");
         session.AsOwner();
@@ -61,7 +61,7 @@ internal static class StateVerification
         session.AddToCart(listing, 1);
         listing.PickupEnd = DateTime.UtcNow.AddSeconds(-1); session.Persist();
         session = new DemoSession(path).AsCustomer();
-        Ensure(session.Cart.Items.Count == 1 && !session.Cart.ValidateCart(), "Expired cart retained but cannot checkout");
+        Ensure(session.Cart.Items.Count == 1 && !session.Cart.GroupByRestaurant().Single().Validate(), "Expired cart retained but cannot checkout");
         Ensure(!session.Search("", "Semua").Any(l => l.Id == listingId), "Expired offer hidden after restart");
         session.ChangeQuantity(listingId, 0);
         Ensure(session.Cart.Items.Count == 0, "Expired cart can be cleared");
@@ -120,13 +120,13 @@ internal static class StateVerification
         }
         CheckMinimum();
         allocationSession.AddToCart(allocationListing, 2);
-        var allocationOrder = allocationSession.Checkout(); CheckMinimum();
+        var allocationOrder = allocationSession.Checkout(allocationListing.Menu.RestaurantId); CheckMinimum();
         allocationSession.AsOwner();
         allocationSession.ConfirmOrder(allocationOrder, 15); allocationSession.ReadyOrder(allocationOrder);
         allocationSession.CompletePickup(allocationOrder, allocationOrder.PickupCode); CheckMinimum();
         allocationSession.AsCustomer();
         allocationSession.AddToCart(allocationListing, 1);
-        allocationOrder = allocationSession.Checkout(); CheckMinimum();
+        allocationOrder = allocationSession.Checkout(allocationListing.Menu.RestaurantId); CheckMinimum();
         allocationSession.CancelOrder(allocationOrder); CheckMinimum();
         var allErrors = allocationSession.ValidateProduction(null, DateOnly.FromDateTime(DateTime.Today.AddDays(1)), -1, -2);
         Ensure(allErrors.Count == 4, "Production validation reports all fields together");

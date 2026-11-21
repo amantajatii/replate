@@ -70,7 +70,7 @@ internal static class OrdersEmptyVerification
             Click(Buttons().Single(b => b.Content as string == "Jelajahi Makanan"));
             Ensure(window.CurrentPage is MarketplaceView, "Explore action opens marketplace");
             session.AddToCart(session.Listings[0], 1);
-            var order = session.Checkout();
+            var order = session.Checkout(session.Listings[0].Menu.RestaurantId);
             window.WindowState = WindowState.Normal; window.Width = 1040; window.Height = 720;
             window.ShowCustomerOrders(); await Settle(); CheckResults(OrderStatus.Reserved, 1);
             foreach (var (index, message) in new[] { (2, "Belum ada pesanan selesai."), (3, "Tidak ada pesanan yang dibatalkan.") })
@@ -93,7 +93,7 @@ internal static class OrdersEmptyVerification
             Filter().SelectedIndex = 2; await Settle(); CheckResults(OrderStatus.Completed, 1);
             Shot("orders-empty-completed-results");
             session.AddToCart(session.Listings[0], 1);
-            var cancelled = session.Checkout(); session.CancelOrder(cancelled);
+            var cancelled = session.Checkout(session.Listings[0].Menu.RestaurantId); session.CancelOrder(cancelled);
             window.ShowCustomerOrders(); await Settle(); Filter().SelectedIndex = 3; await Settle(); CheckResults(OrderStatus.Cancelled, 1);
             Console.WriteLine("All Replate customer order empty-state checks passed (no history, other customers, empty filters, show all, results/badges/navigation, minimum/maximized).");
         }

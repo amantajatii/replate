@@ -58,8 +58,23 @@ source for checkout, stock, state transitions, and recommendations.
   PBKDF2. This is prototype-grade authentication, not production authentication.
 - Access guards: each workspace is guarded by role, and restaurant data can only
   be changed by the owner of that restaurant.
-- Cart scope: each customer has their own cart; a cart may contain items from
-  only one restaurant (single pickup location); one checkout produces one order.
+- Cart scope: each customer has one cart, which may hold menus from several
+  restaurants. Adding the same offer again merges it into one line; the quantity
+  never exceeds the remaining stock and only available offers can be added. The
+  cart groups its items by restaurant in the order the first item of each
+  restaurant was added, with a subtotal per group.
+- Checkout: each restaurant in the cart is ordered separately from Keranjang
+  (one order per restaurant), after a confirmation pop up. Ordering one
+  restaurant creates exactly one order with its own id, pickup code, total, and
+  pickup at that restaurant; the items of other restaurants stay in the cart.
+  Checkout is atomic: only that restaurant's items are validated (available,
+  enough stock, active menu; an unavailable item of another restaurant does not
+  block it), the order is built without touching stock, and it is saved to
+  PostgreSQL in one transaction. Only after that save succeeds is that
+  restaurant's stock reduced, the order added to its restaurant, its items
+  removed from the cart, and the JSON state written once. If the save fails,
+  stock and cart stay unchanged and no order is kept. Each restaurant owner sees
+  only the orders of their own restaurant.
 - State storage: the JSON state format is version 2, with migration from
   version 1.
 - Empty states: a newly registered restaurant starts with no menus, listings, or

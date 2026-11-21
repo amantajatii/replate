@@ -35,7 +35,7 @@ Ensure(cart.CalculateSubtotal() == 20_000m, "Cart subtotal must use rescue price
 
 var stock = new StockService();
 var checkout = new CheckoutService(stock);
-var order = checkout.CreateOrder(cart);
+var order = checkout.CreateOrder(cart, listing.Menu.RestaurantId);
 
 Ensure(order.TotalPrice == 20_000m, "Order total must equal cart subtotal");
 Ensure(listing.Quantity == 1, "Checkout must reserve listing stock");
@@ -65,16 +65,61 @@ SurplusListing ListingAt(Restaurant restaurant, string name) => new()
 };
 var firstListing = ListingAt(firstRestaurant, "Chicken rice bowl");
 var secondListing = ListingAt(secondRestaurant, "Gado-gado");
+var firstExtra = ListingAt(firstRestaurant, "Butter croissant");
 var multiCart = new Cart();
-multiCart.AddItem(firstListing, 1);
-Ensure(multiCart.RestaurantId == firstRestaurant.Id, "Cart must take the restaurant of its first item");
-var rejected = false;
-try { multiCart.AddItem(secondListing, 1); }
-catch (InvalidOperationException) { rejected = true; }
-Ensure(rejected && multiCart.Items.Count == 1 && secondListing.Quantity == 3, "Cart must reject items from another restaurant");
-Ensure(checkout.CreateOrder(multiCart).RestaurantId == firstRestaurant.Id, "Order must belong to the cart restaurant");
 multiCart.AddItem(secondListing, 1);
-Ensure(multiCart.RestaurantId == secondRestaurant.Id, "Cleared cart may switch restaurant");
+multiCart.AddItem(firstListing, 1);
+multiCart.AddItem(firstExtra, 2);
+multiCart.AddItem(secondListing, 1);
+var cartGroups = multiCart.GroupByRestaurant();
+Ensure(multiCart.Items.Count == 3 && multiCart.CountRestaurants() == 2, "Cart must accept items from several restaurants");
+Ensure(cartGroups.Select(g => g.RestaurantId).SequenceEqual([secondRestaurant.Id, firstRestaurant.Id]) &&
+    cartGroups[0].Items.Single().Quantity == 2 && cartGroups[1].Items.Count == 2, "Groups must follow the first added item and merge listings");
+Ensure(cartGroups[0].CalculateSubtotal() == 20_000m && cartGroups[1].CalculateSubtotal() == 30_000m &&
+    multiCart.CalculateSubtotal() == 50_000m, "Group subtotals must add up to the cart subtotal");
+var overStock = false;
+try { multiCart.AddItem(secondListing, 2); }
+catch (InvalidOperationException) { overStock = true; }
+Ensure(overStock && multiCart.Items.Single(i => i.ListingId == secondListing.Id).Quantity == 2, "Cart quantity must stay within stock");
+firstExtra.Menu.Deactivate();
+Ensure(!multiCart.FindGroup(firstRestaurant.Id)!.Validate() && multiCart.FindGroup(secondRestaurant.Id)!.Validate(),
+    "An inactive menu must only invalidate its own restaurant group");
+var unavailableElsewhere = checkout.PrepareOrder(multiCart, secondRestaurant.Id);
+Ensure(unavailableElsewhere.RestaurantId == secondRestaurant.Id, "An unavailable item of another restaurant must not block checkout");
+var blocked = false;
+try { checkout.PrepareOrder(multiCart, firstRestaurant.Id); }
+catch (InvalidOperationException) { blocked = true; }
+Ensure(blocked, "A restaurant with an unavailable item must not be checked out");
+firstExtra.Menu.Activate();
+var preparedOrder = checkout.PrepareOrder(multiCart, firstRestaurant.Id);
+Ensure(preparedOrder.RestaurantId == firstRestaurant.Id && firstListing.Quantity == 3 && secondListing.Quantity == 3 && firstExtra.Quantity == 3 &&
+    multiCart.Items.Count == 3, "Preparing an order must not change stock or cart");
+var missingRestaurant = false;
+try { checkout.PrepareOrder(multiCart, Guid.NewGuid()); }
+catch (InvalidOperationException) { missingRestaurant = true; }
+Ensure(missingRestaurant, "A restaurant outside the cart must not be checked out");
+var firstOrder = checkout.CreateOrder(multiCart, firstRestaurant.Id);
+Ensure(firstOrder.RestaurantId == firstRestaurant.Id && firstOrder.TotalPrice == 30_000m &&
+    firstOrder.Items.Select(i => i.ListingId).SequenceEqual([firstListing.Id, firstExtra.Id]) && firstOrder.Items.All(i => i.OrderId == firstOrder.Id) &&
+    firstOrder.PickupCode.Length == 6, "Checkout of one restaurant must create one order with its items and total");
+Ensure(firstListing.Quantity == 2 && firstExtra.Quantity == 1 && secondListing.Quantity == 3,
+    "Checkout must reserve stock of that restaurant only");
+Ensure(multiCart.Items.Single().ListingId == secondListing.Id && multiCart.Items.Single().Quantity == 2 && multiCart.CountRestaurants() == 1,
+    "Items of the other restaurant must stay in the cart");
+var secondOrder = checkout.CreateOrder(multiCart, secondRestaurant.Id);
+Ensure(secondOrder.RestaurantId == secondRestaurant.Id && secondOrder.TotalPrice == 20_000m && secondOrder.Id != firstOrder.Id &&
+    secondListing.Quantity == 1 && multiCart.Items.Count == 0, "Ordering the last restaurant must empty the cart");
+var staleCart = new Cart();
+staleCart.AddItem(secondListing, 1);
+staleCart.AddItem(firstListing, 2);
+staleCart.AddItem(firstExtra, 1);
+var staleOrder = checkout.PrepareOrder(staleCart, firstRestaurant.Id);
+firstExtra.UpdateStock(0);
+var commitRejected = false;
+try { checkout.CommitOrder(staleCart, staleOrder); }
+catch (InvalidOperationException) { commitRejected = true; }
+Ensure(commitRejected && firstListing.Quantity == 2 && firstExtra.Quantity == 0 && secondListing.Quantity == 1 && staleCart.Items.Count == 3,
+    "Failed commit must restore stock and keep the cart");
 var marketplace = new MarketplaceService([firstListing, secondListing]);
 Ensure(marketplace.SearchByRestaurant("sambal").Single() == secondListing, "Marketplace must search by restaurant name");
 

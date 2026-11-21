@@ -34,7 +34,7 @@ internal static class MultiRestaurantVerification
         Ensure(migratedOrder.Id == fixture.OrderId && migratedOrder.RestaurantId == fixture.RestaurantId &&
             migrated.CustomerOrders.Single() == migratedOrder, "Orders migrate");
         Ensure(migrated.Carts.Count == 1 && migrated.Cart == migrated.Carts[0] && migrated.Cart.Id == fixture.CartId &&
-            migrated.Cart.RestaurantId == fixture.RestaurantId && migrated.Cart.Items.Single().Quantity == 1, "Single cart migrates to carts");
+            migrated.Cart.GroupByRestaurant().Single().RestaurantId == fixture.RestaurantId && migrated.Cart.Items.Single().Quantity == 1, "Single cart migrates to carts");
         migrated.SignIn("dapur-lama@replate.demo", DemoAccounts.Password);
         Ensure(migrated.Restaurant.Id == fixture.RestaurantId, "Migrated demo owner manages the migrated restaurant");
 
@@ -103,12 +103,12 @@ internal static class MultiRestaurantVerification
         var pagiListing = session.Listings.First(l => l.Menu.RestaurantId == pagi.Id);
         var bumiOrders = bumi.Orders.Count; var pagiOrders = pagi.Orders.Count;
         session.AddToCart(pagiListing, 1);
-        var order = session.Checkout();
+        var order = session.Checkout(pagi.Id);
         Ensure(order.RestaurantId == pagi.Id && pagi.Orders.Contains(order) && pagi.Orders.Count == pagiOrders + 1 &&
             bumi.Orders.Count == bumiOrders, "Checkout adds order to the cart restaurant");
         Ensure(session.CustomerOrders.Single() == order, "Customer orders collected across restaurants");
         session.AddToCart(session.Listings.First(l => l.Menu.RestaurantId == sambal.Id), 1);
-        var sambalOrder = session.Checkout();
+        var sambalOrder = session.Checkout(sambal.Id);
         Ensure(sambal.Orders.Contains(sambalOrder) && session.CustomerOrders.Count() == 2, "Customer orders span restaurants");
         session = new DemoSession(seededPath);
         Ensure(session.FindRestaurant(pagi.Id)!.Orders.Any(o => o.Id == order.Id) &&
@@ -121,20 +121,121 @@ internal static class MultiRestaurantVerification
         var orphanSession = new DemoSession().AsCustomer();
         orphanSession.Cart.AddItem(orphanListing, 1);
         var message = "";
-        try { orphanSession.Checkout(); } catch (InvalidOperationException e) { message = e.Message; }
+        try { orphanSession.Checkout(orphanMenu.RestaurantId); } catch (InvalidOperationException e) { message = e.Message; }
         Ensure(message.StartsWith("Restoran untuk keranjang ini tidak ditemukan", StringComparison.Ordinal) &&
             orphanListing.Quantity == 3 && orphanSession.Cart.Items.Count == 1 && orphanSession.LastOrder is null,
             "Unknown cart restaurant is rejected before stock changes");
 
-        // Cart restaurant rule
-        var sambalListing = session.Listings.First(l => l.Menu.RestaurantId == sambal.Id && l.IsAvailable(DateTime.UtcNow));
-        var bumiListing = session.Listings.First(l => l.Menu.RestaurantId == bumi.Id && l.IsAvailable(DateTime.UtcNow));
-        session.AsCustomer();
-        session.AddToCart(sambalListing, 1);
-        ExpectFailure(() => session.AddToCart(bumiListing, 1));
-        Ensure(session.Cart.Items.Single().ListingId == sambalListing.Id && session.Cart.RestaurantId == sambal.Id, "Cart rejects another restaurant");
+        // Multi-restaurant cart
         session = new DemoSession(seededPath).AsCustomer();
-        Ensure(session.Cart.Items.Single().ListingId == sambalListing.Id && session.Cart.RestaurantId == sambal.Id, "Cart restaurant survives reload");
+        bumi = session.FindRestaurant(bumi.Id)!; sambal = session.FindRestaurant(sambal.Id)!;
+        var sambalListing = session.Listings.First(l => l.Menu.RestaurantId == sambal.Id && l.IsAvailable(DateTime.UtcNow) && l.Quantity >= 3);
+        var bumiListing = session.Listings.First(l => l.Menu.RestaurantId == bumi.Id && l.IsAvailable(DateTime.UtcNow) && l.Quantity >= 3);
+        var bumiSecond = session.Listings.First(l => l.Menu.RestaurantId == bumi.Id && l != bumiListing && l.IsAvailable(DateTime.UtcNow) && l.Quantity >= 2);
+        session.AddToCart(sambalListing, 2);
+        session.AddToCart(bumiListing, 1);
+        session.AddToCart(bumiSecond, 1);
+        session.AddToCart(bumiListing, 1);
+        var groups = session.Cart.GroupByRestaurant();
+        Ensure(session.Cart.Items.Count == 3 && session.Cart.CountRestaurants() == 2 &&
+            groups.Select(g => g.RestaurantId).SequenceEqual([sambal.Id, bumi.Id]) &&
+            groups[0].CalculateSubtotal() == sambalListing.RescuePrice * 2 &&
+            groups[1].CalculateSubtotal() == bumiListing.RescuePrice * 2 + bumiSecond.RescuePrice &&
+            session.Cart.Items.Single(i => i.ListingId == bumiListing.Id).Quantity == 2, "Cart accepts two restaurants, merges listings and groups by first item");
+        ExpectFailure(() => session.AddToCart(sambalListing, sambalListing.Quantity));
+        Ensure(session.Cart.Items.Single(i => i.ListingId == sambalListing.Id).Quantity == 2, "Cart quantity stays within stock");
+
+        // Multi-restaurant restart
+        var cartBefore = session.Cart.Items.Select(i => (i.ListingId, i.Quantity, i.UnitPrice)).ToList();
+        var savedCart = File.ReadAllText(seededPath);
+        Ensure(Version(seededPath) == 2 && JsonNode.Parse(savedCart)!["Carts"]!.AsArray()
+            .Single(c => c!["CustomerId"]!.GetValue<Guid>() == session.Cart.CustomerId)!["RestaurantId"]!.GetValue<Guid>() == sambal.Id,
+            "Multi-restaurant cart is stored in version 2 with the first restaurant");
+        session = new DemoSession(seededPath);
+        Ensure(session.StorageError is null && File.ReadAllText(seededPath) == savedCart, "Version 2 load does not rewrite the file");
+        session.AsCustomer();
+        Ensure(session.Cart.Items.Select(i => (i.ListingId, i.Quantity, i.UnitPrice)).SequenceEqual(cartBefore) &&
+            session.Cart.CountRestaurants() == 2 && session.Cart.GroupByRestaurant()[0].RestaurantId == sambal.Id, "Multi-restaurant cart survives restart");
+        bumi = session.FindRestaurant(bumi.Id)!; sambal = session.FindRestaurant(sambal.Id)!;
+        sambalListing = session.Listings.Single(l => l.Id == sambalListing.Id);
+        bumiListing = session.Listings.Single(l => l.Id == bumiListing.Id);
+        bumiSecond = session.Listings.Single(l => l.Id == bumiSecond.Id);
+
+        // Failed database save
+        var stockBefore = (sambalListing.Quantity, bumiListing.Quantity, bumiSecond.Quantity);
+        var ordersBefore = session.AllOrders.Count();
+        var failing = new TestOrderStore(true);
+        session.OrderStore = failing;
+        Ensure(FailureMessage(() => session.Checkout(sambal.Id)) == TestOrderStore.Message &&
+            FailureMessage(() => session.CheckoutAsync(sambal.Id).GetAwaiter().GetResult()) == TestOrderStore.Message, "Database failure surfaces the existing message");
+        Ensure(failing.Calls.Count == 2 && failing.Calls.All(o => o.RestaurantId == sambal.Id), "Only the chosen restaurant order goes to the database");
+        var unsaved = failing.Calls.Select(o => o.Id).ToHashSet();
+        void Unchanged(string label) => Ensure((sambalListing.Quantity, bumiListing.Quantity, bumiSecond.Quantity) == stockBefore &&
+            session.Cart.Items.Select(i => (i.ListingId, i.Quantity, i.UnitPrice)).SequenceEqual(cartBefore) &&
+            session.AllOrders.Count() == ordersBefore && session.LastOrder is null && File.ReadAllText(seededPath) == savedCart &&
+            !new DemoSession(seededPath).AllOrders.Any(o => unsaved.Contains(o.Id)), label);
+        Unchanged("Failed database save leaves stock, cart, and orders unchanged");
+        var previous = Environment.GetEnvironmentVariable("REPLATE_DB_CONNECTION_STRING");
+        Environment.SetEnvironmentVariable("REPLATE_DB_CONNECTION_STRING", "Host=127.0.0.1;Port=1;Database=replate_db;Username=postgres;Timeout=3");
+        try { session.OrderStore = new Data.DatabaseService(); }
+        finally { Environment.SetEnvironmentVariable("REPLATE_DB_CONNECTION_STRING", previous); }
+        Ensure(FailureMessage(() => session.Checkout(bumi.Id)) == TestOrderStore.Message, "Unavailable PostgreSQL uses the existing message");
+        Unchanged("Unavailable PostgreSQL leaves stock, cart, and orders unchanged");
+        ExpectFailure(() => session.Checkout(pagi.Id));
+        Unchanged("A restaurant outside the cart cannot be ordered");
+
+        // Per-restaurant checkout
+        var recording = new TestOrderStore(false);
+        session.OrderStore = recording;
+        sambalListing.Menu.Deactivate();
+        ExpectFailure(() => session.Checkout(sambal.Id));
+        Ensure(recording.Calls.Count == 0 && sambalListing.Quantity == stockBefore.Item1 && session.Cart.Items.Count == 3, "An unavailable item blocks its own restaurant");
+        var bumiOrderNew = session.Checkout(bumi.Id);
+        sambalListing.Menu.Activate(); session.Persist();
+        Ensure(session.LastOrder == bumiOrderNew && recording.Calls.Single() == bumiOrderNew,
+            "Checkout of one restaurant creates exactly one order and saves it, even with an unavailable item elsewhere");
+        Ensure(bumiOrderNew.RestaurantId == bumi.Id && bumiOrderNew.Items.Select(i => (i.ListingId, i.Quantity)).SequenceEqual([(bumiListing.Id, 2), (bumiSecond.Id, 1)]) &&
+            bumiOrderNew.TotalPrice == bumiListing.RescuePrice * 2 + bumiSecond.RescuePrice, "Bumi order has its items and total");
+        Ensure(bumiOrderNew.CustomerId == session.CurrentUser!.Id && bumiOrderNew.Status == OrderStatus.Reserved && bumiOrderNew.PickupCode.Length == 6,
+            "The order has its customer, status, and pickup code");
+        Ensure((sambalListing.Quantity, bumiListing.Quantity, bumiSecond.Quantity) == (stockBefore.Item1, stockBefore.Item2 - 2, stockBefore.Item3 - 1),
+            "Checkout reduces stock of that restaurant only");
+        Ensure(session.Cart.Items.Select(i => (i.ListingId, i.Quantity)).SequenceEqual([(sambalListing.Id, 2)]) && bumi.Orders.Contains(bumiOrderNew) &&
+            !sambal.Orders.Contains(bumiOrderNew) && session.AllOrders.Count() == ordersBefore + 1, "Other restaurant items stay in the cart");
+
+        // Remaining cart restart
+        session = new DemoSession(seededPath).AsCustomer();
+        bumi = session.FindRestaurant(bumi.Id)!; sambal = session.FindRestaurant(sambal.Id)!;
+        sambalListing = session.Listings.Single(l => l.Id == sambalListing.Id);
+        Ensure(session.Cart.Items.Select(i => (i.ListingId, i.Quantity)).SequenceEqual([(sambalListing.Id, 2)]) && sambalListing.Menu.IsActive &&
+            bumi.Orders.Any(o => o.Id == bumiOrderNew.Id) && session.Listings.Single(l => l.Id == bumiListing.Id).Quantity == stockBefore.Item2 - 2,
+            "The remaining cart, the order, and the stock survive restart");
+        recording = new TestOrderStore(false);
+        session.OrderStore = recording;
+        var sambalOrderNew = session.Checkout(sambal.Id);
+        Ensure(recording.Calls.Single() == sambalOrderNew && sambalOrderNew.RestaurantId == sambal.Id && sambalOrderNew.Id != bumiOrderNew.Id &&
+            sambalOrderNew.Items.Single().ListingId == sambalListing.Id && sambalOrderNew.TotalPrice == sambalListing.RescuePrice * 2 &&
+            sambalListing.Quantity == stockBefore.Item1 - 2 && session.Cart.Items.Count == 0 && sambal.Orders.Contains(sambalOrderNew),
+            "Ordering the last restaurant creates its own order and empties the cart");
+        Ensure(new[] { sambalOrderNew.Id, bumiOrderNew.Id }.All(id => session.CustomerOrders.Any(o => o.Id == id)), "Customer sees both orders");
+
+        // Owner order isolation
+        session = new DemoSession(seededPath);
+        Ensure(session.Carts.All(c => c.Items.Count == 0) && session.FindRestaurant(sambal.Id)!.Orders.Any(o => o.Id == sambalOrderNew.Id) &&
+            session.FindRestaurant(bumi.Id)!.Orders.Any(o => o.Id == bumiOrderNew.Id) &&
+            session.Listings.Single(l => l.Id == bumiListing.Id).Quantity == stockBefore.Item2 - 2, "Checkout persists orders and stock");
+        session.AsOwner("Warung Sambal Ijo");
+        Ensure(session.Restaurant.Orders.Any(o => o.Id == sambalOrderNew.Id) && session.Restaurant.Orders.All(o => o.Id != bumiOrderNew.Id),
+            "Sambal owner sees only the Sambal order");
+        var foreign = session.FindRestaurant(bumi.Id)!.Orders.Single(o => o.Id == bumiOrderNew.Id);
+        ExpectFailure(() => session.ConfirmOrder(foreign, 10));
+        Ensure(foreign.Status == OrderStatus.Reserved, "Sambal owner cannot process the Bumi order");
+        session.AsOwner("Dapur Bumi");
+        Ensure(session.Restaurant.Orders.Any(o => o.Id == bumiOrderNew.Id) && session.Restaurant.Orders.All(o => o.Id != sambalOrderNew.Id),
+            "Bumi owner sees only the Bumi order");
+        session.AsCustomer();
+        session.AddToCart(session.Listings.Single(l => l.Id == sambalListing.Id), 1);
+        session.AddToCart(session.Listings.Single(l => l.Id == bumiSecond.Id), 1);
 
         // Version 2 round trip
         session.Register(UserRole.Customer, "Sari", "sari@example.com", "kata-sandi-1");
@@ -198,9 +299,23 @@ internal static class MultiRestaurantVerification
     private static void Ensure(bool condition, string message)
     { if (!condition) throw new InvalidOperationException(message); }
 
-    private static void ExpectFailure(Action action)
+    private static void ExpectFailure(Action action) => FailureMessage(action);
+
+    private static string FailureMessage(Action action)
     {
-        try { action(); } catch (InvalidOperationException) { return; }
+        try { action(); } catch (InvalidOperationException e) { return e.Message; }
         throw new InvalidOperationException("Expected validation failure.");
+    }
+
+    private sealed class TestOrderStore(bool fail) : Data.IOrderStore
+    {
+        internal const string Message = "Pesanan dibuat, tetapi belum dapat disimpan ke PostgreSQL. Periksa koneksi database lalu coba lagi.";
+        public List<Order> Calls { get; } = [];
+
+        public Task SaveOrderAsync(Order order)
+        {
+            Calls.Add(order);
+            return fail ? Task.FromException(new InvalidOperationException(Message)) : Task.CompletedTask;
+        }
     }
 }
