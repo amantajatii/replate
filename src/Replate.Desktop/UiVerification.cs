@@ -54,6 +54,8 @@ internal static class UiVerification
             await CollectionVerification.Run(window);
             market = window.Marketplace;
             Ensure(market.VisibleCount == 10 && window.TopBar.SearchBox.Text == "", "Jelajah is back with every listing and an empty search");
+            await FoodDialogVerification.Run(window);
+            market = window.Marketplace;
             var listing = window.Session.Listings[0];
             window.ShowFood(listing); await Shot("food-detail");
             for (var i = 0; i <= listing.Quantity; i++) market.Add(listing);

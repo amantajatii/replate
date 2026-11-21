@@ -136,5 +136,5 @@ public sealed class MarketplaceView : UserControl
     // Listings
     internal void Refresh() => Feed.Refresh();
 
-    internal void Add(SurplusListing listing) => Feed.Add(listing);
+    internal string? Add(SurplusListing listing, int quantity = 1) => Feed.Add(listing, quantity);
 }

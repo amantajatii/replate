@@ -152,8 +152,9 @@ JELAJAH (customer marketplace, `MarketplaceView.cs` and `MarketplaceBanner.cs`):
   collection page (`MainWindow.ShowCollection`). Hover selection fill; Tab, Enter and
   Space work with the shared 2 px primary focus ring.
 - Listing cards: card style, padding 20, 16 apart, same columns and content as the old
-  rows; no row dividers (`ListingFeed.cs`, shared with collection pages). Tambah
-  behaves as before and keeps one restaurant per cart. Empty state "Belum ada menu
+  rows; no row dividers (`ListingFeed.cs`, shared with collection pages). Tambah, the
+  menu name, or a click anywhere else on the card opens the food dialog; Tambah never
+  adds directly. Empty state "Belum ada menu
   tersedia", 16 under the title.
 - Verified by `--verify-ui` (MarketplaceVerification) at 1040x720, 1360x940 and
   1920x1080: banner ratio equals the bitmap ratio (within 1%), banner left and right
@@ -162,6 +163,34 @@ JELAJAH (customer marketplace, `MarketplaceView.cs` and `MarketplaceBanner.cs`):
   left-aligned title; the three 24 gaps equal (within 1 px) and the title to first card
   gap 16; focus rings on collection cards and Tambah without the native adorner; no
   pick-one state or Hapus filter.
+
+FOOD DIALOG (customer only, `FoodDialog.cs`, opened by `MainWindow.ShowFoodDialog`):
+- An overlay inside the main window (no OS window), one at a time, above the top bar:
+  a flat scrim (`scrim`, ink at 40%, no blur) and a centered white card (760 wide,
+  radius 16, card shadow, no border, at least 32 from every edge, internal vertical
+  scroll when short, the bar always visible).
+- Content: photo 300 by 300 or the large "Foto belum tersedia" box; name, "Restoran ·
+  Kategori", description, "Pengambilan HH:mm–HH:mm", "N porsi tersisa", rescue price
+  with "/porsi", struck normal price, "Hemat N%"; round primary minus and plus with the
+  quantity (1 to stock minus cart quantity for that listing). At the limit plus is
+  disabled with "Maksimal N porsi"; nothing left: "Sudah di keranjang dengan jumlah
+  maksimal" and Tambah ke keranjang disabled; expired or sold out: "Penawaran tidak
+  tersedia" and disabled. Bottom bar on `selection`: total (rescue price x quantity)
+  and the primary "Tambah ke keranjang".
+- Tambah ke keranjang calls `DemoSession.AddToCart` with the quantity (through
+  `ListingFeed.Add`). Success closes the dialog, updates the badge and the existing
+  notice, and stays on the page. Another restaurant in the cart: the existing message
+  shows inside the dialog above the bar, nothing is added, the dialog stays open.
+- Closes with the X button, Esc, or a click on the scrim, without touching the cart.
+  Opening and closing never write state. Focus moves into the dialog, Tab cycles
+  inside it, and closing returns focus to the trigger; `:focus-visible` rings only.
+- Any navigation (Render or a public page) dismisses an open dialog.
+- Verified by `--verify-ui` (FoodDialogVerification): Tambah opens without adding;
+  content; plus/minus and total; limit and disabled plus; adding the chosen quantity
+  and closing; one restaurant message inside the dialog; expired offer; Esc, X and
+  scrim close without adding; no state write on open/close; focus trap and return
+  (pointer and keyboard); collection and search pages; centered and not cut off at
+  1040x720 and 1920x1080.
 
 COLLECTION AND SEARCH PAGES (customer only, `CollectionView.cs`):
 - One view for the five collections (`ShowCollection(name)`) and for search results
@@ -190,7 +219,8 @@ COLLECTION AND SEARCH PAGES (customer only, `CollectionView.cs`):
 - Verified by `--verify-ui` (CollectionVerification): each card opens its page with the
   right title; ordering and category filtering; search by menu name, restaurant name
   and words out of order; unknown words empty state; blank search stays; back link,
-  logo, cart and orders clear the field; Tambah keeps one restaurant per cart; rhythm
+  logo, cart and orders clear the field; Tambah opens the food dialog, which adds and
+  keeps one restaurant per cart; rhythm
   and alignment; no horizontal scrolling at 1040x720 and 1920x1080; role guards.
 
 AUTH SURFACE (Masuk and Daftar, implemented in `AuthViews.cs` as `AuthSurface`):

@@ -1,5 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Replate.Domain.Entities;
@@ -24,6 +26,8 @@ public sealed class MainWindow : Window
     internal Image? RailLogo { get; private set; }
     private readonly ContentControl customerArea = new();
     private readonly DockPanel customerShell = new();
+    private readonly Panel dialogLayer = new();
+    internal FoodDialog? Dialog { get; private set; }
     internal string SearchText => TopBar.SearchBox.Text?.Trim() ?? "";
 
     public MainWindow(DemoSession? session = null, string? startupError = null)
@@ -49,7 +53,14 @@ public sealed class MainWindow : Window
         DockPanel.SetDock(successBanner, Dock.Top);
         shell.Children.Add(successBanner);
         shell.Children.Add(pageHost);
-        Content = shell;
+        dialogLayer.Styles.Add(Ui.FocusStyles());
+        Content = new Panel { Children = { shell, dialogLayer } };
+        AddHandler(KeyDownEvent, (_, e) =>
+        {
+            if (e.Key != Key.Escape || Dialog is null) return;
+            e.Handled = true;
+            Dialog.Close();
+        }, RoutingStrategies.Tunnel);
         successTimer.Tick += (_, _) => { successTimer.Stop(); successBanner.IsVisible = false; };
         Closed += (_, _) => successTimer.Stop();
         ShowHome();
@@ -77,6 +88,7 @@ public sealed class MainWindow : Window
 
     private void ShowPublic(Control page)
     {
+        DismissDialog();
         CurrentPage = page;
         alert = null;
         pageHost.Content = page;
@@ -166,6 +178,28 @@ public sealed class MainWindow : Window
         if (Allowed(true)) Render(true, new OrdersView(this, Session, true), "Pesanan");
     }
 
+    // Dialog
+    internal void ShowFoodDialog(SurplusListing listing, Func<SurplusListing, int, string?> add, bool keyboard, Action? focusBack)
+    {
+        if (Session.CurrentUser is not Customer) return;
+        DismissDialog();
+        var dialog = new FoodDialog(Session, listing, add, keyboard);
+        dialog.Closed += () =>
+        {
+            if (Dialog != dialog) return;
+            DismissDialog();
+            focusBack?.Invoke();
+        };
+        Dialog = dialog;
+        dialogLayer.Children.Add(dialog);
+    }
+
+    private void DismissDialog()
+    {
+        Dialog = null;
+        dialogLayer.Children.Clear();
+    }
+
     internal void UpdateCartCount() => TopBar.SetCartCount(Session.Cart.Items.Sum(i => i.Quantity));
 
     internal void SubmitSearch(string query)
@@ -221,6 +255,7 @@ public sealed class MainWindow : Window
     }
     private void Render(bool restaurant, Control page, string active, string search = "")
     {
+        DismissDialog();
         CurrentPage = page;
         alert = Ui.Text(Session.StorageError ?? "", 14, Brush.Parse("#963E28"));
         alert.IsVisible = Session.StorageError is not null; alert.Margin = new Thickness(32, 16, 32, 0);

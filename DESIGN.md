@@ -11,6 +11,7 @@ colors:
   selection: "#E0E9DF"
   divider: "#DDE3DA"
   leaf: "#4FA37E"
+  scrim: "rgba(35, 56, 44, 0.40)"
 typography:
   headline:
     fontFamily: "Helvetica Neue, Segoe UI, sans-serif"
@@ -215,6 +216,28 @@ components:
     textColor: "{colors.leaf}"
     rounded: "{rounded.control}"
     size: "20px"
+  food-dialog:
+    backgroundColor: "{colors.surface}"
+    rounded: "{rounded.card}"
+    shadow: "{elevation.card}"
+    width: "760px"
+    margin: "32px"
+  food-dialog-bar:
+    backgroundColor: "{colors.selection}"
+    textColor: "{colors.ink}"
+    padding: "16px 24px"
+  dialog-scrim:
+    backgroundColor: "{colors.scrim}"
+  stepper-button:
+    backgroundColor: "{colors.primary}"
+    textColor: "{colors.surface}"
+    rounded: "{rounded.full}"
+    size: "36px"
+  stepper-button-disabled:
+    backgroundColor: "{colors.divider}"
+    textColor: "{colors.muted}"
+    rounded: "{rounded.full}"
+    size: "36px"
   time-field:
     backgroundColor: "{colors.surface}"
     textColor: "{colors.ink}"
@@ -254,6 +277,7 @@ Forest green is a functional accent within a pale, warm-neutral workspace. Front
 - **Soft Sage Selection** (`selection`): selected navigation, collection cards and the back link on hover, profile menu items on hover and keyboard focus, the profile circle on hover, and the cart icon on hover (about 6.4:1 on `primary`).
 - **Sage Divider** (`divider`): row rules and shell separators.
 - **Light Leaf** (`leaf`): the hover color of the password-toggle icon only. About 3.1:1 on white, enough for an icon, not for body text.
+- **Ink Scrim** (`scrim`): `ink` at 40% alpha (Avalonia `#6623382C`), the flat dimmed layer behind the food dialog only. No blur.
 
 The customer top bar is the one place `primary` is a surface rather than an accent: white text and icons on it reach about 7.9:1.
 
@@ -305,7 +329,7 @@ Custom application surfaces stay flat. Tonal backgrounds, whitespace, and thin d
 
 **The One Shadow Rule.** `elevation.card` is offset (0, 8), blur (24), spread (0), in ink (`#23382C`) at about 12% alpha. In Avalonia this is the `BoxShadow` string `0 8 24 0 #1F23382C` (Avalonia colors are `#AARRGGBB`, and `1F` is 31 of 255, about 12%). The CSS equivalent is `0px 8px 24px 0px rgba(35, 56, 44, 0.12)`. Do not stack shadows, tint them with the primary color, or apply them to buttons, rows, or the shell.
 
-The current build applies `elevation.card` to the auth-card, the profile menu, and the Jelajah collection cards and listing cards (also on collection and search result pages) only. The Jelajah banner has no shadow. The top bar stays flat with no rule and no shadow: its green fill separates it from the canvas. If a separator is ever needed, it is `elevation.card`, never a line.
+The current build applies `elevation.card` to the auth-card, the profile menu, the Jelajah collection cards and listing cards (also on collection and search result pages), and the food dialog only. The Jelajah banner has no shadow. The top bar stays flat with no rule and no shadow: its green fill separates it from the canvas. If a separator is ever needed, it is `elevation.card`, never a line.
 
 Native Avalonia Fluent controls retain their theme behavior; this document does not override native popups or interaction states. The exceptions are the thin scrollbar of the auth scroll area, described under Auth surface, and keyboard focus on customer routes, described under Focus.
 
@@ -333,7 +357,7 @@ These three components exist only on the auth surface. Their states are document
 - **time-field:** Jam buka and Jam tutup in the restaurant profile. A white pill (`rounded.full`, height 42) with the same border as native text fields, holding a native hour ComboBox (00 to 23), a ":" separator, and a native minute ComboBox (00 to 59). No AM/PM and no shadow. Picking an hour fills the minute with 00. The two fields share one row (16 apart) with visible labels above each; automation names follow the pattern "Jam buka, jam" and "Jam buka, menit". The value is a 24-hour `TimeOnly`. The hour and minute boxes share the pill width equally, so both stay inside the pill at the narrowest card (360).
 
 ### Focus
-Customer routes (top bar, profile menu, Jelajah, Keranjang, Pesanan saya, details, and the customer cancellation dialog) share one focus style, `Ui.FocusStyles` in `Ui.cs`. It replaces the Fluent focus adorner (the black double box) with an empty adorner and shows focus only on `:focus-visible`, that is after Tab or arrow keys, never after a click.
+Customer routes (top bar, profile menu, Jelajah, Keranjang, Pesanan saya, details, the food dialog, and the customer cancellation dialog) share one focus style, `Ui.FocusStyles` in `Ui.cs`. It replaces the Fluent focus adorner (the black double box) with an empty adorner and shows focus only on `:focus-visible`, that is after Tab or arrow keys, never after a click.
 
 - **Ring:** buttons and collection cards show a 2 px ring 2 outside their edge, following their corner radius: `primary` on light surfaces, white (`surface`) on the green top bar. The control's own border, fill, and size do not change. Primary buttons keep a visible ring because it sits outside the green fill.
 - **Menu items:** profile menu items show the `selection` fill with `primary` text instead of a ring, the same as hover. Opened with the mouse, the menu focuses Pesanan saya without showing it; opened with Enter or Space, Pesanan saya shows the fill.
@@ -381,13 +405,27 @@ One reused view (`CollectionView.cs`) for the five collections and for search re
 - **Back link:** "Kembali ke Jelajah" with a 16 left arrow (Path on a 16 grid, stroke 1.75, round caps), 8 from the 14 semibold `primary` text and vertically centered with it, transparent, at least 32 high; hover `selection` fill; padding 8 by 6 with the arrow on the content edge; the shared `primary` focus ring. It opens Jelajah.
 - **Title:** 32, bold, `ink`, one line, the same size as "Jelajahi Menu". A collection uses its card label exactly; search results read "Hasil untuk {kata}" with the keyword as typed (outer spaces trimmed), cut with an ellipsis when too long. The add-to-cart notice sits right-aligned on the same row.
 - **Intro:** on a collection page with listings, one sentence sits (8) under the title, 16 in `muted`, wrapping; the first card follows (16) under it. Search results and empty states have no intro. Termurah: "Temukan berbagai makanan lezat, pas, dan ramah di kantong!"; Segera berakhir: "Nikmati hidangan favorit sebelum terlambat!"; Makanan utama: "Temukan hidangan mengenyangkan untuk menemani harimu!"; Roti & kue: "Maniskan harimu dengan roti dan kue lezat yang menggugah selera!"; Buah & sayur: "Nikmati pilihan hidangan sehat yang lezat, segar, dan penuh kebaikan!".
-- **Listings:** the same listing cards as Jelajah, (16) apart, with the same Tambah behavior and notice. Termurah lists every available listing by rescue price ascending, Segera berakhir by pickup end ascending, and Makanan utama, Roti & kue, and Buah & sayur keep their category in the default order.
+- **Listings:** the same listing cards as Jelajah, (16) apart, with the same Tambah behavior (the food dialog) and notice. Termurah lists every available listing by rescue price ascending, Segera berakhir by pickup end ascending, and Makanan utama, Roti & kue, and Buah & sayur keep their category in the default order.
 - **Search:** the keyword is split on spaces and every word must appear (case-insensitive) in the menu name, description, restaurant name, or category; "vegetarian" also matches Buah & sayur.
 - **Categories:** the menu categories are Makanan utama, Roti & kue, and Buah & sayur (`MenuCategories.cs`), shown the same on the cards, collection titles, listing lines, food details, and the owner's menu form. Buah & sayur replaces the old Vegetarian label: a saved state file that still holds "Vegetarian" loads as Buah & sayur in memory without being rewritten on load.
 - **Empty states:** a collection shows "Belum ada menu di sini" with "Menu di koleksi ini sedang habis. Coba lagi nanti."; a search shows "Tidak ada menu yang cocok" with "Coba kata kunci lain.". Both end with a secondary "Kembali ke Jelajah" button and sit (16) under the title.
 
 ### Listing Card
-Each Jelajah listing is one card (`surface`, `rounded.card`, `elevation.card`, padding 20, no border), (16) apart, with photo, description, pickup, price, and action columns: photo box (or "Foto belum tersedia"), menu name, description, "Restoran · Kategori", Pengambilan with time and remaining portions, rescue price, struck-through normal price, "Hemat N%", and Tambah. The first card sits (16) under the "Jelajahi Menu" title; there is no result counter. The sample-data note stays under the list. If nothing is available, Jelajah shows "Belum ada menu tersedia" (16) under the title. Tambah adds one portion; when the cart already holds another restaurant's menu, the notice explains that a cart holds one restaurant.
+Each Jelajah listing is one card (`surface`, `rounded.card`, `elevation.card`, padding 20, no border), (16) apart, with photo, description, pickup, price, and action columns: photo box (or "Foto belum tersedia"), menu name, description, "Restoran · Kategori", Pengambilan with time and remaining portions, rescue price, struck-through normal price, "Hemat N%", and Tambah. The first card sits (16) under the "Jelajahi Menu" title; there is no result counter. The sample-data note stays under the list. If nothing is available, Jelajah shows "Belum ada menu tersedia" (16) under the title. Tambah does not add to the cart: it opens the food dialog (see Food Dialog), and so does a click anywhere else on the card (photo, name, text). The card shows a hand cursor. One shared card (`ListingFeed.cs`) serves Jelajah, collection pages, and search results.
+
+### Food Dialog
+The pop up detail for one listing (`FoodDialog.cs`), customer only. It is drawn in an overlay layer inside the main window (never a separate OS window), above everything including the top bar, and only one is open at a time.
+
+- **Scrim:** a full-window layer in `scrim` (ink at 40%), flat, no blur. A click on it closes the dialog.
+- **Card:** `surface`, `rounded.card`, `elevation.card`, no border, width (760), centered horizontally and vertically with at least (32) to every window edge. The height follows the content; when the window is too short, the upper area scrolls inside the card (vertical only) while the bar stays visible. Resizing keeps it centered; it fits at (1040 × 720) and (1920 × 1080).
+- **Content** (padding 24, columns 300 and the rest, 24 apart): left, the menu photo at 300 by 300 (`MenuPhotoView`, radius 8), or the same "Foto belum tersedia" box at that size with 14 text. Right, top to bottom: the menu name (28, bold, `ink`) with the close button on the same row; "Restoran · Kategori" (14, `muted`); the full description (14); "Pengambilan HH:mm–HH:mm" (14) and "N porsi tersisa" (13, `muted`); the rescue price (26, semibold, `primary`) with "/porsi" (14, `muted`); the struck-through normal price (13, `muted`) and "Hemat N%" (13, semibold, `primary`); then "Jumlah porsi" (14 semibold) above the stepper.
+- **Stepper:** a minus button, the quantity (18 semibold, centered), and a plus button, 12 apart. The buttons are `stepper-button`: 36 circles in `primary` with a white filled minus or plus icon (Path geometry, no icon package), never red; disabled, they use `divider` with a `muted` icon. The quantity is at least 1 and at most the listing stock minus what the cart already holds of that listing. At the limit the plus button is disabled and a 12 `muted` note reads "Maksimal N porsi". When nothing more may be added the note reads "Sudah di keranjang dengan jumlah maksimal" and Tambah ke keranjang is disabled. When the offer is no longer available (expired, sold out, or the menu turned inactive while the dialog is open; re-checked every 15 seconds and on every action) the note reads "Penawaran tidak tersedia" and the stepper and Tambah ke keranjang are disabled.
+- **Bar:** the bottom strip of the card in `selection` (padding 16 by 24, bottom corners `rounded.card`): left, "Total" (12, `muted`) above the rescue price times the quantity (20 semibold, Rupiah format); right, the primary button "Tambah ke keranjang". Disabled, it uses `divider` with `muted` text.
+- **Adding:** Tambah ke keranjang uses the existing cart logic with the chosen quantity, added to any quantity already in the cart. On success the dialog closes, the cart badge updates, the existing "{menu} ditambahkan ke keranjang." notice shows next to the page title, and the page does not change. When the cart holds another restaurant, the existing one-restaurant message appears inside the dialog in 14 text right above the bar, nothing is added, and the dialog stays open.
+- **Closing:** the close button (36 circle, transparent, `ink` X drawn as a 24 Path, stroke 1.75, name and tooltip "Tutup") in the top-right of the details, Esc, or a click on the scrim. Closing never changes the cart, and opening or closing never writes state.
+- **Focus:** opening moves focus to the close button (with the ring only when the dialog was opened from the keyboard); Tab and Shift+Tab cycle inside the card; closing returns focus to the control that opened it (Tambah or the menu name, rebuilt after an add). All buttons use the shared focus style on `:focus-visible`.
+- No animation, blur, glow, or gradient. No em dashes in its text.
+
 
 ### Lists and Tables
 Shared operational rows use minimum heights (40 header / 64 body), while compact dashboard tables use (36 / 48). All use the divider token. Avoid wrapping each datum in a separate card.
@@ -434,4 +472,4 @@ Empty lists preserve a direct recovery path when applicable. Operational errors 
 - **Don't** pair Space Grotesk with Instrument Serif.
 - **Don't** add grain or noise overlays on gradients.
 
-Source evidence: `src/Replate.Desktop/Ui.cs` (shared primitives), `MainWindow.cs` (font, palette, shell), `CustomerTopBar.cs` (customer top bar and profile menu), `MarketplaceView.cs` and `MarketplaceBanner.cs` (Jelajah banner, collection cards), `ListingFeed.cs` (listing cards, Tambah), `CollectionView.cs` (collection and search result pages), `DashboardView.cs` (aligned data tables), `CustomerViews.cs` and `RestaurantViews.cs` (full-page forms and states), `AuthViews.cs` (auth surface, role-button, password-toggle, and time-field), and `Program.cs` (light FluentTheme). The photo asset `src/Replate.Desktop/Assets/auth-hero.png` is loaded by `AuthViews.cs`; the logos `logo-green.webp` and `logo-white.webp` are loaded once by `Ui.cs` and verified (source, height, bitmap ratio within 1%) in the top bar, the restaurant rail, and the auth surface. The `elevation.card`, `rounded.card`, and `rounded.full` tokens, the auth-card, role-button, password-toggle, and time-field components, and the auth surface layout and thin scrollbar are implemented and verified by `--verify-ui` (`AuthVerification.cs`; input centering and placeholders by `InputVerification.cs`) at (1360 × 940), (1040 × 720), (1283 × 780), and (1920 × 1080). The top bar, profile menu, and their focus behavior are verified by `TopBarVerification.cs`, the Jelajah banner, collection cards, section title, rhythm, and listing cards by `MarketplaceVerification.cs`, at (1040 × 720), (1360 × 940), and (1920 × 1080), and the collection and search result pages by `CollectionVerification.cs` at (1040 × 720) and (1920 × 1080). Product guardrails come from `PRODUCT.md`. The sidecar contains browser-panel translations of five native patterns; its HTML/CSS focus outlines, native-control approximations, and synthesized tonal ramps are preview metadata, not additional application tokens or verified native state styles. No HTML/CSS implementation or iOS/Android behavior is claimed.
+Source evidence: `src/Replate.Desktop/Ui.cs` (shared primitives), `MainWindow.cs` (font, palette, shell), `CustomerTopBar.cs` (customer top bar and profile menu), `MarketplaceView.cs` and `MarketplaceBanner.cs` (Jelajah banner, collection cards), `ListingFeed.cs` (listing cards, Tambah), `CollectionView.cs` (collection and search result pages), `FoodDialog.cs` (the food dialog and scrim), `DashboardView.cs` (aligned data tables), `CustomerViews.cs` and `RestaurantViews.cs` (full-page forms and states), `AuthViews.cs` (auth surface, role-button, password-toggle, and time-field), and `Program.cs` (light FluentTheme). The photo asset `src/Replate.Desktop/Assets/auth-hero.png` is loaded by `AuthViews.cs`; the logos `logo-green.webp` and `logo-white.webp` are loaded once by `Ui.cs` and verified (source, height, bitmap ratio within 1%) in the top bar, the restaurant rail, and the auth surface. The `elevation.card`, `rounded.card`, and `rounded.full` tokens, the auth-card, role-button, password-toggle, and time-field components, and the auth surface layout and thin scrollbar are implemented and verified by `--verify-ui` (`AuthVerification.cs`; input centering and placeholders by `InputVerification.cs`) at (1360 × 940), (1040 × 720), (1283 × 780), and (1920 × 1080). The top bar, profile menu, and their focus behavior are verified by `TopBarVerification.cs`, the Jelajah banner, collection cards, section title, rhythm, and listing cards by `MarketplaceVerification.cs`, at (1040 × 720), (1360 × 940), and (1920 × 1080), the collection and search result pages by `CollectionVerification.cs` at (1040 × 720) and (1920 × 1080), and the food dialog by `FoodDialogVerification.cs` at (1040 × 720) and (1920 × 1080). Product guardrails come from `PRODUCT.md`. The sidecar contains browser-panel translations of five native patterns; its HTML/CSS focus outlines, native-control approximations, and synthesized tonal ramps are preview metadata, not additional application tokens or verified native state styles. No HTML/CSS implementation or iOS/Android behavior is claimed.
