@@ -120,8 +120,7 @@ public sealed class DashboardView : UserControl
             : new[] { ReportPanel(analysis), ReportPanel(recommendationSection), ReportPanel(impact) };
         ProfileButton = Ui.Pill("Ubah profil", ActionClass, 1, host.ShowRestaurantProfile);
         ProfileButton.HorizontalAlignment = HorizontalAlignment.Left;
-        var body = Ui.Stack(Ui.Spacing.Section, [Banner, ProfileButton, summary, .. details,
-            Ui.Text("Pendapatan dan porsi terselamatkan bertambah setelah pengambilan diverifikasi. Reservasi belum dihitung sebagai penjualan selesai.", 12, Ui.Muted)]);
+        var body = Ui.Stack(Ui.Spacing.Section, [Banner, ProfileButton, summary, .. details]);
         body.Margin = new Thickness(Ui.Spacing.Page);
         Background = Ui.WorkspaceFill;
         Content = Ui.Scroll(body);
