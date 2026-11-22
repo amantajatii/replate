@@ -1,6 +1,8 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
+using Avalonia.Media;
 using Avalonia.VisualTree;
 using Replate.Domain.Entities;
 using Replate.Domain.Enums;
@@ -12,16 +14,72 @@ public sealed class MenusView : UserControl
 {
     internal MenusView(MainWindow host, DemoSession session)
     {
-        var list = Ui.Stack(0);
+        Background = Ui.WorkspaceFill;
+        Styles.Add(Ui.FocusStyles());
+        var list = Ui.Stack(Ui.Spacing.Related);
         foreach (var menu in session.Restaurant.Menus)
-            list.Children.Add(Ui.TableRow("*,120,90,300", false,
-                Ui.Stack(6, Ui.Text(menu.Name, 18, bold: true), Ui.Text(menu.Category, 13, Ui.Muted), Ui.Text(menu.Description, 13, Ui.Muted)),
-                Ui.Text(DemoSession.Rupiah(menu.NormalPrice), 14), Ui.Text(menu.IsActive ? "Aktif" : "Nonaktif", 13),
-                Ui.Row(8, Ui.Button("Ubah", () => host.ShowMenuEditor(menu)),
-                    Ui.Button(menu.IsActive ? "Nonaktifkan" : "Aktifkan", () => host.Run(() => session.ToggleMenu(menu), host.ShowMenus)), Ui.Button("Hapus", async () => await MenuDeletionDialog.Show(host, session, menu)))));
+        {
+            var description = Ui.Text(menu.Description, 13, Ui.Muted);
+            description.MaxLines = 2;
+            description.TextTrimming = TextTrimming.WordEllipsis;
+            description.IsVisible = !string.IsNullOrWhiteSpace(menu.Description);
+            var details = Ui.Stack(4, Ui.Text(menu.Name, 18, bold: true),
+                Ui.Text($"{menu.Category} · {menu.WeightPerPortion * 1000:0.##} g per porsi", 13, Ui.Muted), description);
+            var facts = RestaurantListCard.Price("Harga normal", menu.NormalPrice,
+                RestaurantListCard.Status(menu.IsActive ? "Aktif" : "Nonaktif", menu.IsActive));
+            var toggle = menu.IsActive ? "Nonaktifkan" : "Aktifkan";
+            var actions = Ui.Row(8,
+                RestaurantListCard.Action("Ubah", menu.Name, () => host.ShowMenuEditor(menu), Ui.Selection, Ui.Green),
+                RestaurantListCard.Action(toggle, menu.Name, () => host.Run(() => session.ToggleMenu(menu), host.ShowMenus)),
+                RestaurantListCard.Action("Hapus", menu.Name, async () => await MenuDeletionDialog.Show(host, session, menu), foreground: Ui.Danger));
+            actions.MinWidth = 224;
+            list.Children.Add(new RestaurantListCard(session.PhotoPath(menu.ImageUrl), details, facts, actions));
+        }
         if (list.Children.Count == 0) list.Children.Add(Ui.Text("Belum ada menu. Tambahkan menu untuk mulai mencatat produksi."));
         Content = Ui.Page(Ui.Heading("Menu restoran", "Daftar menu, harga normal, dan berat per porsi.",
             Ui.Button("Tambah menu", () => host.ShowMenuEditor(), true)), list);
+    }
+}
+
+internal sealed class RestaurantListCard : Border
+{
+    internal RestaurantListCard(string? photoPath, Control details, Control facts, Control actions)
+    {
+        var photo = new MenuPhotoView(photoPath, 76, 76, placeholderSize: 10);
+        photo.VerticalAlignment = details.VerticalAlignment = facts.VerticalAlignment = actions.VerticalAlignment = VerticalAlignment.Center;
+        var row = Ui.Columns("Auto,*,132,Auto", photo, details, facts, actions);
+        row.ColumnSpacing = Ui.Spacing.Related;
+        Child = row;
+        Background = Brushes.White;
+        CornerRadius = new CornerRadius(16);
+        BorderBrush = Ui.CardBorder;
+        BorderThickness = Ui.CardBorderThickness;
+        Padding = new Thickness(18);
+    }
+
+    internal static StackPanel Price(string label, decimal price, Control status) =>
+        Ui.Stack(6, Ui.Text(label, 12, Ui.Muted), Ui.Text(DemoSession.Rupiah(price), 18, Ui.Green, true), status);
+
+    internal static Border Status(string label, bool positive) => new()
+    {
+        Background = positive ? Ui.Selection : Ui.Sidebar,
+        CornerRadius = new CornerRadius(6),
+        Padding = new Thickness(8, 4),
+        HorizontalAlignment = HorizontalAlignment.Left,
+        Child = Ui.Text(label, 12, positive ? Ui.Green : Ui.Muted, true)
+    };
+
+    internal static Button Action(string label, string item, Action action, IBrush? background = null, IBrush? foreground = null)
+    {
+        var button = Ui.Button(label, action);
+        button.MinHeight = 36;
+        button.Padding = new Thickness(10, 6);
+        button.Background = background ?? Brushes.White;
+        button.Foreground = foreground ?? Ui.Ink;
+        button.BorderBrush = Ui.CardBorder;
+        button.BorderThickness = Ui.CardBorderThickness;
+        AutomationProperties.SetName(button, $"{label} {item}");
+        return button;
     }
 }
 
@@ -218,22 +276,32 @@ public sealed class ListingsView : UserControl
 {
     internal ListingsView(MainWindow host, DemoSession session)
     {
-        var list = Ui.Stack(0);
+        Background = Ui.WorkspaceFill;
+        Styles.Add(Ui.FocusStyles());
+        var list = Ui.Stack(Ui.Spacing.Related);
+        var now = DateTime.UtcNow;
         foreach (var listing in session.RestaurantListings.OrderByDescending(l => l.CreatedAt))
         {
-            var ended = listing.PickupEnd <= DateTime.UtcNow || listing.Status is ListingStatus.Cancelled or ListingStatus.Expired;
-            var status = listing.Status == ListingStatus.Cancelled ? "Dibatalkan" : listing.PickupEnd <= DateTime.UtcNow ? "Berakhir" :
-                listing.Quantity == 0 ? "Habis" : !listing.Menu.IsActive ? "Menu nonaktif" : listing.PickupStart > DateTime.UtcNow ? "Terjadwal" : "Tersedia";
+            var ended = listing.PickupEnd <= now || listing.Status is ListingStatus.Cancelled or ListingStatus.Expired;
+            var status = listing.Status == ListingStatus.Cancelled ? "Dibatalkan" : ended ? "Berakhir" :
+                listing.Quantity == 0 ? "Habis" : !listing.Menu.IsActive ? "Menu nonaktif" : listing.PickupStart > now ? "Terjadwal" : "Tersedia";
+            var name = listing.Menu.Name;
             var buttons = Ui.Row(8);
+            buttons.MinWidth = 126;
             if (!ended)
             {
-                buttons.Children.Add(Ui.Button("Ubah", () => host.ShowListingEditor(listing)));
-                buttons.Children.Add(Ui.Button("Tutup", () => host.Run(() => session.CancelListing(listing), host.ShowListings)));
+                buttons.Children.Add(RestaurantListCard.Action("Ubah", name, () => host.ShowListingEditor(listing), Ui.Selection, Ui.Green));
+                buttons.Children.Add(RestaurantListCard.Action("Tutup", name, () => host.Run(() => session.CancelListing(listing), host.ShowListings)));
             }
-            list.Children.Add(Ui.TableRow("*,130,100,180", false,
-                Ui.Stack(6, Ui.Text(listing.Menu.Name, 18, bold: true),
-                    Ui.Text($"{listing.PickupStart.ToLocalTime():dd MMM, HH:mm}–{listing.PickupEnd.ToLocalTime():HH:mm} · {status}", 13, Ui.Muted)),
-                Ui.Text(DemoSession.Rupiah(listing.RescuePrice), 14), Ui.Text($"{listing.Quantity} porsi", 14), buttons));
+            var start = listing.PickupStart.ToLocalTime();
+            var end = listing.PickupEnd.ToLocalTime();
+            var endTime = start.Date == end.Date ? $"{end:HH:mm}" : $"{end:dd MMM, HH:mm}";
+            var details = Ui.Stack(4, Ui.Text(name, 18, bold: true),
+                Ui.Text($"Ambil {start:dd MMM, HH:mm}–{endTime}", 13, Ui.Muted),
+                Ui.Text($"{listing.Quantity} porsi tersisa", 13, Ui.Muted));
+            var facts = RestaurantListCard.Price("Harga surplus", listing.RescuePrice,
+                RestaurantListCard.Status(status, status == "Tersedia"));
+            list.Children.Add(new RestaurantListCard(session.PhotoPath(listing.Menu.ImageUrl), details, facts, buttons));
         }
         if (list.Children.Count == 0) list.Children.Add(Ui.Text("Belum ada penawaran. Catat produksi, lalu tawarkan surplus yang tersedia."));
         Content = Ui.Page(Ui.Heading("Penawaran surplus", "Stok yang ditawarkan kepada pelanggan, terpisah dari stok yang sudah dipesan.",
