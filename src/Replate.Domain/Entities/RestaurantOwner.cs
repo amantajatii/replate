@@ -10,6 +10,12 @@ public sealed class RestaurantOwner : User
 
     public Restaurant ManageRestaurant(Restaurant restaurant)
     {
+        RequireAuthentication();
+        if (restaurant.OwnerId != Guid.Empty)
+        {
+            RequireOwnedRestaurant(restaurant);
+        }
+
         restaurant.Owner = this;
         restaurant.OwnerId = Id;
         if (!Restaurants.Contains(restaurant))
@@ -22,9 +28,11 @@ public sealed class RestaurantOwner : User
 
     public Menu ManageMenu(Restaurant restaurant, Menu menu)
     {
-        if (!Restaurants.Contains(restaurant))
+        RequireOwnedRestaurant(restaurant);
+        if ((menu.RestaurantId != Guid.Empty && menu.RestaurantId != restaurant.Id) ||
+            (menu.Restaurant is not null && menu.Restaurant.Id != restaurant.Id))
         {
-            throw new InvalidOperationException("Restaurant is not owned by this user.");
+            throw new UnauthorizedAccessException("Menu ini milik restoran lain.");
         }
 
         menu.Restaurant = restaurant;
@@ -44,6 +52,7 @@ public sealed class RestaurantOwner : User
         DateTime pickupStart,
         DateTime pickupEnd)
     {
+        RequireOwnedMenu(menu);
         var listing = new SurplusListing
         {
             MenuId = menu.Id,
@@ -57,15 +66,48 @@ public sealed class RestaurantOwner : User
         return listing;
     }
 
-    public IReadOnlyList<Order> ManageOrders(Restaurant restaurant) => restaurant.Orders;
+    public IReadOnlyList<Order> ManageOrders(Restaurant restaurant)
+    {
+        RequireOwnedRestaurant(restaurant);
+        return restaurant.Orders.Where(order => order.RestaurantId == restaurant.Id).ToList();
+    }
 
     public ProductionRecord RecordProduction(Menu menu, ProductionRecord record)
     {
+        RequireOwnedMenu(menu);
+        if (record.MenuId != Guid.Empty && record.MenuId != menu.Id)
+        {
+            throw new UnauthorizedAccessException("Catatan produksi ini milik menu lain.");
+        }
+
         record.Menu = menu;
         record.MenuId = menu.Id;
         menu.ProductionRecords.Add(record);
         return record;
     }
 
-    public SurplusDashboard ViewDashboard() => new();
+    public SurplusDashboard ViewDashboard()
+    {
+        RequireAuthentication();
+        return new();
+    }
+
+    private void RequireOwnedRestaurant(Restaurant restaurant)
+    {
+        RequireAuthentication();
+        if (restaurant.OwnerId != Id)
+        {
+            throw new UnauthorizedAccessException("Anda tidak memiliki akses ke restoran ini.");
+        }
+    }
+
+    private void RequireOwnedMenu(Menu menu)
+    {
+        if (menu.Restaurant is not { } restaurant || menu.RestaurantId != restaurant.Id)
+        {
+            throw new UnauthorizedAccessException("Restoran pemilik menu tidak ditemukan.");
+        }
+
+        RequireOwnedRestaurant(restaurant);
+    }
 }
