@@ -1,9 +1,18 @@
+
 using Replate.Domain.Enums;
 
 namespace Replate.Domain.Entities;
 
 public sealed class Order
 {
+    public Order() { }
+
+    public Order(OrderStatus status, DateTime? completedAt = null)
+    {
+        Status = status;
+        CompletedAt = completedAt;
+    }
+
     public Guid Id { get; init; } = Guid.NewGuid();
     public Guid CustomerId { get; set; }
     public Guid RestaurantId { get; set; }
@@ -19,6 +28,10 @@ public sealed class Order
     [System.Text.Json.Serialization.JsonInclude]
     public DateTime? CompletedAt { get; private set; }
     public List<OrderItem> Items { get; } = [];
+
+    public bool IsPastPickupWindow(DateTime now) =>
+        Status is (OrderStatus.Reserved or OrderStatus.Confirmed or OrderStatus.ReadyForPickup) &&
+        Items.Any(item => item.Listing.PickupEnd < now);
 
     public void Confirm() => Transition(OrderStatus.Reserved, OrderStatus.Confirmed);
 
@@ -37,10 +50,10 @@ public sealed class Order
 
     public void MarkReady() => Transition(OrderStatus.Confirmed, OrderStatus.ReadyForPickup);
 
-    public void Complete()
+    public void Complete(DateTime? completedAt = null)
     {
         Transition(OrderStatus.ReadyForPickup, OrderStatus.Completed);
-        CompletedAt = DateTime.UtcNow;
+        CompletedAt = completedAt ?? DateTime.UtcNow;
     }
 
     public void Cancel()

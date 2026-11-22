@@ -15,14 +15,30 @@ public sealed class Customer : User
     public IEnumerable<SurplusListing> SearchListing(MarketplaceService marketplace, string keyword) =>
         marketplace.SearchByFood(keyword);
 
-    public void AddToCart(SurplusListing listing, int quantity) => Cart.AddItem(listing, quantity);
+    public void AddToCart(SurplusListing listing, int quantity) => GetOwnedCart().AddItem(listing, quantity);
 
     public Order Checkout(CheckoutService checkout, Guid restaurantId)
     {
-        var order = checkout.CreateOrder(Cart, restaurantId);
+        var order = checkout.CreateOrder(GetOwnedCart(), restaurantId);
         Orders.Add(order);
         return order;
     }
 
-    public IReadOnlyList<Order> ViewOrders() => Orders;
+    public IReadOnlyList<Order> ViewOrders()
+    {
+        RequireAuthentication();
+        return Orders.Where(order => order.CustomerId == Id).ToList();
+    }
+
+    private Cart GetOwnedCart()
+    {
+        RequireAuthentication();
+        if (Cart.CustomerId != Guid.Empty && Cart.CustomerId != Id)
+        {
+            throw new UnauthorizedAccessException("Keranjang ini milik pelanggan lain.");
+        }
+
+        Cart.CustomerId = Id;
+        return Cart;
+    }
 }

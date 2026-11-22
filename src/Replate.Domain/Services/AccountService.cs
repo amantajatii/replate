@@ -86,7 +86,9 @@ public static partial class AccountService
         var restaurant = new Restaurant();
         restaurant.UpdateProfile(profile.Name.Trim(), (profile.Description ?? string.Empty).Trim(), profile.Address.Trim(),
             profile.Phone.Trim(), profile.OpeningTime!.Value, profile.ClosingTime!.Value);
-        owner.ManageRestaurant(restaurant);
+        restaurant.Owner = owner;
+        restaurant.OwnerId = owner.Id;
+        owner.Restaurants.Add(restaurant);
         return owner;
     }
 
@@ -99,7 +101,7 @@ public static partial class AccountService
             return null;
         }
 
-        return PasswordHasher.Verify(password, user.PasswordHash) ? user : null;
+        return user.TryLogin(email, password) ? user : null;
     }
 
     [GeneratedRegex(@"^[^@\s]+@[^@\s]+\.[^@\s.]{2,}$")]

@@ -20,7 +20,7 @@ internal static class SessionStore
     internal sealed record SnapshotV1(int Version, RestaurantState Restaurant, List<MenuState> Menus,
         List<ListingState> Listings, List<RecordState> Records, List<OrderState> Orders, CartState Cart);
     internal sealed record RestaurantState(Guid Id, string Name, string Address, Guid OwnerId = default, string Description = "",
-        string Phone = "", TimeOnly OpeningTime = default, TimeOnly ClosingTime = default);
+        string Phone = "", TimeOnly OpeningTime = default, TimeOnly ClosingTime = default, bool IsImported = false);
     internal sealed record MenuState(Guid Id, string Name, string Description, string Category,
         decimal NormalPrice, decimal WeightPerPortion, bool IsActive, string ImageUrl = "", Guid RestaurantId = default);
     internal sealed record ListingState(Guid Id, Guid MenuId, decimal RescuePrice, int Quantity,
@@ -42,7 +42,7 @@ internal static class SessionStore
         var menus = session.Restaurants.SelectMany(r => r.Menus).ToList();
         var state = new Snapshot(CurrentVersion,
             session.Restaurants.Select(r => new RestaurantState(r.Id, r.Name, r.Address, r.OwnerId, r.Description,
-                r.Phone, r.OpeningTime, r.ClosingTime)).ToList(),
+                r.Phone, r.OpeningTime, r.ClosingTime, session.ImportedRestaurantIds.Contains(r.Id))).ToList(),
             menus.Select(m => new MenuState(m.Id, m.Name, m.Description, m.Category,
                 m.NormalPrice, m.WeightPerPortion, m.IsActive, m.ImageUrl, m.RestaurantId)).ToList(),
             session.Listings.Select(l => new ListingState(l.Id, l.MenuId, l.RescuePrice, l.Quantity,
@@ -111,7 +111,9 @@ internal static class SessionStore
             if (snapshot.OwnerId == Guid.Empty) continue;
             if (!owners.TryGetValue(snapshot.OwnerId, out var owner))
                 throw new InvalidDataException("Pemilik restoran tidak ditemukan dalam berkas data.");
-            owner.ManageRestaurant(restaurant);
+            restaurant.Owner = owner;
+            restaurant.OwnerId = owner.Id;
+            owner.Restaurants.Add(restaurant);
         }
         var orders = restaurantList.SelectMany(r => r.Orders).ToList();
         if (menus.Values.Any(m => string.IsNullOrWhiteSpace(m.Name) || m.NormalPrice <= 0 || m.WeightPerPortion <= 0) ||
@@ -126,6 +128,7 @@ internal static class SessionStore
             users.Select(u => Replate.Domain.Services.AccountService.NormalizeEmail(u.Email)).Distinct().Count() != users.Count)
             throw new InvalidDataException("Berkas data mengandung nilai yang tidak valid.");
         session.Restore(restaurantList, carts, users, listings.Values.ToList());
+        session.ImportedRestaurantIds.UnionWith(state.Restaurants.Where(r => r.IsImported).Select(r => r.Id));
     }
 
     // Version 1 migration

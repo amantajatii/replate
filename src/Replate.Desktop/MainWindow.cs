@@ -116,7 +116,7 @@ public sealed class MainWindow : Window
         if (!Allowed(false)) return;
         Marketplace = new MarketplaceView(this, Session);
         Render(false, Marketplace, "Jelajah");
-        Marketplace.Refresh();
+        Run(Session.RefreshSharedListings, Marketplace.Refresh);
     }
     internal void ShowCollection(string name)
     {
@@ -143,7 +143,9 @@ public sealed class MainWindow : Window
     }
     internal void ShowCustomerOrders()
     {
-        if (Allowed(false)) Render(false, new OrdersView(this, Session, false), "Pesanan saya");
+        if (!Allowed(false)) return;
+        Render(false, new OrdersView(this, Session, false), "Pesanan saya");
+        Run(Session.RefreshCustomerOrders, () => Render(false, new OrdersView(this, Session, false), "Pesanan saya"));
     }
     internal void ShowOrder(Order order, bool restaurant)
     {
@@ -168,7 +170,9 @@ public sealed class MainWindow : Window
     }
     internal void ShowListings()
     {
-        if (Allowed(true)) Render(true, new ListingsView(this, Session), "Penawaran surplus");
+        if (!Allowed(true)) return;
+        Render(true, new ListingsView(this, Session), "Penawaran surplus");
+        Run(Session.RefreshSharedListings, () => Render(true, new ListingsView(this, Session), "Penawaran surplus"));
     }
     internal void ShowListingEditor(SurplusListing? listing = null)
     {
@@ -181,7 +185,9 @@ public sealed class MainWindow : Window
     }
     internal void ShowRestaurantOrders()
     {
-        if (Allowed(true)) Render(true, new OrdersView(this, Session, true), "Pesanan");
+        if (!Allowed(true)) return;
+        Render(true, new OrdersView(this, Session, true), "Pesanan");
+        Run(Session.RefreshRestaurantOrders, () => Render(true, new OrdersView(this, Session, true), "Pesanan"));
     }
 
     // Dialog
