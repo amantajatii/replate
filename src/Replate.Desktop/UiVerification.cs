@@ -186,7 +186,10 @@ internal static class UiVerification
             window.ShowListings(); await Shot("listings");
             window.ShowListingEditor(); await Shot("listing-editor");
             window.ShowProduction(); await Shot("production");
+            await ProductionFields(window, output);
             window.ShowRestaurantOrders(); await Shot("restaurant-orders");
+            await RestaurantStatusPills(window);
+            await LabelWidths(window);
             window.ShowOrder(order, true); await Shot("restaurant-order-detail");
             Click(((OrderDetailView)window.CurrentPage!).ConfirmButton!);
             Click(((OrderDetailView)window.CurrentPage!).ReadyButton!);
@@ -463,6 +466,297 @@ internal static class UiVerification
         Ensure(button.GetVisualAncestors().OfType<Visual>().Where(v => v.ClipToBounds).All(v => v.TransformToVisual(window) is { } m && new Rect(v.Bounds.Size).TransformToAABB(m).Contains(reach)),
             $"{label}: no container clips the hover shadow ({reach})");
     }
+    // Restaurant status pills
+    private static async Task RestaurantStatusPills(MainWindow window)
+    {
+        var (width, height) = (window.Width, window.Height);
+        void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        int Expected(int index) => window.Session.RestaurantOrders.Count(o => index switch
+        {
+            0 => o.Status is not (Replate.Domain.Enums.OrderStatus.Completed or Replate.Domain.Enums.OrderStatus.Cancelled),
+            2 => o.Status == Replate.Domain.Enums.OrderStatus.Completed, 3 => o.Status == Replate.Domain.Enums.OrderStatus.Cancelled, _ => true
+        });
+        foreach (var (w, h) in new[] { (1040d, 720d), (1920d, 1080d) })
+        {
+            window.Width = w; window.Height = h;
+            var size = $"{w:0}x{h:0}";
+            window.ShowRestaurantOrders(); await Settle();
+            var page = (OrdersView)window.CurrentPage!;
+            var pills = page.StatusButtons;
+            Ensure(!page.GetVisualDescendants().OfType<ComboBox>().Any() && pills.Count == OrdersView.StatusOptions.Length &&
+                pills.Select(p => p.Content as string).SequenceEqual(OrdersView.StatusOptions) &&
+                pills.All(p => Avalonia.Automation.AutomationProperties.GetName(p) == p.Content as string && p.Classes.Contains(OrdersView.StatusClass)),
+                $"{size}: one named pill per status option, in the dropdown order");
+            Ensure(page.StatusIndex == 0 && pills[0].Classes.Contains(Ui.PillSelectedClass) && pills.Skip(1).All(p => !p.Classes.Contains(Ui.PillSelectedClass)),
+                $"{size}: Aktif is the initial pill");
+            Ensure(pills.All(p => p.Bounds.Height >= Ui.PillHeight - .5 && Math.Abs(p.CornerRadius.TopLeft - p.Bounds.Height / 2) < .5 && p.Focusable && p.IsTabStop),
+                $"{size}: pills are at least 36 high, fully rounded and reachable with Tab");
+            void Faces(int selected)
+            {
+                for (var i = 0; i < pills.Count; i++)
+                {
+                    var presenter = Presenter(pills[i]);
+                    var expected = i == selected ? (Primary, Colors.White) : (Colors.White, Color.Parse("#202522"));
+                    Ensure(Fill(presenter.Background) == expected.Item1 && Fill(presenter.Foreground) == expected.Item2 &&
+                        (i == selected || Fill(presenter.BorderBrush) == DividerColor) && Math.Abs(Scale(pills[i]) - 1) <= .005,
+                        $"{size}: pill {pills[i].Content} shows {Fill(presenter.Background)} with {Fill(presenter.Foreground)} text, expected {expected.Item1} and {expected.Item2}");
+                }
+            }
+            Faces(0);
+            var gap = pills[1].Bounds.X - pills[0].Bounds.Right;
+            Ensure(Math.Abs(gap - Ui.PillGap) < .5 || pills[1].Bounds.Y > pills[0].Bounds.Y, $"{size}: pills sit {gap:0.#} apart");
+            var label = page.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == OrdersView.StatusLabel);
+            var labelBottom = label.TranslatePoint(new Point(0, label.Bounds.Height), page)!.Value.Y;
+            var rowTop = page.StatusRow!.TranslatePoint(default, page)!.Value.Y;
+            Ensure(Math.Abs(rowTop - labelBottom - 8) < .5, $"{size}: label sits {rowTop - labelBottom:0.#} above the pills");
+            var scroll = page.GetVisualDescendants().OfType<ScrollViewer>().First();
+            for (var i = 0; i < pills.Count; i++)
+            {
+                Click(pills[i]); await Settle();
+                page = (OrdersView)window.CurrentPage!; pills = page.StatusButtons;
+                var badges = page.GetVisualDescendants().OfType<OrderStatusBadge>().Count();
+                Ensure(page.StatusIndex == i && badges == Expected(i), $"{size}: {pills[i].Content} lists {badges} orders, expected {Expected(i)}");
+                Faces(i);
+                Ensure(pills.Count(p => p.Classes.Contains(Ui.PillSelectedClass)) == 1, $"{size}: only {pills[i].Content} is selected");
+            }
+            Ensure(Fits(scroll) && page.StatusRow!.Bounds.Right <= scroll.Viewport.Width + .5, $"{size}: no horizontal scrolling on Pesanan restoran");
+            Click(pills[0]); await Settle();
+        }
+        window.Width = width; window.Height = height; window.ShowRestaurantOrders(); await Settle();
+    }
+
+    // Production fields
+    private static readonly Color Primary500 = Color.Parse("#59AC87");
+    private static readonly Color MutedColor = Color.Parse("#69736D");
+    private static async Task ProductionFields(MainWindow window, string output)
+    {
+        var (width, height) = (window.Width, window.Height);
+        void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        foreach (var (w, h) in new[] { (1040d, 720d), (1920d, 1080d) })
+        {
+            window.Width = w; window.Height = h;
+            var size = $"{w:0}x{h:0}";
+            window.ShowProduction(); await Settle();
+            var view = (ProductionView)window.CurrentPage!;
+            var frames = view.Frames;
+            Ensure(frames.Keys.SequenceEqual(new[] { "menu", "date", "produced", "sold" }), $"{size}: Menu, Tanggal produksi, Diproduksi and Terjual reguler use the shared field");
+            Ensure(!view.GetVisualDescendants().OfType<DatePicker>().Any() && !view.ProducedInput.ShowButtonSpinner && !view.SoldInput.ShowButtonSpinner,
+                $"{size}: no three-part date picker and no native spinner");
+
+            Avalonia.Input.InputElement Target(string key) => key switch
+            {
+                "menu" => view.MenuInput,
+                "date" => view.DateInput.Face,
+                _ => frames[key].Input.GetVisualDescendants().OfType<TextBox>().First()
+            };
+            foreach (var (key, frame) in frames)
+            {
+                var face = frame.Face;
+                Ensure(Fill(face.Background) == Colors.White && Fill(face.BorderBrush) == DividerColor && face.BorderThickness == new Thickness(1) &&
+                    face.CornerRadius == new CornerRadius(Ui.FieldRadius) && Math.Abs(face.Bounds.Height - Ui.FieldHeight) < .5,
+                    $"{size} {key}: white field, thin divider border, radius 12, 48 high ({Fill(face.BorderBrush)}, {face.CornerRadius}, {face.Bounds.Height:0.#})");
+                await Hold(face, ":pointerover", true);
+                Ensure(Fill(face.BorderBrush) == Primary500, $"{size} {key}: hover turns the border Primary 500 ({Fill(face.BorderBrush)})");
+                await Hold(face, ":pointerover", false);
+                Ensure(Fill(face.BorderBrush) == DividerColor, $"{size} {key}: leaving restores the divider border");
+
+                window.Focus(); await Settle();
+                Target(key).Focus(Avalonia.Input.NavigationMethod.Tab); await Settle();
+                var ring = frame.Ring;
+                Ensure(frame.KeyboardFocus && ring.IsVisible && Fill(ring.BorderBrush) == Primary && ring.BorderThickness == new Thickness(Ui.FocusRingWidth) &&
+                    ring.Margin == new Thickness(-(Ui.FocusRingWidth + Ui.FocusRingOffset)) && Fill(face.BorderBrush) == Primary,
+                    $"{size} {key}: keyboard focus shows the Primary 700 border and the shared 2 px ring 2 outside");
+                Ensure(Target(key) is Control focused && (focused.FocusAdorner is null || focused.FocusAdorner == Ui.NoFocusAdorner),
+                    $"{size} {key}: no native black focus box");
+                window.Focus(); await Settle();
+                Ensure(!ring.IsVisible && Fill(face.BorderBrush) == DividerColor, $"{size} {key}: leaving the field hides the ring");
+                Target(key).Focus(Avalonia.Input.NavigationMethod.Pointer); await Settle();
+                Ensure(!ring.IsVisible && Fill(face.BorderBrush) == Primary, $"{size} {key}: a click focus shows the Primary 700 border without the ring");
+                window.Focus(); await Settle();
+            }
+
+            var chevron = view.MenuInput.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Path>().FirstOrDefault();
+            Ensure(chevron is { Fill: null } && chevron.StrokeThickness > 0 && chevron.StrokeThickness <= 2 && Fill(chevron.Stroke) == MutedColor,
+                $"{size}: the Menu dropdown shows a thin outline chevron");
+            view.MenuInput.IsDropDownOpen = true; await Settle();
+            var popup = view.MenuInput.GetVisualDescendants().OfType<Popup>().First();
+            Ensure(popup.IsOpen && popup.Child is Avalonia.Controls.Border { BorderThickness.Left: 1 } sheet && Fill(sheet.BorderBrush) == DividerColor &&
+                sheet.CornerRadius == new CornerRadius(Ui.FieldRadius) && frames["menu"].Face.Classes.Contains(Ui.OpenClass) && Fill(frames["menu"].Face.BorderBrush) == Primary,
+                $"{size}: the Menu list opens as a rounded sheet with a thin border");
+            var selected = view.MenuInput.ContainerFromIndex(view.MenuInput.SelectedIndex) as ComboBoxItem;
+            Ensure(selected is not null && selected.FontWeight == FontWeight.SemiBold && (selected.FocusAdorner is null || selected.FocusAdorner == Ui.NoFocusAdorner),
+                $"{size}: the selected menu is semibold without a black focus box");
+            var other = Enumerable.Range(0, view.MenuInput.ItemCount).Where(i => i != view.MenuInput.SelectedIndex)
+                .Select(i => view.MenuInput.ContainerFromIndex(i) as ComboBoxItem).FirstOrDefault(i => i is not null);
+            if (other is not null)
+            {
+                Ensure(other.FontWeight == FontWeight.Normal && Fill(other.Background) == Colors.Transparent, $"{size}: other menus rest normal and transparent");
+                await Hold(other, ":pointerover", true);
+                Ensure(Fill(other.Background) == Selection, $"{size}: a hovered menu uses the Primary 100 fill ({Fill(other.Background)})");
+                await Hold(other, ":pointerover", false);
+            }
+            view.MenuInput.IsDropDownOpen = false; await Settle();
+            Ensure(!frames["menu"].Face.Classes.Contains(Ui.OpenClass), $"{size}: closing the Menu list clears the open border");
+
+            var date = view.DateInput;
+            var today = DateTime.Today;
+            Ensure(date.ValueText.Text == today.ToString(Ui.DateFormat, Ui.Indonesian) && date.ValueText.Text?.Contains('—') == false &&
+                date.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Path>().Any(p => p.Fill is null && Fill(p.Stroke) == MutedColor),
+                $"{size}: the date reads \"{date.ValueText.Text}\" in Indonesian with a calendar icon on the right");
+            date.Open(false); await Settle();
+            Ensure(date.Popup.IsOpen && date.Calendar.SelectedDate == today && date.Face.Classes.Contains(Ui.OpenClass) && Fill(date.Face.BorderBrush) == Primary,
+                $"{size}: the calendar opens on the selected date");
+            var day = date.Calendar.GetVisualDescendants().OfType<CalendarDayButton>().FirstOrDefault(b => b.Classes.Contains(":selected"));
+            Ensure(day is not null && day.Theme == Ui.DayTheme && Fill(day.Background) == Primary && Fill(day.Foreground) == Colors.White,
+                $"{size}: the selected day uses the Primary 700 fill with white text");
+            await CalendarLook(date, size);
+            var pick = today.AddDays(-1);
+            date.Calendar.SelectedDate = pick; await Settle();
+            Ensure(date.SelectedDate?.Date == pick && date.ValueText.Text == pick.ToString(Ui.DateFormat, Ui.Indonesian),
+                $"{size}: picking a day updates the field ({date.ValueText.Text})");
+            date.Close(false); await Settle();
+            Ensure(!date.Popup.IsOpen && !date.Face.Classes.Contains(Ui.OpenClass), $"{size}: the calendar closes");
+            date.SelectedDate = DateTimeOffset.Now; await Settle();
+
+            foreach (var stepper in new[] { view.ProducedStepper, view.SoldStepper })
+            {
+                var input = stepper.Input;
+                var original = input.Value;
+                Ensure(new[] { stepper.MinusButton, stepper.PlusButton }.All(b => b.Classes.Contains(Ui.RoundClass) && Math.Abs(b.Bounds.Width - QuantityStepper.ButtonSize) < .5 &&
+                        b.Bounds.Width == b.Bounds.Height) && stepper.MinusButton.Bounds.Right <= stepper.Frame.Bounds.Left && stepper.PlusButton.Bounds.Left >= stepper.Frame.Bounds.Right,
+                    $"{size}: round minus and plus buttons sit left and right of the number");
+                input.Value = input.Minimum; await Settle();
+                Ensure(!stepper.MinusButton.IsEnabled && stepper.PlusButton.IsEnabled, $"{size}: minus is disabled at the minimum");
+                Click(stepper.PlusButton); await Settle();
+                Ensure(input.Value == input.Minimum + input.Increment && input.Text == (input.Minimum + input.Increment).ToString("0") && stepper.MinusButton.IsEnabled,
+                    $"{size}: plus raises the number ({input.Text})");
+                Click(stepper.MinusButton); await Settle();
+                Ensure(input.Value == input.Minimum, $"{size}: minus lowers the number");
+                stepper.Step(-1); await Settle();
+                Ensure(input.Value == input.Minimum, $"{size}: the minimum holds");
+                input.Value = input.Maximum; await Settle();
+                Ensure(!stepper.PlusButton.IsEnabled && stepper.MinusButton.IsEnabled, $"{size}: plus is disabled at the maximum");
+                stepper.Step(1); await Settle();
+                Ensure(input.Value == input.Maximum, $"{size}: the maximum holds");
+                input.Value = original; await Settle();
+            }
+            var produced = view.ProducedInput.Value ?? 0;
+            var sold = view.SoldInput.Value;
+            view.SoldInput.Value = produced; await Settle();
+            Click(view.SoldStepper.PlusButton); await Settle();
+            Click(view.SaveButton); await Settle();
+            Ensure(view.FieldErrors["sold"].IsVisible && frames["sold"].Invalid && Fill(frames["sold"].Face.BorderBrush) == Danger,
+                $"{size}: selling more than produced is still reported inline with the danger border");
+            view.SoldInput.Value = sold; await Settle();
+            Ensure(!frames["sold"].Invalid, $"{size}: correcting the number clears the danger border");
+
+            var grid = view.Fields;
+            var cells = grid.Children.OfType<Control>().ToList();
+            Rect At(Control c) => new(c.TranslatePoint(default, grid)!.Value, c.Bounds.Size);
+            Ensure(grid.Columns == 2 && cells.Count == 4 && Math.Abs(At(cells[0]).Width - At(cells[1]).Width) < .5 &&
+                Math.Abs(At(cells[2]).X - At(cells[0]).X) < .5 && Math.Abs(At(cells[2]).Width - At(cells[0]).Width) < .5 &&
+                Math.Abs(At(cells[3]).X - At(cells[1]).X) < .5 && Math.Abs(At(cells[3]).Width - At(cells[1]).Width) < .5,
+                $"{size}: two equal columns, and the second row is as wide as the first");
+            Ensure(Math.Abs(At(cells[1]).X - At(cells[0]).Right - Ui.Spacing.Related) < .5 && Math.Abs(At(cells[2]).Y - At(cells[0]).Bottom - Ui.Spacing.Related) < .5,
+                $"{size}: 16 between columns and rows");
+            foreach (var (key, frame) in frames)
+            {
+                var stack = (StackPanel)cells[frames.Keys.ToList().IndexOf(key)];
+                var label = (TextBlock)stack.Children[0];
+                var gap = stack.Children[1].Bounds.Top - label.Bounds.Bottom;
+                Ensure(label.FontSize == 14 && label.FontWeight == FontWeight.SemiBold && Math.Abs(gap - Ui.FieldGap) < .5, $"{size} {key}: semibold 14 label 8 above the field ({gap:0.#})");
+            }
+            grid.Fit(FieldGrid.NarrowWidth); await Settle();
+            Ensure(grid.Columns == 1 && cells.All(c => Math.Abs(At(c).X) < .5), $"{size}: 900 or less stacks the fields in one column");
+            grid.Fit(window.ClientSize.Width); await Settle();
+            Ensure(grid.Columns == 2, $"{size}: wide windows use two columns");
+
+            var card = view.FormCard;
+            Ensure(Fill(card.Background) == Colors.White && Fill(card.BorderBrush) == DividerColor && card.BorderThickness == new Thickness(1) &&
+                card.CornerRadius == new CornerRadius(Ui.FormCardRadius) && card.Padding == new Thickness(Ui.Spacing.Section),
+                $"{size}: the form is one white card with a thin border, radius 16 and padding 24");
+            var note = view.RescuedNote;
+            var count = view.RescuedCount;
+            var noteTop = note.TranslatePoint(default, card)!.Value.Y;
+            var gridBottom = grid.TranslatePoint(new Point(0, grid.Bounds.Height), card)!.Value.Y;
+            Ensure(count.FontSize == 28 && count.FontWeight == FontWeight.Bold && Fill(count.Foreground) == Primary && note.Text == ProductionView.RescuedNoteText &&
+                Fill(note.Foreground) == MutedColor && noteTop > gridBottom && note.Text?.Contains('—') == false,
+                $"{size}: the rescued summary sits under the fields with a large Primary 700 number and a muted note");
+            var save = view.SaveButton;
+            var corner = save.TranslatePoint(new Point(save.Bounds.Width, save.Bounds.Height), card)!.Value;
+            var inner = card.Padding.Right + card.BorderThickness.Right;
+            Ensure(save.Classes.Contains(Ui.PrimaryClass) && save.Classes.Contains(Ui.CompactClass) &&
+                Math.Abs(corner.X - (card.Bounds.Width - inner)) < .5 && Math.Abs(corner.Y - (card.Bounds.Height - inner)) < .5,
+                $"{size}: Simpan catatan is the shared primary button in the bottom right of the card ({corner})");
+            var form = card.FindAncestorOfType<FormArea>()!;
+            var heading = view.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == "Catatan produksi");
+            var headingBlock = heading.FindAncestorOfType<Grid>()!;
+            var rhythm = form.TranslatePoint(default, view)!.Value.Y - headingBlock.TranslatePoint(new Point(0, headingBlock.Bounds.Height), view)!.Value.Y;
+            Ensure(Math.Abs(rhythm - Ui.Spacing.Section) < .5, $"{size}: 24 between the heading and the form card ({rhythm:0.#})");
+
+            var scroll = view.GetVisualDescendants().OfType<ScrollViewer>().First();
+            Ensure(Fits(scroll), $"{size}: no horizontal scrolling on Catatan produksi");
+            foreach (var text in card.GetVisualDescendants().OfType<TextBlock>().Where(t => t.IsEffectivelyVisible && !string.IsNullOrEmpty(t.Text)))
+            {
+                var x = text.TranslatePoint(default, card)!.Value.X;
+                Ensure(text.TextLayout.TextLines.All(l => !l.HasCollapsed) && x >= -.5 && x + text.Bounds.Width <= card.Bounds.Width + .5,
+                    $"{size}: \"{text.Text}\" is shown in full inside the card");
+            }
+            await LabelFits(window, view, $"{size} Catatan produksi");
+            Capture(window, Path.Combine(output, $"production-fields-{size}.png"));
+        }
+        window.Width = width; window.Height = height; window.ShowProduction(); await Settle();
+    }
+
+    // Button label widths
+    private static async Task LabelWidths(MainWindow window)
+    {
+        var (width, height) = (window.Width, window.Height);
+        foreach (var (w, h) in new[] { (1040d, 720d), (1920d, 1080d) })
+        {
+            window.Width = w; window.Height = h;
+            var size = $"{w:0}x{h:0}";
+            window.ShowRestaurantOrders(); await Settle();
+            var orders = window.CurrentPage!.GetVisualDescendants().OfType<Button>().Where(b => b.Content as string == "Lihat pesanan").ToList();
+            Ensure(orders.Count == window.Session.RestaurantOrders.Count(o => o.Status is not (Replate.Domain.Enums.OrderStatus.Completed or Replate.Domain.Enums.OrderStatus.Cancelled)),
+                $"{size}: one Lihat pesanan button per active order ({orders.Count})");
+            await LabelFits(window, window.CurrentPage!, $"{size} Pesanan restoran");
+            window.ShowMenus(); await Settle(); await LabelFits(window, window.CurrentPage!, $"{size} Menu restoran");
+            window.ShowListings(); await Settle(); await LabelFits(window, window.CurrentPage!, $"{size} Penawaran");
+            window.Session.AsCustomer();
+            window.ShowMarketplace(); await Settle(); await LabelFits(window, window.Marketplace, $"{size} Jelajah");
+            window.Session.AsOwner();
+        }
+        window.Width = width; window.Height = height; window.ShowRestaurantOrders(); await Settle();
+    }
+    private static async Task LabelFits(Window window, Control page, string label)
+    {
+        var buttons = page.GetVisualDescendants().OfType<Button>()
+            .Where(b => b.IsEffectivelyVisible && b.Content is string { Length: > 0 } && b.Padding.Left > 0 && b.Padding.Right > 0).ToList();
+        Ensure(buttons.Count > 0, $"{label}: has labelled buttons to measure");
+        foreach (var button in buttons)
+        {
+            button.BringIntoView(); await Settle();
+            var text = (string)button.Content!;
+            var probe = new TextBlock { Text = text, FontSize = button.FontSize, FontWeight = button.FontWeight, FontFamily = button.FontFamily, FontStyle = button.FontStyle };
+            probe.Measure(Size.Infinity);
+            var need = probe.DesiredSize.Width + button.Padding.Left + button.Padding.Right + button.BorderThickness.Left + button.BorderThickness.Right;
+            Ensure(button.Bounds.Width >= need - .5, $"{label} {text}: button is {button.Bounds.Width:0.#} wide, text and padding need {need:0.#}");
+            var shown = Presenter(button).GetVisualDescendants().OfType<TextBlock>().FirstOrDefault(t => t.Text == text);
+            Ensure(shown is null || (shown.Bounds.Width >= probe.DesiredSize.Width - .5 && shown.Bounds.Height <= probe.DesiredSize.Height + .5),
+                $"{label} {text}: label shows {shown?.Bounds.Width:0.#} of {probe.DesiredSize.Width:0.#} on one line");
+            var compact = button.Classes.Contains(Ui.CompactClass) && button.IsEffectivelyEnabled;
+            if (compact) await Hold(button, ":pointerover", true);
+            var box = new Rect(button.Bounds.Size).TransformToAABB(button.TransformToVisual(window)!.Value);
+            var scale = Scale(button);
+            if (compact) await Hold(button, ":pointerover", false);
+            Ensure(!compact || Math.Abs(scale - Ui.PrimaryHoverScale) <= .005, $"{label} {text}: hover scale is {scale:0.###}");
+            Ensure(button.GetVisualAncestors().OfType<Visual>().Where(v => v.ClipToBounds).All(v => v.TransformToVisual(window) is { } m &&
+                    new Rect(v.Bounds.Size).TransformToAABB(m).Inflate(.5).Contains(box)),
+                $"{label} {text}: no container clips the button at scale {scale:0.###} ({box})");
+        }
+    }
+
     // Text links
     private static readonly Color PrimaryHover = Color.Parse("#2F7D5F");
     private static async Task TextLinks(MainWindow window)
@@ -599,8 +893,125 @@ internal static class UiVerification
         Ensure(painted > size * size * .08, $"{label}: the empty icon renders in primary ({painted} pixels)");
         Ensure(fits(), $"{label}: no horizontal scrolling");
     }
+    // Calendar look
+    private static async Task CalendarLook(DateField date, string size)
+    {
+        var calendar = date.Calendar;
+        var sheet = (Avalonia.Controls.Border)date.Popup.Child!;
+        var root = sheet.GetVisualAncestors().LastOrDefault() ?? sheet;
+        Ensure(Fill(sheet.Background) == Colors.White && Fill(calendar.Background) == Colors.White && Fill(calendar.HeaderBackground) == Colors.White &&
+            Fill(calendar.BorderBrush) == Colors.Transparent && sheet.CornerRadius == new CornerRadius(Ui.FieldRadius) && Fill(sheet.BorderBrush) == DividerColor,
+            $"{size}: the calendar is white inside the rounded sheet with a thin divider border");
+        var titles = calendar.GetVisualDescendants().OfType<TextBlock>().Where(t => Ui.DayNames.Contains(t.Text)).OrderBy(t => t.TransformToVisual(root)!.Value.M31).Select(t => t.Text).ToList();
+        Ensure(titles.SequenceEqual(new[] { "Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min" }), $"{size}: day names read {string.Join(" ", titles)}, Monday first in Indonesian");
+        var header = calendar.GetVisualDescendants().OfType<Button>().First(b => b.Name == Ui.CalendarHeaderPart);
+        var month = calendar.DisplayDate.ToString("MMMM yyyy", Ui.Indonesian);
+        Ensure(header.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == month) && month.Contains('—') == false,
+            $"{size}: the header reads {month} in Indonesian");
+
+        Rect Box(Visual visual) => new Rect(visual.Bounds.Size).TransformToAABB(visual.TransformToVisual(root)!.Value);
+        async Task NoGrey(string view)
+        {
+            var marks = calendar.GetVisualDescendants().Where(v => v is TextBlock or Avalonia.Controls.Shapes.Path).ToList();
+            foreach (var mark in marks) mark.Opacity = 0;
+            await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Render);
+            var bare = Snapshot(root);
+            foreach (var mark in marks) mark.Opacity = 1;
+            var area = Box(calendar);
+            var grey = 0;
+            for (var y = (int)Math.Ceiling(area.Y); y < (int)area.Bottom; y++)
+                for (var x = (int)Math.Ceiling(area.X); x < (int)area.Right; x++)
+                {
+                    var p = bare(x, y);
+                    if (Math.Max(p.R, Math.Max(p.G, p.B)) - Math.Min(p.R, Math.Min(p.G, p.B)) <= 2 && p.R <= 248) grey++;
+                }
+            Ensure(grey == 0, $"{size}: no default grey pixels in the {view} calendar ({grey} found in {area})");
+        }
+        await NoGrey("day");
+
+        async Task Hover(Button cell, Color background, Color foreground, string label)
+        {
+            var presenter = Presenter(cell);
+            var rest = Snapshot(root);
+            var restBox = Box(cell);
+            await Hold(cell, ":pointerover", true);
+            var hovered = Snapshot(root);
+            var (fill, text, border, thickness) = (Fill(presenter.Background), Fill(cell.Foreground), Fill(presenter.BorderBrush), presenter.BorderThickness);
+            var weight = cell.FontWeight;
+            await Hold(cell, ":pointerover", false);
+            var contrast = TopBarVerification.Contrast(text, fill);
+            Ensure(fill == background && text == foreground && fill != Colors.White && contrast >= 4.5,
+                $"{label}: hover is {fill} with {text} text ({contrast:0.0}:1), expected {background} and {foreground}");
+            if (cell is CalendarButton)
+                Ensure(!cell.ClipToBounds && presenter.CornerRadius == new CornerRadius(Ui.FieldGap) && cell.Bounds.Width > cell.Bounds.Height,
+                    $"{label}: the hover face is a rounded rectangle ({presenter.CornerRadius}, {cell.Bounds.Width:0.#}x{cell.Bounds.Height:0.#}) and nothing clips it");
+            else
+                Ensure(!cell.ClipToBounds && presenter.CornerRadius == new CornerRadius(cell.Bounds.Width / 2) && Math.Abs(cell.Bounds.Width - cell.Bounds.Height) < .5,
+                    $"{label}: the hover face is a circle ({presenter.CornerRadius}, {cell.Bounds.Width:0.#}x{cell.Bounds.Height:0.#}) and nothing clips it");
+            var box = Box(cell);
+            var (left, top, right, bottom) = ((int)Math.Ceiling(box.X), (int)Math.Ceiling(box.Y), (int)Math.Floor(box.Right) - 1, (int)Math.Floor(box.Bottom) - 1);
+            foreach (var (x, y) in new[] { (left, top), (right, top), (left, bottom), (right, bottom) })
+                Ensure(Near(hovered(x, y), rest(x, y)), $"{label}: corner ({x},{y}) keeps the white surface {rest(x, y)}, not a square {hovered(x, y)}");
+            var (cx, cy) = ((int)box.Center.X, top + 4);
+            Ensure(Near(hovered(cx, cy), background), $"{label}: inside the circle the hover fill is {hovered(cx, cy)}, expected {background}");
+            var calendarCell = cell is CalendarDayButton or CalendarButton;
+            if (calendarCell)
+                Ensure(box == restBox && cell.Bounds.Size == new Size(cell.Width, cell.Height), $"{label}: the hover cell keeps its size and position ({restBox} -> {box})");
+            if (calendarCell && background == Selection)
+            {
+                Ensure(thickness == default(Thickness) && border.A == 0 && weight == FontWeight.Medium,
+                    $"{label}: hover has no border and medium text ({thickness}, {border}, {weight})");
+                foreach (var (x, y) in new[] { ((int)box.Center.X, top), ((int)box.Center.X, bottom), (left, (int)box.Center.Y), (right, (int)box.Center.Y) })
+                    Ensure(!Near(hovered(x, y), Primary500) && !Near(hovered(x, y), Primary), $"{label}: edge ({x},{y}) shows no green outline ({hovered(x, y)})");
+            }
+            if (calendarCell && background == Primary)
+                Ensure(thickness == default(Thickness) && border.A == 0, $"{label}: the selected cell has no extra outline ({thickness}, {border})");
+        }
+        var days = calendar.GetVisualDescendants().OfType<CalendarDayButton>().Where(b => b.IsEnabled && b.IsVisible).ToList();
+        var plain = days.First(b => !b.Classes.Contains(":selected") && !b.Classes.Contains(":today") && !b.Classes.Contains(":inactive"));
+        await Hover(plain, Selection, Primary, $"{size} day {plain.Content}");
+        if (days.FirstOrDefault(b => b.Classes.Contains(":inactive") && !b.Classes.Contains(":today")) is { } outside)
+        {
+            var faint = Fill(outside.Foreground);
+            Ensure(faint.A < 255 && faint.R == MutedColor.R && faint.G == MutedColor.G && faint.B == MutedColor.B,
+                $"{size}: days outside the month use a paler Text Secondary ({faint})");
+            await Hover(outside, Selection, Primary, $"{size} outside day {outside.Content}");
+        }
+        if (days.FirstOrDefault(b => b.Classes.Contains(":selected")) is { } chosen)
+            await Hover(chosen, Primary, Colors.White, $"{size} selected day");
+        if (days.FirstOrDefault(b => b.Classes.Contains(":today") && !b.Classes.Contains(":selected")) is { } today)
+            Ensure(Fill(Presenter(today).BorderBrush) == Primary && Fill(Presenter(today).Background) == Colors.Transparent, $"{size}: today has a thin Primary 700 ring without fill");
+        foreach (var name in Ui.CalendarNavParts)
+        {
+            var nav = calendar.GetVisualDescendants().OfType<Button>().First(b => b.Name == name);
+            Ensure(nav.Classes.Contains(Ui.IconClass) && nav.Theme == Ui.HeaderTheme && nav.Width == Ui.CalendarNavSize,
+                $"{size}: {name} is a round {Ui.CalendarNavSize} icon button");
+            await Hover(nav, Selection, Primary, $"{size} {name}");
+        }
+
+        calendar.DisplayMode = CalendarMode.Year; await Settle();
+        await NoGrey("month");
+        var months = calendar.GetVisualDescendants().OfType<CalendarButton>().Where(b => b.IsVisible).ToList();
+        var monthNames = months.Select(b => Presenter(b).Content?.ToString()).ToList();
+        Ensure(monthNames.SequenceEqual(Ui.MonthNames), $"{size}: month cells read {string.Join(" ", monthNames)} in Indonesian");
+        Ensure(months.All(b => b.Theme == Ui.MonthTheme), $"{size}: month cells use the month theme");
+        await Hover(months.First(b => !b.Classes.Contains(":selected") && !b.Classes.Contains(Ui.NowClass)), Selection, Primary, $"{size} month cell");
+        if (months.FirstOrDefault(b => b.Classes.Contains(":selected")) is { } shownMonth)
+            await Hover(shownMonth, Primary, Colors.White, $"{size} selected month");
+        if (months.FirstOrDefault(b => b.Classes.Contains(Ui.NowClass) && !b.Classes.Contains(":selected")) is { } nowMonth)
+            Ensure(Fill(Presenter(nowMonth).BorderBrush) == Primary && Fill(Presenter(nowMonth).Background) == Colors.Transparent, $"{size}: this month has a thin Primary 700 ring without fill");
+
+        calendar.DisplayMode = CalendarMode.Decade; await Settle();
+        await NoGrey("year");
+        var years = calendar.GetVisualDescendants().OfType<CalendarButton>().Where(b => b.IsVisible && b.IsEnabled).ToList();
+        Ensure(years.Count > 0 && years.All(b => int.TryParse(Presenter(b).Content?.ToString(), out _)), $"{size}: year cells show plain years");
+        await Hover(years.First(b => !b.Classes.Contains(":selected") && !b.Classes.Contains(Ui.NowClass) && !b.Classes.Contains(":inactive")), Selection, Primary, $"{size} year cell");
+        if (years.FirstOrDefault(b => b.Classes.Contains(":selected")) is { } shownYear)
+            await Hover(shownYear, Primary, Colors.White, $"{size} selected year");
+        calendar.DisplayMode = CalendarMode.Month; await Settle();
+    }
     private static bool Near(Color a, Color b) => Math.Abs(a.R - b.R) <= 3 && Math.Abs(a.G - b.G) <= 3 && Math.Abs(a.B - b.B) <= 3;
-    private static Func<int, int, Color> Snapshot(Window window)
+    private static Func<int, int, Color> Snapshot(Visual window)
     {
         var size = new PixelSize((int)window.Bounds.Width, (int)window.Bounds.Height);
         using var bitmap = new RenderTargetBitmap(size, new Vector(96, 96));
