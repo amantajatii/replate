@@ -1,5 +1,4 @@
 using System.Net;
-using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Replate.Domain.Entities;
@@ -14,7 +13,7 @@ internal static class SupabaseOrderReader
         Timeout = TimeSpan.FromSeconds(10)
     };
     private static readonly JsonSerializerOptions Json = new() { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
-    private const string Columns = "id,customer_id,restaurant_id,pickup_code,total_price,status,ordered_at," +
+    private const string Columns = "id,customer_id,restaurant_id,total_price,status,ordered_at," +
         "preparation_minutes,completed_at,order_items(id,listing_id,menu_name,quantity,unit_price)";
 
     internal static Task<List<Order>> LoadCustomerOrdersAsync(
@@ -36,9 +35,7 @@ internal static class SupabaseOrderReader
             {
                 var path = FormattableString.Invariant(
                     $"/rest/v1/orders?select={Columns}&{filter}&order=ordered_at.desc,id.desc&limit=100&offset={offset}");
-                using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(session.Project, path));
-                request.Headers.Add("apikey", session.PublishableKey);
-                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", session.AccessToken);
+                using var request = session.CreateRequest(HttpMethod.Get, path);
                 using var response = await Http.SendAsync(request).ConfigureAwait(false);
                 if (response.StatusCode == HttpStatusCode.Unauthorized)
                     throw new InvalidOperationException("Sesi Supabase sudah tidak berlaku. Keluar lalu masuk kembali.");
@@ -48,6 +45,9 @@ internal static class SupabaseOrderReader
                 var rows = await response.Content.ReadFromJsonAsync<List<OrderRow>>(Json).ConfigureAwait(false)
                     ?? throw new InvalidOperationException("Supabase tidak mengembalikan daftar pesanan.");
                 if (rows.Count == 0) return orders;
+                var pickupCodes = restaurantId is null
+                    ? await LoadPickupCodesAsync(session, rows.Select(row => row.Id)).ConfigureAwait(false)
+                    : null;
 
                 foreach (var row in rows)
                 {
@@ -62,7 +62,8 @@ internal static class SupabaseOrderReader
                     var order = new Order(status, row.CompletedAt?.UtcDateTime)
                     {
                         Id = row.Id, CustomerId = row.CustomerId, RestaurantId = row.RestaurantId,
-                        PickupCode = row.PickupCode, TotalPrice = row.TotalPrice, OrderedAt = row.OrderedAt.UtcDateTime
+                        PickupCode = pickupCodes?.GetValueOrDefault(row.Id) ?? "",
+                        TotalPrice = row.TotalPrice, OrderedAt = row.OrderedAt.UtcDateTime
                     };
                     if (row.PreparationMinutes is int minutes)
                         order.SetPreparationTime(TimeSpan.FromMinutes(minutes));
@@ -83,7 +84,22 @@ internal static class SupabaseOrderReader
         }
     }
 
-    private sealed record OrderRow(Guid Id, Guid CustomerId, Guid RestaurantId, string PickupCode,
+    private static async Task<Dictionary<Guid, string>> LoadPickupCodesAsync(SupabaseAuth.Session session, IEnumerable<Guid> orderIds)
+    {
+        using var request = session.CreateRequest(HttpMethod.Post, "/rest/v1/rpc/replate_customer_pickup_codes");
+        request.Content = JsonContent.Create(new { p_order_ids = orderIds });
+        using var response = await Http.SendAsync(request).ConfigureAwait(false);
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+            throw new InvalidOperationException("Sesi Supabase sudah tidak berlaku. Keluar lalu masuk kembali.");
+        if (!response.IsSuccessStatusCode)
+            throw new InvalidOperationException("Kode pengambilan gagal dibaca dari Supabase.");
+        var rows = await response.Content.ReadFromJsonAsync<List<PickupCodeRow>>(Json).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("Supabase tidak mengembalikan kode pengambilan.");
+        return rows.ToDictionary(row => row.OrderId, row => row.PickupCode);
+    }
+
+    private sealed record PickupCodeRow(Guid OrderId, string PickupCode);
+    private sealed record OrderRow(Guid Id, Guid CustomerId, Guid RestaurantId,
         decimal TotalPrice, string Status, DateTimeOffset OrderedAt, int? PreparationMinutes, DateTimeOffset? CompletedAt,
         List<ItemRow> OrderItems);
     private sealed record ItemRow(Guid Id, Guid ListingId, string MenuName, int Quantity, decimal UnitPrice);

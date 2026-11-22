@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -70,6 +71,14 @@ internal static class SupabaseAuth
         internal string PublishableKey { get; } = publishableKey;
         internal Identity User { get; } = user;
         internal string AccessToken { get; } = accessToken;
+
+        internal HttpRequestMessage CreateRequest(HttpMethod method, string path)
+        {
+            var request = new HttpRequestMessage(method, new Uri(Project, path));
+            request.Headers.Add("apikey", PublishableKey);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AccessToken);
+            return request;
+        }
     }
 
     private sealed record TokenResponse(Identity? User, [property: JsonPropertyName("access_token")] string? AccessToken);

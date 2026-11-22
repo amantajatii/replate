@@ -618,12 +618,14 @@ public sealed class DemoSession
     {
         EnsureWritable();
         RequireOwnedRestaurant(order.RestaurantId);
-        EnsurePickupWindowOpen(order);
+        if (supabaseSession is null) EnsurePickupWindowOpen(order);
         if (preparationMinutes is < 1 or > 240) throw new InvalidOperationException("Waktu persiapan harus antara 1 dan 240 menit.");
         if (order.Status != OrderStatus.Reserved)
             throw new InvalidOperationException("Hanya pesanan yang menunggu konfirmasi yang dapat dikonfirmasi.");
         EnsureNotCheckingOut();
-        if (UsesSharedStock && order.Items.Any(item => sharedListingIds.Contains(item.ListingId)))
+        if (supabaseSession is { } session)
+            SupabaseOrderWriter.UpdateStatusAsync(session, order.Id, OrderStatus.Confirmed, preparationMinutes).GetAwaiter().GetResult();
+        else if (UsesSharedStock && order.Items.Any(item => sharedListingIds.Contains(item.ListingId)))
             new DatabaseService().ConfirmOrder(order.Id, order.RestaurantId, preparationMinutes);
         order.Confirm(); order.SetPreparationTime(TimeSpan.FromMinutes(preparationMinutes)); Persist();
     }
@@ -633,10 +635,12 @@ public sealed class DemoSession
         EnsureWritable();
         EnsureNotCheckingOut();
         RequireOwnedRestaurant(order.RestaurantId);
-        EnsurePickupWindowOpen(order);
+        if (supabaseSession is null) EnsurePickupWindowOpen(order);
         if (order.Status != OrderStatus.Confirmed)
             throw new InvalidOperationException("Pesanan harus dikonfirmasi sebelum ditandai siap diambil.");
-        if (UsesSharedStock && order.Items.Any(item => sharedListingIds.Contains(item.ListingId)))
+        if (supabaseSession is { } session)
+            SupabaseOrderWriter.UpdateStatusAsync(session, order.Id, OrderStatus.ReadyForPickup).GetAwaiter().GetResult();
+        else if (UsesSharedStock && order.Items.Any(item => sharedListingIds.Contains(item.ListingId)))
             new DatabaseService().UpdateOrderStatus(order, OrderStatus.ReadyForPickup);
         order.MarkReady();
         Persist();
@@ -705,18 +709,28 @@ public sealed class DemoSession
         EnsureWritable();
         EnsureNotCheckingOut();
         RequireOwnedRestaurant(order.RestaurantId);
-        EnsurePickupWindowOpen(order);
+        if (supabaseSession is null) EnsurePickupWindowOpen(order);
         if (order.Status != OrderStatus.ReadyForPickup) throw new InvalidOperationException("Pesanan belum siap diambil atau sudah selesai.");
         var verification = new PickupVerification { Order = order, OrderId = order.Id, EnteredCode = code.Trim().ToUpperInvariant() };
-        if (!verification.VerifyCode()) throw new InvalidOperationException("Kode pengambilan tidak cocok. Periksa kode dari pelanggan.");
+        if (supabaseSession is null && !verification.VerifyCode())
+            throw new InvalidOperationException("Kode pengambilan tidak cocok. Periksa kode dari pelanggan.");
         var changes = order.Items.GroupBy(i => (i.Listing.Menu, DateOnly.FromDateTime(i.Listing.PickupStart.ToLocalTime())))
             .Select(g => (Record: g.Key.Menu.ProductionRecords.SingleOrDefault(r => r.RecordDate == g.Key.Item2)
                 ?? throw new InvalidOperationException("Catatan produksi untuk pesanan ini tidak ditemukan."), Quantity: g.Sum(i => i.Quantity))).ToList();
         if (changes.Any(c => c.Record.RescuedQuantity + c.Quantity > c.Record.CalculateSurplus()))
             throw new InvalidOperationException("Porsi terselamatkan melebihi catatan surplus. Periksa catatan produksi.");
-        if (UsesSharedStock && order.Items.Any(item => sharedListingIds.Contains(item.ListingId)))
-            new DatabaseService().UpdateOrderStatus(order, OrderStatus.Completed, verification.VerifiedAt);
-        verification.CompletePickup();
+        if (supabaseSession is { } session)
+        {
+            var completedAt = SupabaseOrderWriter.UpdateStatusAsync(session, order.Id, OrderStatus.Completed,
+                pickupCode: verification.EnteredCode).GetAwaiter().GetResult();
+            order.Complete(completedAt);
+        }
+        else
+        {
+            if (UsesSharedStock && order.Items.Any(item => sharedListingIds.Contains(item.ListingId)))
+                new DatabaseService().UpdateOrderStatus(order, OrderStatus.Completed, verification.VerifiedAt);
+            verification.CompletePickup();
+        }
         foreach (var change in changes) change.Record.UpdateRescuedQuantity(change.Record.RescuedQuantity + change.Quantity);
         Persist();
     }
