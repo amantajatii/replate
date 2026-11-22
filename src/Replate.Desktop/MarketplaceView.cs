@@ -21,10 +21,12 @@ public sealed class MarketplaceView : UserControl
 {
     internal const double ContentMaxWidth = 1200;
     internal const string Cheapest = "Termurah";
+    internal const string Nearest = "Terdekat";
+    internal const string PinOutline = "M12 22S5 15 5 10A7 7 0 1 1 19 10C19 15 12 22 12 22Z M12 7.5A2.5 2.5 0 1 1 12 12.5A2.5 2.5 0 1 1 12 7.5Z";
     internal const string EndingSoon = "Segera berakhir";
     internal const string SectionTitle = "Jelajahi Menu";
     internal const double TitleSize = 32;
-    internal static readonly string[] CollectionNames = [Cheapest, EndingSoon, MenuCategories.MainCourse, MenuCategories.Bakery, MenuCategories.Produce];
+    internal static readonly string[] CollectionNames = [Nearest, Cheapest, EndingSoon, MenuCategories.MainCourse, MenuCategories.Bakery, MenuCategories.Produce];
     internal static readonly BoxShadows CardShadow = Ui.CardShadow;
     internal static readonly BoxShadows PrimaryCardShadow = Ui.PrimaryCardShadow;
     internal static readonly BoxShadows PrimaryCardHoverShadow = Ui.PrimaryCardHoverShadow;
@@ -34,6 +36,7 @@ public sealed class MarketplaceView : UserControl
     internal static readonly IBrush PressedFill = Ui.DividerFill;
     private static readonly Dictionary<string, Geometry> CollectionIcons = new()
     {
+        [Nearest] = Geometry.Parse(PinOutline),
         [Cheapest] = Geometry.Parse("M3.5 12.2V4.5A1 1 0 0 1 4.5 3.5H12.2L20.5 11.8A1.5 1.5 0 0 1 20.5 13.9L13.9 20.5A1.5 1.5 0 0 1 11.8 20.5Z M8 6.5A1.5 1.5 0 1 1 8 9.5A1.5 1.5 0 1 1 8 6.5Z"),
         [EndingSoon] = Geometry.Parse("M12 3A9 9 0 1 1 12 21A9 9 0 1 1 12 3Z M12 7V12L15.5 14"),
         [MenuCategories.MainCourse] = Geometry.Parse("M6 3V8A3 3 0 0 0 12 8V3 M9 3V21 M17 3C15.3 3 14.5 5.2 14.5 7.5C14.5 9.6 15.6 11 17 11C18.4 11 19.5 9.6 19.5 7.5C19.5 5.2 18.7 3 17 3Z M17 11V21"),
@@ -83,10 +86,11 @@ public sealed class MarketplaceView : UserControl
         Feed = new ListingFeed(owner, session, () => ListingQuery.Available(session),
             () => ListingFeed.EmptyState("Belum ada menu tersedia", "Penawaran surplus baru akan tampil di sini.", null));
         Banner = new MarketplaceBanner(session.CurrentUser?.Name ?? "");
-        CollectionRow = new Grid { ColumnDefinitions = ColumnDefinitions.Parse("*,*,*,*,*"), ColumnSpacing = Ui.Spacing.Related };
+        CollectionRow = new Grid { ColumnDefinitions = new ColumnDefinitions(), ColumnSpacing = Ui.Spacing.Related };
         for (var i = 0; i < CollectionNames.Length; i++)
         {
             var name = CollectionNames[i];
+            CollectionRow.ColumnDefinitions.Add(new ColumnDefinition(1, GridUnitType.Star));
             var card = CollectionCard(name, () => owner.ShowCollection(name));
             Grid.SetColumn(card, i); CollectionRow.Children.Add(card);
         }

@@ -12,6 +12,7 @@ namespace Replate.Desktop;
 internal sealed class ListingFeed
 {
     internal const string StockMessage = "Jumlah di keranjang sudah mencapai stok yang tersedia.";
+    internal const double EmptyStateTopGap = 96;
     private readonly MainWindow owner;
     private readonly DemoSession session;
     private readonly Func<IEnumerable<SurplusListing>> source;
@@ -45,11 +46,16 @@ internal sealed class ListingFeed
 
     internal static Control EmptyState(string title, string message, Action? back)
     {
-        var state = Ui.Stack(12, Ui.Text(title, 20, bold: true), Ui.Text(message, 13, Ui.Muted));
+        var heading = Ui.Text(title, 20, bold: true);
+        var body = Ui.Text(message, 13, Ui.Muted);
+        heading.TextAlignment = body.TextAlignment = TextAlignment.Center;
+        var state = Ui.Stack(12, heading, body);
+        state.HorizontalAlignment = HorizontalAlignment.Center;
+        state.Margin = new Thickness(0, EmptyStateTopGap, 0, 0);
         if (back is not null)
         {
             var button = Ui.Button(CollectionView.BackLabel, back);
-            button.HorizontalAlignment = HorizontalAlignment.Left;
+            button.HorizontalAlignment = HorizontalAlignment.Center;
             state.Children.Add(button);
         }
         return state;
@@ -65,9 +71,12 @@ internal sealed class ListingFeed
         AutomationProperties.SetName(add, $"Tambah {listing.Menu.Name} ke keranjang");
         var details = Ui.Button(listing.Menu.Name, () => Open(listing, false));
         details.Background = Brushes.Transparent; details.Padding = new Thickness(0); details.FontSize = 18;
+        var restaurant = listing.Menu.Restaurant;
+        var travel = TravelText.Format(session.TravelTo(restaurant));
+        var meta = $"{restaurant?.Name} · {listing.Menu.Category}";
         var description = Ui.Stack(6, details,
             Ui.Text(listing.Menu.Description, 13, Ui.Muted),
-            Ui.Text($"{listing.Menu.Restaurant?.Name} · {listing.Menu.Category}", 12, Ui.Muted));
+            Ui.Text(travel.Length == 0 ? meta : $"{meta} · {travel}", 12, Ui.Muted));
         description.Margin = new Thickness(0, 0, 24, 0);
         var pickup = Ui.Stack(5, Ui.Text("Pengambilan", 12, Ui.Muted),
             Ui.Text($"{listing.PickupStart.ToLocalTime():HH:mm}–{listing.PickupEnd.ToLocalTime():HH:mm}", 14),

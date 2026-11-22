@@ -36,7 +36,10 @@ internal static class CollectionVerification
             NoLegacyCategory(page, name);
             var listed = page.VisibleListings;
             Ensure(listed.Count > 0 && page.Feed.Panel.Children.OfType<Border>().Count() == listed.Count, $"{name}: one listing card per listing");
-            if (name == MarketplaceView.Cheapest)
+            if (name == MarketplaceView.Nearest)
+                Ensure(listed.SequenceEqual(all.OrderBy(l => session.TravelTo(l.Menu.Restaurant)?.DistanceKm ?? double.PositiveInfinity)
+                    .ThenBy(l => l.PickupEnd)), "Terdekat sorts by fake route distances, with pickup time breaking ties");
+            else if (name == MarketplaceView.Cheapest)
                 Ensure(listed.Count == all.Count && listed.ToHashSet().SetEquals(all) && Ascending(listed.Select(l => l.RescuePrice)), "Termurah lists every listing by rescue price ascending");
             else if (name == MarketplaceView.EndingSoon)
                 Ensure(listed.Count == all.Count && listed.ToHashSet().SetEquals(all) && Ascending(listed.Select(l => l.PickupEnd)), "Segera berakhir (Enter) lists every listing by pickup end ascending");
@@ -109,7 +112,11 @@ internal static class CollectionVerification
         var texts = results.Feed.Panel.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToList();
         Ensure(results.VisibleListings.Count == 0 && texts.Contains(CollectionView.SearchEmpty) && texts.Contains("Coba kata kunci lain."), "Unknown words show the empty state");
         var empty = results.Feed.Panel.Children.Single();
-        Ensure(Math.Abs(Rect(empty, window).Y - Rect(results.TitleRow, window).Bottom - Ui.Spacing.Related) <= 1, "Empty state sits 16 under the title");
+        var emptyRect = Rect(empty, window);
+        var panelRect = Rect(results.Feed.Panel, window);
+        Ensure(Math.Abs(emptyRect.Y - Rect(results.TitleRow, window).Bottom - Ui.Spacing.Related - ListingFeed.EmptyStateTopGap) <= 1,
+            "Empty state sits below the title with the empty-state gap");
+        Ensure(Math.Abs(emptyRect.Center.X - panelRect.Center.X) <= 1, "Empty state is horizontally centered");
         Click(results.Feed.Panel.GetVisualDescendants().OfType<Button>().Single(b => b.Content as string == CollectionView.BackLabel)); await Settle();
         Ensure(window.CurrentPage is MarketplaceView && bar.SearchBox.Text == "", "The empty state button returns to Jelajah and clears the search");
 
@@ -181,7 +188,7 @@ internal static class CollectionVerification
         NoLegacyCategory(window, "Jelajah");
         Ensure(window.Marketplace.CollectionCards.ContainsKey(MenuCategories.Produce) &&
             window.Marketplace.CollectionCards[MenuCategories.Produce].GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == MenuCategories.Produce) &&
-            Texts(window).Any(t => t.EndsWith(" · " + MenuCategories.Produce)), "Jelajah shows Buah & sayur on the card and in the listing line");
+            Texts(window).Any(IsProduceMeta), "Jelajah shows Buah & sayur on the card and in the listing line");
         await Submit("vegetarian");
         results = Results("vegetarian");
         Ensure(results.VisibleListings.Count > 0 && results.VisibleListings.Count == all.Count(l => l.Menu.Category == MenuCategories.Produce) &&
@@ -207,7 +214,7 @@ internal static class CollectionVerification
         try
         {
             legacyWindow.Show(); legacyWindow.ShowMarketplace(); await Settle();
-            Ensure(legacySession.StorageError is null && Texts(legacyWindow).Count(t => t.EndsWith(" · " + MenuCategories.Produce)) == 3,
+            Ensure(legacySession.StorageError is null && Texts(legacyWindow).Count(IsProduceMeta) == 3,
                 "A legacy Vegetarian state file shows Buah & sayur on Jelajah");
             NoLegacyCategory(legacyWindow, "legacy Jelajah");
             legacyWindow.ShowCollection(MenuCategories.Produce); await Settle();
@@ -232,8 +239,11 @@ internal static class CollectionVerification
         ownerWindow.ShowSearch("croissant");
         Ensure(ownerWindow.CurrentPage is SignInView && !ownerSession.IsSignedIn, "A restaurant owner opening search results is signed out");
         window.ShowMarketplace(); await Settle();
-        Console.WriteLine("All Replate collection and search checks passed (five collections, ordering, categories, search words, empty states, clearing, cart rule, 1040x720 and 1920x1080, role guards).");
+        Console.WriteLine("All Replate collection and search checks passed (six collections, ordering, categories, search words, empty states, clearing, cart rule, 1040x720 and 1920x1080, role guards).");
     }
+
+    private static bool IsProduceMeta(string text) =>
+        text.Split(" · ", 3).ElementAtOrDefault(1) == MenuCategories.Produce;
 
     private static void CheckPage(MainWindow window, CollectionView page, string label)
     {

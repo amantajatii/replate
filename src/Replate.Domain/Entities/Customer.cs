@@ -1,5 +1,6 @@
 using Replate.Domain.Enums;
 using Replate.Domain.Services;
+using Replate.Domain.ValueObjects;
 
 namespace Replate.Domain.Entities;
 
@@ -8,6 +9,22 @@ public sealed class Customer : User
     public override UserRole Role => UserRole.Customer;
     public Cart Cart { get; set; } = new();
     public List<Order> Orders { get; } = [];
+    public GeoPoint? Location { get; private set; }
+    public string? LocationLabel { get; private set; }
+
+    public void SetLocation(GeoPoint location, string label)
+    {
+        if (string.IsNullOrWhiteSpace(label))
+            throw new ArgumentException("Label lokasi wajib diisi.", nameof(label));
+        Location = location;
+        LocationLabel = label.Trim();
+    }
+
+    public void ClearLocation()
+    {
+        Location = null;
+        LocationLabel = null;
+    }
 
     public IEnumerable<SurplusListing> BrowseMarketplace(MarketplaceService marketplace) =>
         marketplace.GetActiveListings();

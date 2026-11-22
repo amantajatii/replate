@@ -69,8 +69,16 @@ internal sealed class CustomerTopBar : Border
     internal TextBlock EmailText { get; }
     internal Button OrdersItem { get; }
     internal Button SignOutItem { get; }
+    internal Button LocationChip { get; }
+    internal TextBlock LocationLabel { get; } = Ui.Text("Atur lokasi", 14, Ui.OnPrimary, true);
+    private readonly LocationPicker locationPicker;
+    internal Popup LocationMenu => locationPicker.Menu;
+    internal TextBox LocationInput => locationPicker.Input;
+    internal Button LocationAddressButton => locationPicker.AddressButton;
+    internal Button LocationDeviceButton => locationPicker.DeviceButton;
 
-    internal CustomerTopBar(Action home, Action cart, Action orders, Action signOut, Action<string> search)
+    internal CustomerTopBar(Action home, Action cart, Action orders, Action signOut, Action<string> search,
+        DemoSession session, Func<Task> locationChanged, Func<Task<bool>>? confirmBrowser = null, Action<string>? notify = null)
     {
         Height = BarHeight; Background = Ui.Green; Padding = new Thickness(Ui.Spacing.Page, 0);
         AddStyles();
@@ -184,22 +192,51 @@ internal sealed class CustomerTopBar : Border
         };
 
         // Layout
-        var actions = Ui.Row(16, CartButton, ProfileButton);
+        LocationLabel.MaxWidth = 128;
+        LocationLabel.TextWrapping = TextWrapping.NoWrap;
+        LocationLabel.TextTrimming = TextTrimming.CharacterEllipsis;
+        LocationLabel.VerticalAlignment = VerticalAlignment.Center;
+        var pin = Ui.OutlineIcon(MarketplaceView.PinOutline, 18, .08, null);
+        LocationChip = Plain("bar-cart", Ui.Row(6, pin, LocationLabel), () =>
+        {
+            ProfileMenu.IsOpen = false;
+            if (LocationMenu.IsOpen) CloseLocationPicker();
+            else LocationMenu.IsOpen = true;
+        });
+        LocationChip.Height = 44;
+        LocationChip.Padding = new Thickness(6, 0);
+        pin[!Shape.StrokeProperty] = LocationChip[!TemplatedControl.ForegroundProperty];
+        LocationLabel[!TextBlock.ForegroundProperty] = LocationChip[!TemplatedControl.ForegroundProperty];
+        locationPicker = new LocationPicker(session, LocationChip, locationChanged,
+            confirmBrowser ?? (() => Task.FromResult(false)), notify);
+        var actions = Ui.Row(16, LocationChip, CartButton, ProfileButton);
         actions.VerticalAlignment = VerticalAlignment.Center;
         LogoButton.VerticalAlignment = VerticalAlignment.Center;
         var grid = Ui.Columns("Auto,*,Auto", LogoButton, SearchFrame, actions);
         Grid.SetColumn(ProfileMenu, 2); grid.Children.Add(ProfileMenu);
+        Grid.SetColumn(LocationMenu, 2); grid.Children.Add(LocationMenu);
         Child = grid;
     }
 
     internal void Show(User? user, int cartCount, bool cartActive)
     {
         ProfileMenu.IsOpen = false;
+        CloseLocationPicker();
+        ShowLocation(user as Customer);
         NameText.Text = user?.Name ?? ""; EmailText.Text = user?.Email ?? "";
         CartButton.Classes.Set("active", cartActive);
         CartIndicator.IsVisible = cartActive;
         SetCartCount(cartCount);
     }
+
+    internal void ShowLocation(Customer? customer)
+    {
+        LocationLabel.Text = customer?.LocationLabel ?? "Atur lokasi";
+        AutomationProperties.SetName(LocationChip, $"Lokasi kamu: {LocationLabel.Text}");
+        ToolTip.SetTip(LocationChip, LocationLabel.Text);
+    }
+
+    internal void CloseLocationPicker() => locationPicker.Close();
 
     internal void SetCartCount(int count)
     {

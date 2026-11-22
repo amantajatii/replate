@@ -1,6 +1,7 @@
 using Replate.Domain.Entities;
 using Replate.Domain.Enums;
 using Replate.Domain.Services;
+using Replate.Domain.ValueObjects;
 
 var customer = new Customer { Name = "Budi", Email = "budi@example.com" };
 
@@ -205,6 +206,25 @@ Ensure(AccountService.Authenticate(accounts, "rina@example.com", "salah-sandi") 
     AccountService.Authenticate(accounts, "tidak-ada@example.com", "kata-sandi-2") is null &&
     AccountService.Authenticate(accounts, "", "") is null, "Failed sign-in must return no user");
 Ensure(AccountService.SignInFailedMessage == "Email atau kata sandi salah.", "Failed sign-in must use the generic message");
+
+var yogyakarta = new GeoPoint(-7.7956, 110.3695);
+var jakarta = new GeoPoint(-6.2088, 106.8456);
+Ensure(Math.Abs(GeoDistance.HaversineKm(yogyakarta, jakarta) - 430) <= 10, "Yogyakarta to Jakarta is about 430 km");
+Ensure(GeoDistance.HaversineKm(yogyakarta, yogyakarta) == 0, "Distance to the same point is zero");
+foreach (var (latitude, longitude) in new[] { (91d, 0d), (0d, -181d), (double.NaN, 0d) })
+{
+    var rejected = false;
+    try { _ = new GeoPoint(latitude, longitude); }
+    catch (ArgumentOutOfRangeException) { rejected = true; }
+    Ensure(rejected, "Invalid coordinates must be rejected");
+}
+firstRestaurant.UpdatedAt = DateTime.UnixEpoch;
+firstRestaurant.SetLocation(yogyakarta);
+Ensure(firstRestaurant.Location == yogyakarta && firstRestaurant.UpdatedAt > DateTime.UnixEpoch, "Restaurant location and timestamp update");
+var emptyLabelRejected = false;
+try { customer.SetLocation(jakarta, " "); }
+catch (ArgumentException) { emptyLabelRejected = true; }
+Ensure(emptyLabelRejected, "Empty customer location label must be rejected");
 
 Console.WriteLine("All Replate domain checks passed.");
 

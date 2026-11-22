@@ -11,7 +11,14 @@ internal static class Program
     [STAThread]
     public static void Main(string[] args)
     {
-        if (args.Contains("--verify-state")) { StateVerification.Run(); MultiRestaurantVerification.Run(); AccountVerification.Run(); return; }
+        if (args.Contains("--verify-state"))
+        {
+            StateVerification.Run();
+            MultiRestaurantVerification.Run();
+            AccountVerification.Run();
+            LocationStateVerification.Run();
+            return;
+        }
 
         string? databaseError = null;
         if (!args.Contains("--verify-ui"))
@@ -48,7 +55,10 @@ public sealed class App : Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             var args = desktop.Args ?? [];
-            var window = new MainWindow(args.Contains("--verify-ui") ? new DemoSession(Path.Combine(Path.GetTempPath(), "replate-ui-" + Guid.NewGuid().ToString("N"), "state.json")) : null, DatabaseError);
+            MapView.OfflineTiles = args.Contains("--verify-ui");
+            var verificationSession = MapView.OfflineTiles ? new DemoSession(
+                Path.Combine(Path.GetTempPath(), "replate-ui-" + Guid.NewGuid().ToString("N"), "state.json")) : null;
+            var window = new MainWindow(verificationSession, DatabaseError);
             desktop.MainWindow = window;
             var expirationTimer = new Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromMinutes(1) };
             expirationTimer.Tick += (_, _) => ExpireOrders();

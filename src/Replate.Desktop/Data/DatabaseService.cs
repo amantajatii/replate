@@ -1,7 +1,9 @@
 using System.Security.Authentication;
 using Npgsql;
+using NpgsqlTypes;
 using Replate.Domain.Entities;
 using Replate.Domain.Enums;
+using Replate.Domain.ValueObjects;
 
 namespace Replate.Desktop.Data;
 
@@ -65,6 +67,13 @@ internal sealed class DatabaseService : IOrderStore
                 address text NOT NULL,
                 owner_id uuid
             );
+            ALTER TABLE public.restaurants
+                ADD COLUMN IF NOT EXISTS latitude double precision,
+                ADD COLUMN IF NOT EXISTS longitude double precision,
+                ADD COLUMN IF NOT EXISTS description text NOT NULL DEFAULT '',
+                ADD COLUMN IF NOT EXISTS phone text NOT NULL DEFAULT '',
+                ADD COLUMN IF NOT EXISTS opening_time time,
+                ADD COLUMN IF NOT EXISTS closing_time time;
             CREATE INDEX IF NOT EXISTS restaurants_owner_id_idx ON public.restaurants (owner_id);
             CREATE TABLE IF NOT EXISTS public.menus (
                 id uuid PRIMARY KEY,
@@ -130,14 +139,25 @@ internal sealed class DatabaseService : IOrderStore
             using var connection = CreateConnection();
             connection.Open();
             using var command = new NpgsqlCommand("""
-                SELECT id, name, address FROM public.restaurants WHERE owner_id = @owner_id
+                SELECT id, name, address, description, phone, opening_time, closing_time, latitude, longitude
+                FROM public.restaurants WHERE owner_id = @owner_id
                 ORDER BY name, id
                 """, connection);
             command.Parameters.AddWithValue("owner_id", ownerId);
             using var reader = command.ExecuteReader();
             var restaurants = new List<Restaurant>();
             while (reader.Read())
-                restaurants.Add(new Restaurant { Id = reader.GetGuid(0), Name = reader.GetString(1), Address = reader.GetString(2) });
+            {
+                var restaurant = new Restaurant
+                {
+                    Id = reader.GetGuid(0), Name = reader.GetString(1), Address = reader.GetString(2),
+                    Description = reader.GetString(3), Phone = reader.GetString(4),
+                    OpeningTime = reader.IsDBNull(5) ? default : reader.GetFieldValue<TimeOnly>(5),
+                    ClosingTime = reader.IsDBNull(6) ? default : reader.GetFieldValue<TimeOnly>(6)
+                };
+                if (ReadLocation(reader, 7, 8) is { } location) restaurant.SetLocation(location);
+                restaurants.Add(restaurant);
+            }
             return restaurants;
         }
         catch (NpgsqlException e)
@@ -157,7 +177,7 @@ internal sealed class DatabaseService : IOrderStore
                        listing.description, listing.category, listing.normal_price,
                        listing.weight_per_portion, listing.rescue_price, listing.quantity,
                        listing.pickup_start, listing.pickup_end, listing.closed,
-                       restaurant.id, restaurant.name, restaurant.address
+                       restaurant.id, restaurant.name, restaurant.address, restaurant.latitude, restaurant.longitude
                 FROM public.surplus_listings AS listing
                 LEFT JOIN public.menus AS menu ON menu.id = listing.menu_id
                 LEFT JOIN public.restaurants AS restaurant ON restaurant.id = menu.restaurant_id
@@ -177,6 +197,7 @@ internal sealed class DatabaseService : IOrderStore
                     {
                         Id = menu.RestaurantId, Name = reader.GetString(13), Address = reader.GetString(14)
                     };
+                    if (ReadLocation(reader, 15, 16) is { } location) menu.Restaurant.SetLocation(location);
                 }
                 var listing = new SurplusListing
                 {
@@ -197,6 +218,43 @@ internal sealed class DatabaseService : IOrderStore
         catch (NpgsqlException e)
         {
             throw new InvalidOperationException($"Penawaran dari PostgreSQL gagal dimuat. Penyebab: {e.Message}", e);
+        }
+    }
+
+    private static GeoPoint? ReadLocation(NpgsqlDataReader reader, int latitude, int longitude) =>
+        reader.IsDBNull(latitude) || reader.IsDBNull(longitude)
+            ? null : new GeoPoint(reader.GetDouble(latitude), reader.GetDouble(longitude));
+
+    public void SaveRestaurantProfile(Restaurant restaurant)
+    {
+        try
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+            using var command = new NpgsqlCommand("""
+                INSERT INTO public.restaurants
+                    (id, name, address, owner_id, description, phone, opening_time, closing_time, latitude, longitude)
+                VALUES (@id, @name, @address, @owner_id, @description, @phone, @opening, @closing, @latitude, @longitude)
+                ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, address = EXCLUDED.address,
+                    owner_id = EXCLUDED.owner_id, description = EXCLUDED.description, phone = EXCLUDED.phone,
+                    opening_time = EXCLUDED.opening_time, closing_time = EXCLUDED.closing_time,
+                    latitude = EXCLUDED.latitude, longitude = EXCLUDED.longitude
+                """, connection);
+            command.Parameters.AddWithValue("id", restaurant.Id);
+            command.Parameters.AddWithValue("name", restaurant.Name);
+            command.Parameters.AddWithValue("address", restaurant.Address);
+            command.Parameters.AddWithValue("owner_id", restaurant.OwnerId);
+            command.Parameters.AddWithValue("description", restaurant.Description);
+            command.Parameters.AddWithValue("phone", restaurant.Phone);
+            command.Parameters.AddWithValue("opening", NpgsqlDbType.Time, restaurant.OpeningTime);
+            command.Parameters.AddWithValue("closing", NpgsqlDbType.Time, restaurant.ClosingTime);
+            command.Parameters.AddWithValue("latitude", NpgsqlDbType.Double, (object?)restaurant.Location?.Latitude ?? DBNull.Value);
+            command.Parameters.AddWithValue("longitude", NpgsqlDbType.Double, (object?)restaurant.Location?.Longitude ?? DBNull.Value);
+            command.ExecuteNonQuery();
+        }
+        catch (NpgsqlException e)
+        {
+            throw new InvalidOperationException("Profil restoran gagal disimpan ke PostgreSQL.", e);
         }
     }
 

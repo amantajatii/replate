@@ -120,6 +120,7 @@ internal static class MenuDeletionDialog
 
 public sealed class MenuEditorView : UserControl
 {
+    private const double MenuFormWidth = 860;
     internal TextBox NameInput { get; }
     internal TextBox DescriptionInput { get; }
     internal NumericUpDown PriceInput { get; }
@@ -255,8 +256,11 @@ public sealed class MenuEditorView : UserControl
         numbers.ColumnSpacing = Ui.Spacing.Related;
         var details = Ui.Stack(Ui.Spacing.Related, Field("name", "Nama menu"), Field("category", "Kategori"), numbers,
             Field("description", "Deskripsi"));
-        var actions = Ui.Row(12, Ui.Button("Batal", host.ShowMenus), SaveButton);
-        actions.HorizontalAlignment = HorizontalAlignment.Right;
+        var cancelButton = Ui.Button("Batal", host.ShowMenus);
+        cancelButton.HorizontalAlignment = SaveButton.HorizontalAlignment = HorizontalAlignment.Stretch;
+        cancelButton.HorizontalContentAlignment = SaveButton.HorizontalContentAlignment = HorizontalAlignment.Center;
+        var actions = Ui.Columns("*,*", cancelButton, SaveButton);
+        actions.ColumnSpacing = 12;
         var side = new Grid
         {
             RowDefinitions = RowDefinitions.Parse("*,Auto"), RowSpacing = 12,
@@ -271,8 +275,8 @@ public sealed class MenuEditorView : UserControl
                 if (attempted && (e.Property == TextBox.TextProperty || e.Property == NumericUpDown.TextProperty || e.Property == NumericUpDown.ValueProperty))
                     Display(pair.Key, Errors());
             };
-        Content = Ui.Page(Ui.Heading(menu is null ? "Tambah menu" : "Ubah menu",
-            menu?.Name ?? "Siapkan menu untuk pencatatan produksi dan penawaran surplus."), Ui.Form(form));
+        Content = Ui.CenteredPage(MenuFormWidth, Ui.Heading(menu is null ? "Tambah menu" : "Ubah menu",
+            menu?.Name ?? "Siapkan menu untuk pencatatan produksi dan penawaran surplus."), Ui.Form(form, MenuFormWidth));
     }
     internal async Task SelectPhoto(Stream stream, string name)
     {
@@ -345,6 +349,8 @@ public sealed class ListingsView : UserControl
 
 public sealed class ListingEditorView : UserControl
 {
+    private const double ListingFormWidth = 860;
+
     internal ListingEditorView(MainWindow host, DemoSession session, SurplusListing? listing)
     {
         var menus = session.Restaurant.Menus.Where(m => m.IsActive || m == listing?.Menu).ToList();
@@ -374,7 +380,9 @@ public sealed class ListingEditorView : UserControl
             Ui.Field("Tanggal pengambilan", date), Ui.FormPair(Ui.Field("Mulai", from), Ui.Field("Selesai", until)),
             Ui.SupportingText("Stok tidak boleh melebihi surplus dalam catatan produksi. Jadwal pesanan aktif tidak dapat diubah."),
             Ui.Row(12, save, Ui.Button("Batal", host.ShowListings)));
-        Content = Ui.Page(Ui.Heading(listing is null ? "Buat penawaran" : "Ubah penawaran", "Harga khusus dan jadwal pengambilan makanan surplus."), Ui.Form(form));
+        Content = Ui.CenteredPage(ListingFormWidth,
+            Ui.Heading(listing is null ? "Buat penawaran" : "Ubah penawaran", "Harga khusus dan jadwal pengambilan makanan surplus."),
+            Ui.Form(form, ListingFormWidth));
     }
 }
 

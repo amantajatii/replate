@@ -57,6 +57,7 @@ internal static class UiVerification
             await TopBarVerification.Run(window);
             NavbarCart(window);
             await MarketplaceVerification.Run(window);
+            await LocationVerification.Run(window, Shot);
             var market = window.Marketplace;
             Ensure(market.VisibleCount == 10, "Initial listings from all restaurants");
             await CollectionVerification.Run(window);
