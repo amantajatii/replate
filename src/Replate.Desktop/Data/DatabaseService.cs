@@ -59,6 +59,16 @@ internal sealed class DatabaseService : IOrderStore
                 quantity integer NOT NULL,
                 unit_price numeric(18, 2) NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS public.restaurants (
+                id uuid PRIMARY KEY,
+                name text NOT NULL,
+                address text NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS public.menus (
+                id uuid PRIMARY KEY,
+                restaurant_id uuid NOT NULL REFERENCES public.restaurants(id),
+                name text NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS public.surplus_listings (
                 id uuid PRIMARY KEY,
                 menu_id uuid NOT NULL,
@@ -194,7 +204,7 @@ internal sealed class DatabaseService : IOrderStore
         }
         catch (NpgsqlException e)
         {
-            throw new InvalidOperationException("Penawaran dari PostgreSQL gagal dimuat.", e);
+            throw new InvalidOperationException($"Penawaran dari PostgreSQL gagal dimuat. Penyebab: {e.Message}", e);
         }
     }
 

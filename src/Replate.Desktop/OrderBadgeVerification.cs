@@ -29,7 +29,7 @@ internal static class OrderBadgeVerification
             var label = (TextBlock)badge.Child!;
             Ensure(badge.Status == status && label.Text == expected[status].Label, "Badge matches actual order status and requested label");
             Ensure(((ISolidColorBrush)badge.Background!).Color == Color.Parse(expected[status].Color) &&
-                ((ISolidColorBrush)label.Foreground!).Color == Color.Parse("#23382C"), "Badge color and dark text");
+                ((ISolidColorBrush)label.Foreground!).Color == Color.Parse("#202522"), "Badge color and dark text");
             Ensure(badge.CornerRadius == new CornerRadius(6) && badge.Padding == new Thickness(10, 5), "Consistent badge shape");
         }
         void CheckDetail(MainWindow window, Order order)
@@ -129,6 +129,15 @@ internal static class OrderBadgeVerification
                         (detail.VerifyButton is not null) == (restaurant && order.Status == OrderStatus.ReadyForPickup), "Status actions preserved in both areas");
                     var canCancel = window.GetVisualDescendants().OfType<Button>().Any(b => b.Content as string == "Batalkan pesanan");
                     Ensure(canCancel == (order.Status is not (OrderStatus.Completed or OrderStatus.Cancelled)), "Cancellation availability preserved");
+                    var nextAction = detail.ConfirmButton ?? detail.ReadyButton ?? detail.VerifyButton;
+                    if (nextAction is not null)
+                    {
+                        var cancel = window.GetVisualDescendants().OfType<Button>().Single(b => b.Content as string == "Batalkan pesanan");
+                        var primaryBounds = new Rect(nextAction.TranslatePoint(default, detail)!.Value, nextAction.Bounds.Size);
+                        var cancelBounds = new Rect(cancel.TranslatePoint(default, detail)!.Value, cancel.Bounds.Size);
+                        Ensure(Math.Abs(primaryBounds.Y - cancelBounds.Y) < 1 && primaryBounds.Right < cancelBounds.X &&
+                            cancelBounds.Right <= detail.Bounds.Width, "Restaurant actions fit side by side with cancellation on the right");
+                    }
                     Shot(window, $"badges-{area}-detail-{order.Status}");
                 }
             }

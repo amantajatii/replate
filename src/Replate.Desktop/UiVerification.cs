@@ -128,9 +128,9 @@ internal static class UiVerification
             Ensure(window.Session.CurrentUser is Replate.Domain.Entities.RestaurantOwner && window.Session.Restaurant.Name == "Dapur Bumi" &&
                 window.CurrentPage is DashboardView, "Owner sign-in opens Dapur Bumi dashboard");
             await Settle();
-            Ensure(window.RailLogo is { Source: var railSource, IsEffectivelyVisible: true } rail && railSource == Ui.LogoGreen &&
+            Ensure(window.RailLogo is { Source: var railSource, IsEffectivelyVisible: true } rail && railSource == Ui.LogoWhite &&
                 Math.Abs(rail.Bounds.Height - MainWindow.RailLogoHeight) < .5 && !window.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == "replate."),
-                "Green logo replaces the text wordmark on the light restaurant rail");
+                "White logo is visible on the restaurant rail");
             TopBarVerification.CheckRatio(window.RailLogo!, "restaurant rail logo");
             await Shot("dashboard");
             window.ShowMenus(); await Shot("menus");
@@ -287,9 +287,9 @@ internal static class UiVerification
     { await Task.Delay(250); await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Render); }
 
     // Primary buttons
-    private static readonly Color Primary = Color.Parse("#245B43");
-    private static readonly Color Selection = Color.Parse("#E0E9DF");
-    private static readonly Color DividerColor = Color.Parse("#DDE3DA");
+    private static readonly Color Primary = Color.Parse("#1F6B4F");
+    private static readonly Color Selection = Color.Parse("#DDEDE5");
+    private static readonly Color DividerColor = Color.Parse("#D7E4DF");
     private static readonly Color Danger = Color.Parse("#B3261E");
     private static readonly Color DangerTint = Color.Parse("#FBE4E1");
     private static readonly Color DangerPressed = Color.Parse("#F6D3CE");
@@ -464,7 +464,7 @@ internal static class UiVerification
             $"{label}: no container clips the hover shadow ({reach})");
     }
     // Text links
-    private static readonly Color PrimaryHover = Color.Parse("#357F5D");
+    private static readonly Color PrimaryHover = Color.Parse("#2F7D5F");
     private static async Task TextLinks(MainWindow window)
     {
         var (width, height) = (window.Width, window.Height);

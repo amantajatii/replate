@@ -17,20 +17,31 @@ namespace Replate.Desktop;
 
 internal static class Ui
 {
-    public static readonly IBrush Green = Brush.Parse("#245B43");
-    public static readonly IBrush PrimaryHover = Brush.Parse("#357F5D");
-    public static readonly IBrush Ink = Brush.Parse("#23382C");
-    public static readonly IBrush Muted = Brush.Parse("#59675D");
-    public static readonly IBrush Selection = Brush.Parse("#E0E9DF");
+    // Palette
+    private const string Primary700Hex = "1F6B4F";
+    private const string TextPrimaryHex = "202522";
+    public static readonly IBrush Green = Brush.Parse("#" + Primary700Hex);
+    public static readonly IBrush PrimaryHover = Brush.Parse("#2F7D5F");
+    public static readonly IBrush Primary500 = Brush.Parse("#59AC87");
+    public static readonly IBrush Selection = Brush.Parse("#DDEDE5");
+    public static readonly IBrush Accent = Brush.Parse("#F4A261");
+    public static readonly IBrush Canvas = Brush.Parse("#FAF8F3");
+    public static readonly IBrush Surface = Brushes.White;
+    public static readonly IBrush Ink = Brush.Parse("#" + TextPrimaryHex);
+    public static readonly IBrush Muted = Brush.Parse("#69736D");
     public static readonly IBrush OnPrimary = Brushes.White;
-    public static readonly IBrush DividerFill = Brush.Parse("#DDE3DA");
-    public static readonly IBrush Sidebar = Brush.Parse("#F1F3EE");
-    public static readonly IBrush CanvasFill = Brush.Parse("#FFFFFF");
+    public static readonly IBrush DividerFill = Brush.Parse("#D7E4DF");
+    public static readonly IBrush Sidebar = Brush.Parse("#EEF4F1");
+    public static readonly IBrush Scrim = Brush.Parse("#66" + TextPrimaryHex);
+    public static readonly IBrush WorkspaceFill = Brush.Parse("#F7F8F4");
     public static readonly IBrush CardBorder = DividerFill;
     public static readonly Thickness CardBorderThickness = new(1);
     public static readonly IBrush Danger = Brush.Parse("#B3261E");
     public static readonly IBrush DangerTint = Brush.Parse("#FBE4E1");
     public static readonly IBrush DangerPressed = Brush.Parse("#F6D3CE");
+    public static readonly BoxShadows CardShadow = BoxShadows.Parse("0 8 24 0 #1F" + TextPrimaryHex);
+    public static readonly BoxShadows PrimaryCardShadow = BoxShadows.Parse("0 6 18 0 #4D" + Primary700Hex);
+    public static readonly BoxShadows PrimaryCardHoverShadow = BoxShadows.Parse("0 10 24 0 #59" + Primary700Hex);
     public static readonly FontFamily CodeFont = new("Cascadia Mono, Consolas, Menlo, monospace");
 
     // Logo
@@ -213,7 +224,7 @@ internal static class Ui
     public const string DangerClass = "danger";
     public const double PrimaryHoverScale = 1.03;
     public static readonly TimeSpan PrimaryHoverDuration = TimeSpan.FromMilliseconds(120);
-    public static readonly BoxShadows PrimaryButtonHoverShadow = BoxShadows.Parse("0 4 12 0 #4D245B43");
+    public static readonly BoxShadows PrimaryButtonHoverShadow = BoxShadows.Parse("0 4 12 0 #4D" + Primary700Hex);
     public static readonly BoxShadows DangerButtonHoverShadow = BoxShadows.Parse("0 4 12 0 #4DB3261E");
     public static void UsePrimaryButtons(Application app) { app.Styles.Add(PrimaryStyles()); app.Styles.Add(IconStyles()); }
     private static Styles PrimaryStyles()
@@ -318,7 +329,7 @@ internal static class Ui
     public static Control Form(Control content, double maximumWidth = 860) => new FormArea(content, maximumWidth);
     public static Control FormPair(Control first, Control second) => new FormColumns(first, second);
     public static TextBlock SupportingText(string text, IBrush? color = null) => Text(text, 14, color ?? Muted);
-    public static TextBlock FieldError() => Text("", 14, Brush.Parse("#B3261E"));
+    public static TextBlock FieldError() => Text("", 14, Danger);
     public static Border Divider() => new() { Height = 1, Background = DividerFill };
 
     public static ScrollViewer Scroll(Control body) => new() { Content = body,
@@ -328,8 +339,12 @@ internal static class Ui
         var body = Stack(24, children); body.Margin = new Thickness(32);
         return Scroll(body);
     }
-    public static Control Heading(string title, string subtitle, Control? action = null) =>
-        Columns("*,Auto", Stack(6, Text(title, 28, bold: true), Text(subtitle, 14, Muted)), action ?? new Border());
+    public static Control Heading(string title, string subtitle, Control? action = null)
+    {
+        var heading = Text(title, MarketplaceView.TitleSize);
+        heading.FontWeight = FontWeight.Bold;
+        return Columns("*,Auto", Stack(6, heading, Text(subtitle, 14, Muted)), action ?? new Border());
+    }
     public static StackPanel Field(string label, Control input)
     {
         Avalonia.Automation.AutomationProperties.SetName(input, label);
@@ -391,7 +406,7 @@ internal static class Ui
             cells[i].Margin = new Thickness(i == 0 ? 0 : 16, 10, 0, 10);
             cells[i].VerticalAlignment = VerticalAlignment.Center;
         }
-        return new Border { Child = grid, BorderBrush = Brush.Parse("#DDE3DA"), BorderThickness = new Thickness(0, 0, 0, 1) };
+        return new Border { Child = grid, BorderBrush = DividerFill, BorderThickness = new Thickness(0, 0, 0, 1) };
     }
 
 }

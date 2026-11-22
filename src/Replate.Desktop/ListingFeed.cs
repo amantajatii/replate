@@ -77,7 +77,7 @@ internal sealed class ListingFeed
         var card = new Border
         {
             Child = Ui.Columns("112,*,136,120,90", photo, description, pickup, price, add),
-            Background = Brushes.White, CornerRadius = new CornerRadius(16), BoxShadow = MarketplaceView.CardShadow, Padding = new Thickness(20), BorderBrush = Ui.CardBorder, BorderThickness = Ui.CardBorderThickness,
+            Background = Brushes.White, CornerRadius = new CornerRadius(16), BoxShadow = MarketplaceView.CardShadow, Padding = new Thickness(20),
             Cursor = new Cursor(StandardCursorType.Hand)
         };
         card.Tapped += (_, e) =>

@@ -13,7 +13,7 @@ namespace Replate.Desktop;
 
 internal static class CollectionVerification
 {
-    private static readonly Color Primary = Color.Parse("#245B43");
+    private static readonly Color Primary = Color.Parse("#1F6B4F");
 
     internal static async Task Run(MainWindow window)
     {
@@ -54,7 +54,7 @@ internal static class CollectionVerification
             AutomationProperties.GetName(link) == CollectionView.BackLabel && ColorOf(link.Foreground) == Primary && ColorOf(link.Background) == Colors.Transparent &&
             ColorOf(collection.BackGlyph.Stroke) == Primary && collection.BackGlyph.StrokeThickness == 1.75, "Kembali ke Jelajah is a primary text link with a left arrow");
         await Pseudo(link, ":pointerover", true);
-        Ensure(ColorOf(link.Background) == Colors.Transparent && ColorOf(link.Foreground) == Color.Parse("#357F5D") && ColorOf(collection.BackGlyph.Stroke) == Color.Parse("#357F5D"),
+        Ensure(ColorOf(link.Background) == Colors.Transparent && ColorOf(link.Foreground) == Color.Parse("#2F7D5F") && ColorOf(collection.BackGlyph.Stroke) == Color.Parse("#2F7D5F"),
             "Back link hover only changes the text and arrow color");
         await Pseudo(link, ":pointerover", false);
         var ring = TopBarVerification.FocusRing(link);
@@ -256,7 +256,7 @@ internal static class CollectionVerification
             var intro = page.Intro ?? throw new InvalidOperationException($"{label}: collection has an intro");
             var introBox = Rect(intro, window);
             Ensure(intro.IsVisible && intro.Text == CollectionView.Intros[page.Collection!] && intro.FontSize < page.Title.FontSize && intro.FontSize == CollectionView.IntroSize &&
-                ColorOf(intro.Foreground) == Color.Parse("#59675D") && intro.TextWrapping == TextWrapping.Wrap && page.Header.Children[1] == intro &&
+                ColorOf(intro.Foreground) == Color.Parse("#69736D") && intro.TextWrapping == TextWrapping.Wrap && page.Header.Children[1] == intro &&
                 Math.Abs(introBox.Y - row.Bottom - CollectionView.IntroGap) <= 1 && Math.Abs(introBox.Bottom - header.Bottom) <= .5,
                 $"{label}: intro \"{intro.Text}\" sits 8 under the title in muted {intro.FontSize:0}");
         }
@@ -265,7 +265,7 @@ internal static class CollectionVerification
             page.Body.Children.Count == 3 && page.Body.Children[0] == page.BackLink && page.Body.Children[1] == page.Header && page.Body.Children[2] == panel &&
             page.Header.Children[0] == page.TitleRow && page.Header.Spacing == CollectionView.IntroGap,
             $"{label}: top bar, then back link, title and listing cards, no banner");
-        Ensure(page.Title.FontSize == MarketplaceView.TitleSize && page.Title.FontWeight == FontWeight.Bold && ColorOf(page.Title.Foreground) == Color.Parse("#23382C") &&
+        Ensure(page.Title.FontSize == MarketplaceView.TitleSize && page.Title.FontWeight == FontWeight.Bold && ColorOf(page.Title.Foreground) == Color.Parse("#202522") &&
             page.Title.TextLayout.TextLines.Count == 1, $"{label}: title is {MarketplaceView.TitleSize:0} bold ink on one line");
         Ensure(Math.Abs(link.Y - bar.Bottom - Ui.Spacing.Section) <= 1 && Math.Abs(row.Y - link.Bottom - Ui.Spacing.Related) <= 1 &&
             (panel.Children.Count == 0 || Math.Abs(Rect(panel.Children[0], window).Y - header.Bottom - Ui.Spacing.Related) <= 1) && panel.Spacing == Ui.Spacing.Related &&

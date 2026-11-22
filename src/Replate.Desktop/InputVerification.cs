@@ -29,7 +29,7 @@ internal static class InputVerification
             var placeholder = box.PlaceholderText ?? "";
             Fail(placeholder.Trim().Length > 0, "placeholder is empty");
             Fail(!placeholder.Contains('—') && !placeholder.Contains('!'), $"placeholder \"{placeholder}\" uses an em dash or exclamation mark");
-            Fail(box.PlaceholderForeground is ISolidColorBrush { Color: var ink } && ink == Color.Parse("#59675D"), "placeholder does not use the muted token");
+            Fail(box.PlaceholderForeground is ISolidColorBrush { Color: var ink } && ink == Color.Parse("#69736D"), "placeholder does not use the muted token");
             var multiline = box.AcceptsReturn;
             Fail(box.VerticalContentAlignment == (multiline ? VerticalAlignment.Top : VerticalAlignment.Center), $"vertical content alignment is {box.VerticalContentAlignment}");
             Fail(multiline ? Math.Abs(box.Padding.Top - box.Padding.Left) < .01 : Math.Abs(box.Padding.Top - box.Padding.Bottom) < .01,
@@ -44,7 +44,7 @@ internal static class InputVerification
                 var hint = box.GetVisualDescendants().OfType<TextBlock>().FirstOrDefault(t => t.IsEffectivelyVisible && t.Text == placeholder);
                 Fail(hint is not null && Math.Abs(Offset(hint)) <= 1,
                     $"placeholder {where} is off by {(hint is null ? double.NaN : Offset(hint)):0.##}");
-                Fail(hint is not null && hint.Opacity >= 1 && hint.Foreground is ISolidColorBrush { Color: var shown } && shown == Color.Parse("#59675D"),
+                Fail(hint is not null && hint.Opacity >= 1 && hint.Foreground is ISolidColorBrush { Color: var shown } && shown == Color.Parse("#69736D"),
                     $"placeholder {hint?.Name} is drawn at opacity {hint?.Opacity} in {(hint?.Foreground as ISolidColorBrush)?.Color}");
             }
             if (box.InnerRightContent is Control { IsEffectivelyVisible: true } inner)

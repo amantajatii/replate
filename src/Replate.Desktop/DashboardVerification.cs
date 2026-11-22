@@ -1,8 +1,10 @@
 using System.Globalization;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Animation;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.VisualTree;
@@ -24,6 +26,26 @@ internal static class DashboardVerification
         try
         {
             window.Show(); window.ShowDashboard(); await Settle();
+            var logo = window.RailLogo!;
+            var rail = logo.FindAncestorOfType<Border>()!;
+            Ensure(logo.Source == Ui.LogoWhite && rail.Background == Ui.Green, "Restaurant rail matches the customer navigation palette");
+            var routes = rail.GetVisualDescendants().OfType<Button>().ToDictionary(b => AutomationProperties.GetName(b)!);
+            Ensure(routes["Dashboard"].Background == Ui.Selection && routes["Dashboard"].Foreground == Ui.Green &&
+                routes["Menu"].Foreground == Ui.OnPrimary, "Rail distinguishes the selected route");
+            Ensure(routes["Menu"].Focusable && KeyboardNavigation.GetIsTabStop(routes["Menu"]), "Rail route is reachable by keyboard");
+            ((IPseudoClasses)routes["Menu"].Classes).Set(":focus-visible", true);
+            await Settle();
+            Ensure(TopBarVerification.FocusRing(routes["Menu"]).BorderBrush == Ui.OnPrimary, "Rail keyboard focus uses the white ring");
+            ((IPseudoClasses)routes["Menu"].Classes).Set(":focus-visible", false);
+            routes["Menu"].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await Settle();
+            Ensure(window.CurrentPage is MenusView && AutomationProperties.GetName(window.RailLogo!.FindAncestorOfType<Border>()!
+                .GetVisualDescendants().OfType<Button>().Single(b => b.Classes.Contains("active"))) == "Menu",
+                "Opening Menu moves the active state to that route");
+            window.ShowDashboard(); await Settle();
+            Ensure(window.CurrentPage!.GetVisualDescendants().OfType<TextBlock>().Any(t =>
+                t.Text == "Dashboard restoran" && t.FontSize == MarketplaceView.TitleSize && t.FontWeight == FontWeight.Bold),
+                "Restaurant page heading matches the customer heading");
             string[] Values(DashboardView view) => view.SummaryCards.Children.Cast<Border>()
                 .Select(card => ((StackPanel)card.Child!).Children.OfType<TextBlock>().ElementAt(1).Text!).ToArray();
             void CheckData(int days)
@@ -54,11 +76,23 @@ internal static class DashboardVerification
                 var view = (DashboardView)window.CurrentPage!;
                 var grid = view.SummaryCards;
                 Ensure(grid.ColumnDefinitions.Count == columns, "Responsive column count");
+                var period = view.PeriodPicker;
+                var banner = view.Banner;
+                var bannerSize = banner.Bounds.Size;
+                Ensure(banner.Art.IsEffectivelyVisible && banner.Art.Bounds.Position == default &&
+                    banner.Art.Bounds.Size == bannerSize && Math.Abs(bannerSize.Height - MarketplaceBanner.HeightFor(bannerSize.Width)) < 1,
+                    "The original-ratio artwork covers the entire dashboard banner");
+                var picker = new Rect(period.TranslatePoint(default, banner)!.Value, period.Bounds.Size);
+                Ensure(picker.Right < MarketplaceBanner.IllustrationLeft(bannerSize) &&
+                    picker.Bottom < MarketplaceBanner.CabinetTop(bannerSize) && bannerSize.Width == grid.Bounds.Width,
+                    "Banner and cards align, with the period picker inside the clear part of the artwork");
                 var cards = grid.Children.Cast<Border>().ToList();
                 for (var i = 0; i < cards.Count; i++)
                 {
                     Ensure(Grid.GetColumn(cards[i]) == i % columns && Grid.GetRow(cards[i]) == i / columns, "Cards arranged without overlap");
                     Ensure(cards[i].Bounds.Right <= grid.Bounds.Width + 1 && cards[i].Bounds.Width > 0, "Card fits available width");
+                    Ensure(cards[i].CornerRadius == new CornerRadius(16) && cards[i].BoxShadow.Equals(MarketplaceView.CardShadow),
+                        "Summary cards match the customer card radius and shadow");
                     var body = (StackPanel)cards[i].Child!;
                     Ensure(body.Children.All(t => t.Bounds.Width <= body.Bounds.Width + 1), "Card text fits without clipping");
                 }
@@ -90,7 +124,7 @@ internal static class DashboardVerification
                     Ensure(card.Transitions!.OfType<BrushTransition>().Single().Duration == TimeSpan.FromMilliseconds(180) &&
                         scale.Transitions!.OfType<DoubleTransition>().All(t => t.Duration == TimeSpan.FromMilliseconds(180)), "Color and scale use 180ms transitions");
                     Hover(card, true); await Settle();
-                    Ensure(((ISolidColorBrush)card.Background!).Color == Color.Parse("#E0E9DF") &&
+                    Ensure(((ISolidColorBrush)card.Background!).Color == Color.Parse("#DDEDE5") &&
                         Math.Abs(scale.ScaleX - 1.02) < .0001 && Math.Abs(scale.ScaleY - 1.02) < .0001,
                         "Hover turns card green and scales both axes to 1.02");
                     Ensure(cards.Select(c => c.Bounds).SequenceEqual(bounds), "Hover never changes layout bounds or moves neighboring cards");

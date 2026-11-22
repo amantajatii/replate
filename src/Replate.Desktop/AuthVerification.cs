@@ -37,7 +37,7 @@ internal static class AuthVerification
         Check(surface.ColumnDefinitions.Count == 2 && Math.Abs(bounds.Width - size.Width) < 1 && Math.Abs(bounds.Height - size.Height) < 1 &&
             panel.X >= bounds.Width * AuthSurface.BoundaryShare - .5 && Math.Abs(panel.Right - bounds.Width) < 1 && Math.Abs(panel.Height - bounds.Height) < 1,
             $"{where}: primary panel is full height on the right and starts at or after 72% ({panel.X:0.#} of {bounds.Width:0.#})");
-        Check(ColorOf(surface.HeroPanel.Background) == Color.Parse("#245B43"), $"{where}: panel uses the primary color");
+        Check(ColorOf(surface.HeroPanel.Background) == Color.Parse("#1F6B4F"), $"{where}: panel uses the primary color");
         Check(surface.Hero.Source is Bitmap { PixelSize: { Width: 1080, Height: 1080 } } && surface.Hero.Stretch == Stretch.Uniform &&
             surface.Hero.Bounds.Width > 0, $"{where}: hero image loaded from {AuthSurface.HeroUri}");
         Check(surface.Hero.GetVisualParent() == surface.HeroLayer && !surface.HeroLayer.IsHitTestVisible &&
@@ -53,7 +53,7 @@ internal static class AuthVerification
         Check(Math.Abs(onCanvas - .5) <= .02, $"{where}: panel edge sits at the plate center, half on canvas and half on the panel ({onCanvas:0.###})");
         var card = surface.Card;
         Check(ColorOf(card.Background) == Colors.White && card.CornerRadius == new CornerRadius(16) &&
-            card.Padding == new Thickness(32) && card.BorderThickness == Ui.CardBorderThickness && card.BoxShadow == BoxShadows.Parse("0 8 24 0 #1F23382C"),
+            card.Padding == new Thickness(32) && card.BorderThickness == default && card.BoxShadow == BoxShadows.Parse("0 8 24 0 #1F202522"),
             $"{where}: card is white, rounded, shadowed, padded and borderless");
         var cardBox = RectIn(card, surface);
         Check(card.Bounds.Width >= AuthSurface.MinCardWidth - .5 && card.Bounds.Width <= AuthSurface.CardWidth + .5,
@@ -89,7 +89,7 @@ internal static class AuthVerification
             !surface.FormScroll.GetVisualDescendants().Contains(surface.Logo), $"{where}: logo stays fully visible above the scroll area");
         Check(Math.Abs(mark.X - cardBox.X) < 1, $"{where}: logo aligns with the card left edge ({mark.X:0.#}, card {cardBox.X:0.#})");
         var header = RectIn(surface.Header, surface); var clip = RectIn(surface.FormClip, surface);
-        Check(ColorOf(surface.Header.Background) == ColorOf(Ui.CanvasFill) && header.Contains(mark) && header.Bottom <= clip.Y + .5 &&
+        Check(ColorOf(surface.Header.Background) == Color.Parse("#FAF8F3") && header.Contains(mark) && header.Bottom <= clip.Y + .5 &&
             surface.FormClip.ClipToBounds && surface.Header.GetVisualParent() is Panel host && host.Children.IndexOf(surface.Header) > host.Children.IndexOf(surface.FormClip),
             $"{where}: logo sits on a clean canvas band above a clipped scroll area (band bottom {header.Bottom:0.#}, scroll top {clip.Y:0.#})");
         Check(cardBox.X >= scrollBox.X - .5 && cardBox.Right <= scrollBox.Right + .5 && scrollBox.Right <= plate.X + 1,
@@ -136,7 +136,7 @@ internal static class AuthVerification
             var thumb = vertical.GetVisualDescendants().OfType<Thumb>().Single();
             var face = thumb.GetVisualDescendants().OfType<Border>().Single();
             Check(vertical.Bounds.Width >= 4 && vertical.Bounds.Width <= 6 && face.CornerRadius.TopLeft >= vertical.Bounds.Width / 2 - .01 &&
-                ColorOf(thumb.Background) == Color.Parse("#59675D"), $"{where}: scrollbar is {vertical.Bounds.Width:0.#} wide with a rounded muted thumb");
+                ColorOf(thumb.Background) == Color.Parse("#69736D"), $"{where}: scrollbar is {vertical.Bounds.Width:0.#} wide with a rounded muted thumb");
         }
         Check(surface.GetVisualDescendants().OfType<ScrollBar>().Where(b => b.IsEffectivelyVisible && b.Opacity > 0)
             .All(b => !b.GetVisualDescendants().OfType<RepeatButton>().Any()), $"{where}: no scrollbar with a track or arrows is shown");
@@ -206,7 +206,7 @@ internal static class AuthVerification
             foreach (var (name, make, surfaceOf) in screens)
             {
                 var view = make();
-                var canvas = new Border { Child = view, Width = size.Width, Height = size.Height, Background = Ui.CanvasFill };
+                var canvas = new Border { Child = view, Width = size.Width, Height = size.Height, Background = Brush.Parse("#FAF8F3") };
                 var frame = new Window
                 {
                     Width = 1040, Height = 720, FontFamily = new FontFamily("Helvetica Neue, Segoe UI, sans-serif"),
@@ -275,7 +275,7 @@ internal static class AuthVerification
         Click(toggle); await Task.Delay(100);
         Check(input.PasswordChar != default && AutomationProperties.GetName(toggle) == AuthSurface.RevealName && icon.Data == AuthSurface.EyeIcon,
             $"{screen}: toggle hides the password again");
-        var ink = Color.Parse("#23382C"); var green = Color.Parse("#245B43"); var leaf = Color.Parse("#4FA37E");
+        var ink = Color.Parse("#202522"); var green = Color.Parse("#1F6B4F"); var leaf = Color.Parse("#59AC87");
         Check(ColorOf(toggle.Background) == Colors.Transparent && ColorOf(toggle.Foreground) == ink && ColorOf(icon.Stroke) == ink && toggle.Focusable && toggle.IsTabStop,
             $"{screen}: toggle defaults to an ink icon and is keyboard focusable");
         Check(toggle.Bounds.Width <= icon.Bounds.Width + 4 + .5 && toggle.Bounds.Height <= icon.Bounds.Height + 4 + .5 && toggle.Transitions is null or { Count: 0 },
@@ -327,15 +327,15 @@ internal static class AuthVerification
         Check(Math.Abs(customer.Bounds.Width - owner.Bounds.Width) < 1 && Math.Abs(owner.Bounds.Right - customer.Bounds.X - content) < 1 &&
             customer.CornerRadius == new CornerRadius(6) && Math.Abs(customer.Bounds.Y - owner.Bounds.Y) < 1,
             "Daftar: role buttons are equal width, rounded, and span the card together");
-        var (green, ink, white) = (Color.Parse("#245B43"), Color.Parse("#23382C"), Colors.White);
+        var (green, ink, white) = (Color.Parse("#1F6B4F"), Color.Parse("#202522"), Colors.White);
         customer.IsChecked = true; await Task.Delay(100);
         Check(ColorOf(customer.Background) == green && ColorOf(customer.Foreground) == white &&
-            ColorOf(owner.Background) == Color.Parse("#F1F3EE") && ColorOf(owner.Foreground) == ink &&
+            ColorOf(owner.Background) == Color.Parse("#EEF4F1") && ColorOf(owner.Foreground) == ink &&
             ColorOf(customer.BorderBrush) == Colors.Transparent && ColorOf(owner.BorderBrush) == Colors.Transparent,
             "Daftar: selected role is primary with white text, unselected role is sidebar with ink text and no border");
         Check(!customer.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Ellipse>().Any(), "Daftar: role buttons show no radio circle");
         await CheckState(customer, ":pointerover", ink, white, "Daftar: selected role");
-        await CheckState(owner, ":pointerover", Color.Parse("#E0E9DF"), green, "Daftar: unselected role");
+        await CheckState(owner, ":pointerover", Color.Parse("#DDEDE5"), green, "Daftar: unselected role");
         owner.IsChecked = true; await Task.Delay(100);
         Check(customer.IsChecked == false, "Daftar: role buttons are exclusive");
         customer.IsChecked = true; customer.Focus(NavigationMethod.Directional); await Task.Delay(100);
@@ -442,15 +442,15 @@ internal static class AuthVerification
                 "Sign-in shows logo, heading and demo account hint");
             Ensure(!window.GetVisualDescendants().OfType<Button>().Any(b => b.Content as string is "Jelajahi makanan" or "Buka area restoran" or "Ganti area"),
                 "Old automatic demo entry buttons are removed");
-            Ensure(((Avalonia.Media.ISolidColorBrush)signIn.SignInButton.Background!).Color == Avalonia.Media.Color.Parse("#245B43"), "Masuk is the green primary action");
+            Ensure(((Avalonia.Media.ISolidColorBrush)signIn.SignInButton.Background!).Color == Avalonia.Media.Color.Parse("#1F6B4F"), "Masuk is the green primary action");
             await CheckSurface(window, signIn.Surface, "Masuk");
             Ensure(signIn.Surface.Warning is null, "No database warning without a startup error");
             Ensure(Texts().Single(t => t.Text?.StartsWith("Akun demo:") == true).TranslatePoint(default, signIn.Surface)!.Value.Y >
                 signIn.Surface.Card.TranslatePoint(default, signIn.Surface)!.Value.Y + signIn.Surface.Card.Bounds.Height, "Demo account line sits below the card");
             CheckTitle(signIn.TitleText, "Masuk", "Masuk");
             await CheckReveal(signIn.PasswordInput, "Masuk");
-            await CheckHover(signIn.SignInButton, Color.Parse("#E0E9DF"), "Masuk");
-            await CheckHover(signIn.RegisterButton, Color.Parse("#E0E9DF"), "Masuk");
+            await CheckHover(signIn.SignInButton, Color.Parse("#DDEDE5"), "Masuk");
+            await CheckHover(signIn.RegisterButton, Color.Parse("#DDEDE5"), "Masuk");
             Shot("auth-sign-in");
             Click(AuthSurface.RevealToggle(signIn.PasswordInput));
             Ensure(signIn.PasswordInput.PasswordChar == default, "Password revealed before submission");
@@ -519,8 +519,8 @@ internal static class AuthVerification
             await CheckSurface(window, register.Surface, "Daftar");
             await CheckReveal(register.PasswordInput, "Daftar");
             await CheckReveal(register.ConfirmPasswordInput, "Daftar");
-            await CheckHover(register.RegisterButton, Color.Parse("#E0E9DF"), "Daftar");
-            await CheckHover(register.BackButton, Color.Parse("#E0E9DF"), "Daftar");
+            await CheckHover(register.RegisterButton, Color.Parse("#DDEDE5"), "Daftar");
+            await CheckHover(register.BackButton, Color.Parse("#DDEDE5"), "Daftar");
             await CheckRoles(register);
             var users = session.Users.Count;
             register.NameInput.Text = "Pelanggan Uji";

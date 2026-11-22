@@ -43,10 +43,10 @@ internal sealed class AuthSurface : Grid
     internal static readonly Uri HeroUri = new("avares://Replate.Desktop/Assets/auth-hero.png");
     internal static readonly Geometry EyeIcon = Geometry.Parse("M1,8 C3.5,3 12.5,3 15,8 C12.5,13 3.5,13 1,8 Z M8,5.5 A2.5,2.5 0 1 1 8,10.5 A2.5,2.5 0 1 1 8,5.5 Z");
     internal static readonly Geometry EyeOffIcon = Geometry.Parse("M1,8 C3.5,3 12.5,3 15,8 C12.5,13 3.5,13 1,8 Z M8,5.5 A2.5,2.5 0 1 1 8,10.5 A2.5,2.5 0 1 1 8,5.5 Z M2,2 L14,14");
-    internal static readonly IBrush Selection = Brush.Parse("#E0E9DF");
-    internal static readonly IBrush Sidebar = Brush.Parse("#F1F3EE");
-    internal static readonly IBrush Leaf = Brush.Parse("#4FA37E");
-    internal static readonly IBrush CanvasFill = Ui.CanvasFill;
+    internal static readonly IBrush Selection = Ui.Selection;
+    internal static readonly IBrush Sidebar = Ui.Sidebar;
+    internal static readonly IBrush Leaf = Ui.Primary500;
+    internal static readonly IBrush CanvasFill = Ui.Canvas;
     private static readonly Lazy<Bitmap> HeroBitmap = new(() => { using var stream = AssetLoader.Open(HeroUri); return new Bitmap(stream); });
     private static readonly IBrush WarningText = Brush.Parse("#7A4E00");
     private static readonly ControlTheme PlainButton = Plain(typeof(Button));
@@ -97,8 +97,8 @@ internal sealed class AuthSurface : Grid
         ColumnDefinitions = ColumnDefinitions.Parse("3*,2*");
         Card = new Border
         {
-            Child = cardContent, Background = Brushes.White, CornerRadius = new CornerRadius(16),
-            Padding = new Thickness(32), BoxShadow = BoxShadows.Parse("0 8 24 0 #1F23382C"), BorderBrush = Ui.CardBorder, BorderThickness = Ui.CardBorderThickness
+            Child = cardContent, Background = Ui.Surface, CornerRadius = new CornerRadius(16),
+            Padding = new Thickness(32), BoxShadow = Ui.CardShadow
         };
         column = Ui.Stack(16);
         column.VerticalAlignment = VerticalAlignment.Center; column.HorizontalAlignment = HorizontalAlignment.Left;
@@ -109,7 +109,7 @@ internal sealed class AuthSurface : Grid
             Warning = new Border
             {
                 Child = Ui.Stack(6, Ui.Text("Database belum tersambung. Pesanan belum dapat disimpan.", 13, WarningText, true), detail),
-                Background = Brush.Parse("#FFF4D6"), BorderBrush = Brush.Parse("#E5B94A"), BorderThickness = new Thickness(1),
+                Background = Brush.Parse("#FFF4D6"), BorderBrush = Ui.Accent, BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(6), Padding = new Thickness(12)
             };
             ToolTip.SetTip(Warning, databaseError);
@@ -504,7 +504,7 @@ public sealed class RegisterView : UserControl
             ["description"] = DescriptionInput, ["openingTime"] = OpeningInput, ["closingTime"] = ClosingInput
         };
         var outlines = new Dictionary<string, Border>();
-        var red = Brush.Parse("#B3261E");
+        var red = Ui.Danger;
         var attempted = false;
         Control Field(string key, string label)
         {

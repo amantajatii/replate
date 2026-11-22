@@ -1,5 +1,6 @@
 using System.Globalization;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Animation;
 using Avalonia.Animation.Easings;
@@ -13,6 +14,7 @@ namespace Replate.Desktop;
 public sealed class DashboardView : UserControl
 {
     private static readonly CultureInfo Indonesian = CultureInfo.GetCultureInfo("id-ID");
+    internal MarketplaceBanner Banner { get; private set; } = null!;
     internal Grid SummaryCards { get; private set; } = null!;
     internal ComboBox PeriodPicker { get; private set; } = null!;
     internal DashboardView(MainWindow host, DemoSession session) => Render(host, session, 28);
@@ -21,8 +23,13 @@ public sealed class DashboardView : UserControl
     {
         var firstDate = DateOnly.FromDateTime(DateTime.Today.AddDays(1 - days));
         var lastDate = DateOnly.FromDateTime(DateTime.Today);
-        var period = new ComboBox { ItemsSource = new[] { "7 hari terakhir", "28 hari terakhir" },
-            SelectedIndex = days == 7 ? 0 : 1, MinWidth = 180 };
+        var period = new ComboBox
+        {
+            ItemsSource = new[] { "7 hari terakhir", "28 hari terakhir" }, SelectedIndex = days == 7 ? 0 : 1,
+            MinWidth = 180, MinHeight = 38, HorizontalAlignment = HorizontalAlignment.Left,
+            CornerRadius = new CornerRadius(8), Background = Brushes.White, BorderBrush = Ui.Muted, Foreground = Ui.Ink
+        };
+        AutomationProperties.SetName(period, "Periode laporan");
         PeriodPicker = period;
         period.SelectionChanged += (_, _) => Render(host, session, period.SelectedIndex == 0 ? 7 : 28);
         var records = session.Restaurant.Menus.SelectMany(m => m.ProductionRecords)
@@ -30,8 +37,8 @@ public sealed class DashboardView : UserControl
         var surplus = new SurplusDashboard();
         var finance = new FinancialDashboard();
         var recommendations = new ProductionRecommendationService();
-        var header = Ui.Heading("Dashboard restoran", $"{session.Restaurant.Name} · {firstDate:dd MMM}–{lastDate:dd MMM yyyy}",
-            Ui.Row(8, Ui.Button("Ubah profil", host.ShowRestaurantProfile), period));
+        var range = $"{firstDate.ToString("dd MMM", Indonesian)}–{lastDate.ToString("dd MMM yyyy", Indonesian)}";
+        Banner = new MarketplaceBanner("Dashboard restoran", $"{session.Restaurant.Name} · {range}", period);
 
         var summary = new Grid { ColumnSpacing = 16, RowSpacing = 16 };
         summary.Children.Add(MetricCard("Total Produksi", $"{surplus.CalculateTotalProduced(records).ToString("N0", Indonesian)} porsi", "Porsi pada periode terpilih"));
@@ -103,13 +110,21 @@ public sealed class DashboardView : UserControl
         var empty = Ui.Stack(12, Ui.Text("Belum ada menu", 20, bold: true),
             Ui.Text("Tambahkan menu, lalu catat produksi harian untuk melihat surplus, rekomendasi produksi, dan pendapatan yang dipulihkan.", 14, Ui.Muted),
             addMenu);
-        var details = session.Restaurant.Menus.Count == 0 ? new Control[] { empty } : new Control[] { analysis, recommendationSection, impact };
-        var body = Ui.Stack(28, [header, summary, Ui.Divider(), .. details,
+        var details = session.Restaurant.Menus.Count == 0
+            ? new[] { ReportPanel(empty) }
+            : new[] { ReportPanel(analysis), ReportPanel(recommendationSection), ReportPanel(impact) };
+        var body = Ui.Stack(Ui.Spacing.Section, [Banner, Ui.Row(8, Ui.Button("Ubah profil", host.ShowRestaurantProfile)), summary, .. details,
             Ui.Text("Pendapatan dan porsi terselamatkan bertambah setelah pengambilan diverifikasi. Reservasi belum dihitung sebagai penjualan selesai.", 12, Ui.Muted)]);
-        body.Margin = new Thickness(32);
-        Content = new ScrollViewer { Content = body,
-            HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
+        body.Margin = new Thickness(Ui.Spacing.Page);
+        Background = Ui.WorkspaceFill;
+        Content = Ui.Scroll(body);
     }
+
+    private static Border ReportPanel(Control content) => new()
+    {
+        Child = content, Background = Brushes.White, CornerRadius = new CornerRadius(16), Padding = new Thickness(20),
+        BorderBrush = Ui.CardBorder, BorderThickness = Ui.CardBorderThickness
+    };
 
     private static Border MetricCard(string title, string value, string supporting)
     {
@@ -126,19 +141,20 @@ public sealed class DashboardView : UserControl
         {
             Background = Brushes.White,
             BorderBrush = Ui.CardBorder, BorderThickness = Ui.CardBorderThickness,
-            CornerRadius = new CornerRadius(8), Padding = new Thickness(20), MinHeight = 140,
+            CornerRadius = new CornerRadius(16), BoxShadow = MarketplaceView.CardShadow,
+            Padding = new Thickness(20), MinHeight = 128,
             RenderTransform = scale, RenderTransformOrigin = RelativePoint.Center,
             Cursor = new Cursor(StandardCursorType.Arrow),
             Transitions = new Transitions
             {
                 new BrushTransition { Property = Border.BackgroundProperty, Duration = duration, Easing = new CubicEaseOut() }
             },
-            Child = Ui.Stack(12, Ui.Text(title, 13, Ui.Muted), Ui.Text(value, 28, Ui.Ink, true),
+            Child = Ui.Stack(8, Ui.Text(title, 13, Ui.Muted, true), Ui.Text(value, 28, Ui.Green, true),
                 Ui.Text(supporting, 12, Ui.Muted))
         };
         card.PointerEntered += (_, _) =>
         {
-            card.Background = Brush.Parse("#E0E9DF");
+            card.Background = Ui.Selection;
             scale.ScaleX = scale.ScaleY = 1.02;
         };
         card.PointerExited += (_, _) =>
@@ -168,7 +184,12 @@ public sealed class DashboardView : UserControl
             text.HorizontalAlignment = i == 0 ? HorizontalAlignment.Left : HorizontalAlignment.Right;
             Grid.SetColumn(text, i); grid.Children.Add(text);
         }
-        return new Border { Child = grid, BorderBrush = Brush.Parse("#DDE3DA"),
-            BorderThickness = new Thickness(0, 0, 0, 1) };
+        return new Border
+        {
+            Child = grid, Padding = new Thickness(12, 0), BorderBrush = Ui.DividerFill,
+            Background = header ? Ui.Sidebar : Brushes.Transparent,
+            CornerRadius = header ? new CornerRadius(8) : default,
+            BorderThickness = header ? default : new Thickness(0, 0, 0, 1)
+        };
     }
 }

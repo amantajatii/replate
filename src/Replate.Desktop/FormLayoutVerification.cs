@@ -60,6 +60,20 @@ internal static class FormLayoutVerification
                 {
                     window.ShowMenuEditor(edit ? session.Restaurant.Menus[0] : null); await Settle();
                     var editor = (MenuEditorView)window.CurrentPage!;
+                    Rect Bounds(Control control) => new(control.TranslatePoint(default, window)!.Value, control.Bounds.Size);
+                    Ensure(Bounds(editor.NameInput).Right < Bounds(editor.PhotoPreview).X &&
+                        Bounds(editor.PriceInput).Right < Bounds(editor.WeightInput).X &&
+                        Bounds(editor.SaveButton).Bottom <= window.Bounds.Height,
+                        "Menu details, photo, and save are visible on first load");
+                    var photoCard = editor.PhotoPreview.GetVisualAncestors().OfType<Border>().First(b => b.BorderBrush == Ui.CardBorder);
+                    var detailsCard = editor.NameInput.GetVisualAncestors().OfType<Border>().First(b => b.BorderBrush == Ui.CardBorder);
+                    var save = Bounds(editor.SaveButton);
+                    Ensure(Math.Abs(save.Y - Bounds(photoCard).Bottom - 12) <= 1 &&
+                        Math.Abs(save.Right - Bounds(photoCard).Right) <= 1, "Menu actions sit directly below the photo card");
+                    Ensure(Math.Abs(Bounds(photoCard).Y - Bounds(detailsCard).Y) <= 1 &&
+                        Math.Abs(save.Bottom - Bounds(detailsCard).Bottom) <= 1 && editor.PhotoPreview.Bounds.Height > 156,
+                        "The photo column fills the same height as the detail card");
+                    Shot($"form-menu-{(edit ? "edit" : "add")}-{size}");
                     editor.DescriptionInput.Text = "Deskripsi panjang untuk memeriksa pembungkusan teks dan mempertahankan isian pengguna. " + new string('x', 200);
                     editor.NameInput.Text = ""; editor.PriceInput.Value = 0; editor.WeightInput.Value = 0;
                     await editor.SelectPhoto(new MemoryStream(new byte[] { 1, 2, 3 }), "invalid.png");

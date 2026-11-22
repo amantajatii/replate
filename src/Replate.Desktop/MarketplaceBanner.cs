@@ -30,20 +30,23 @@ internal sealed class MarketplaceBanner : Panel
     internal TextBlock Greeting { get; }
     internal TextBlock Message { get; }
 
-    internal MarketplaceBanner(string name)
+    internal MarketplaceBanner(string name) : this($"Halo, {name}.", Tagline) { }
+
+    internal MarketplaceBanner(string title, string description, Control? action = null)
     {
         HorizontalAlignment = HorizontalAlignment.Stretch;
         Greeting = new TextBlock
         {
-            Text = $"Halo, {name}.", FontWeight = FontWeight.Bold, Foreground = Ui.Green,
+            Text = title, FontWeight = FontWeight.Bold, Foreground = Ui.Green,
             TextWrapping = TextWrapping.NoWrap, TextTrimming = TextTrimming.CharacterEllipsis
         };
         Message = new TextBlock
         {
-            Text = Tagline, Foreground = Ui.Muted,
+            Text = description, Foreground = Ui.Muted,
             TextWrapping = TextWrapping.Wrap, MaxLines = 2, TextTrimming = TextTrimming.WordEllipsis
         };
         TextArea = Ui.Stack(8, Greeting, Message);
+        if (action is not null) TextArea.Children.Add(action);
         AutomationProperties.SetAccessibilityView(Art, AccessibilityView.Raw);
         Children.Add(Art); Children.Add(TextArea);
     }
