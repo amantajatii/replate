@@ -48,6 +48,8 @@ internal sealed class DatabaseService : IOrderStore
                 status varchar(30) NOT NULL,
                 ordered_at timestamp with time zone NOT NULL
             );
+            ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS preparation_minutes integer;
+            ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS completed_at timestamptz;
 
             CREATE TABLE IF NOT EXISTS public.order_items (
                 id uuid PRIMARY KEY,
@@ -286,21 +288,76 @@ internal sealed class DatabaseService : IOrderStore
         }
     }
 
-    internal List<Order> LoadOrders(Guid restaurantId, IReadOnlyDictionary<Guid, SurplusListing> listings)
+    internal void ConfirmOrder(Guid orderId, Guid restaurantId, int preparationMinutes)
     {
         try
         {
             using var connection = CreateConnection();
             connection.Open();
             using var command = new NpgsqlCommand("""
+                UPDATE public.orders
+                SET status = 'Confirmed', preparation_minutes = @minutes
+                WHERE id = @id AND restaurant_id = @restaurant_id
+                    AND (status = 'Reserved' OR (status = 'Confirmed' AND preparation_minutes = @minutes))
+                """, connection);
+            command.Parameters.AddWithValue("id", orderId);
+            command.Parameters.AddWithValue("restaurant_id", restaurantId);
+            command.Parameters.AddWithValue("minutes", preparationMinutes);
+            if (command.ExecuteNonQuery() != 1)
+                throw new InvalidOperationException("Pesanan sudah berubah di Supabase. Buka ulang daftar pesanan.");
+        }
+        catch (NpgsqlException e)
+        {
+            throw new InvalidOperationException("Konfirmasi pesanan gagal disimpan ke Supabase.", e);
+        }
+    }
+
+    internal void UpdateOrderStatus(Order order, OrderStatus next, DateTime? completedAt = null)
+    {
+        try
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+            using var command = new NpgsqlCommand("""
+                UPDATE public.orders
+                SET status = @next, completed_at = COALESCE(completed_at, @completed_at)
+                WHERE id = @id AND restaurant_id = @restaurant_id AND status IN (@previous, @next)
+                """, connection);
+            command.Parameters.AddWithValue("id", order.Id);
+            command.Parameters.AddWithValue("restaurant_id", order.RestaurantId);
+            command.Parameters.AddWithValue("previous", order.Status.ToString());
+            command.Parameters.AddWithValue("next", next.ToString());
+            command.Parameters.AddWithValue("completed_at", NpgsqlTypes.NpgsqlDbType.TimestampTz, (object?)completedAt ?? DBNull.Value);
+            if (command.ExecuteNonQuery() != 1)
+                throw new InvalidOperationException("Status pesanan sudah berubah di Supabase. Buka ulang daftar pesanan.");
+        }
+        catch (NpgsqlException e)
+        {
+            throw new InvalidOperationException("Status pesanan gagal disimpan ke Supabase.", e);
+        }
+    }
+
+    internal List<Order> LoadOrders(Guid? restaurantId, IReadOnlyDictionary<Guid, SurplusListing> listings, Guid? customerId = null)
+    {
+        if (restaurantId is null && customerId is null)
+            throw new ArgumentException("Restoran atau pelanggan harus ditentukan.");
+
+        try
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+            using var command = new NpgsqlCommand("""
                 SELECT o.id, o.customer_id, o.pickup_code, o.total_price, o.status, o.ordered_at,
-                       item.id, item.listing_id, item.menu_name, item.quantity, item.unit_price
+                       item.id, item.listing_id, item.menu_name, item.quantity, item.unit_price,
+                       o.preparation_minutes, o.completed_at, o.restaurant_id
                 FROM public.orders AS o
                 JOIN public.order_items AS item ON item.order_id = o.id
-                WHERE o.restaurant_id = @restaurant_id
+                WHERE (@restaurant_id IS NULL OR o.restaurant_id = @restaurant_id)
+                  AND (@customer_id IS NULL OR o.customer_id = @customer_id)
                 ORDER BY o.ordered_at DESC, o.id, item.id
                 """, connection);
-            command.Parameters.AddWithValue("restaurant_id", restaurantId);
+            command.Parameters.AddWithValue("restaurant_id", NpgsqlTypes.NpgsqlDbType.Uuid, (object?)restaurantId ?? DBNull.Value);
+            command.Parameters.AddWithValue("customer_id", NpgsqlTypes.NpgsqlDbType.Uuid, (object?)customerId ?? DBNull.Value);
             using var reader = command.ExecuteReader();
             var orders = new Dictionary<Guid, Order>();
             var incomplete = new HashSet<Guid>();
@@ -308,7 +365,8 @@ internal sealed class DatabaseService : IOrderStore
             {
                 var id = reader.GetGuid(0);
                 var listingId = reader.GetGuid(7);
-                if (!listings.TryGetValue(listingId, out var listing) || listing.Menu.RestaurantId != restaurantId)
+                var owningRestaurantId = reader.GetGuid(13);
+                if (!listings.TryGetValue(listingId, out var listing) || listing.Menu.RestaurantId != owningRestaurantId)
                 {
                     incomplete.Add(id);
                     continue;
@@ -319,11 +377,13 @@ internal sealed class DatabaseService : IOrderStore
                     if (!Enum.TryParse<OrderStatus>(reader.GetString(4), out var status) || !Enum.IsDefined(status))
                         throw new InvalidOperationException("Status pesanan dari PostgreSQL tidak dikenali.");
 
-                    order = new Order(status)
+                    order = new Order(status, reader.IsDBNull(12) ? null : reader.GetDateTime(12))
                     {
-                        Id = id, CustomerId = reader.GetGuid(1), RestaurantId = restaurantId,
+                        Id = id, CustomerId = reader.GetGuid(1), RestaurantId = owningRestaurantId,
                         PickupCode = reader.GetString(2), TotalPrice = reader.GetDecimal(3), OrderedAt = reader.GetDateTime(5)
                     };
+                    if (!reader.IsDBNull(11))
+                        order.SetPreparationTime(TimeSpan.FromMinutes(reader.GetInt32(11)));
                     orders.Add(id, order);
                 }
 

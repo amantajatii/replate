@@ -23,6 +23,6 @@ public sealed class PickupVerification
             throw new InvalidOperationException("Pickup code has not been verified.");
         }
 
-        Order.Complete();
+        Order.Complete(VerifiedAt);
     }
 }

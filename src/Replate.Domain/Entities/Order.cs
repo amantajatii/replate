@@ -1,3 +1,4 @@
+
 using Replate.Domain.Enums;
 
 namespace Replate.Domain.Entities;
@@ -6,7 +7,11 @@ public sealed class Order
 {
     public Order() { }
 
-    public Order(OrderStatus status) => Status = status;
+    public Order(OrderStatus status, DateTime? completedAt = null)
+    {
+        Status = status;
+        CompletedAt = completedAt;
+    }
 
     public Guid Id { get; init; } = Guid.NewGuid();
     public Guid CustomerId { get; set; }
@@ -45,10 +50,10 @@ public sealed class Order
 
     public void MarkReady() => Transition(OrderStatus.Confirmed, OrderStatus.ReadyForPickup);
 
-    public void Complete()
+    public void Complete(DateTime? completedAt = null)
     {
         Transition(OrderStatus.ReadyForPickup, OrderStatus.Completed);
-        CompletedAt = DateTime.UtcNow;
+        CompletedAt = completedAt ?? DateTime.UtcNow;
     }
 
     public void Cancel()

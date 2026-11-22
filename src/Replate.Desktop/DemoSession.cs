@@ -191,15 +191,37 @@ public sealed class DemoSession
         var restaurant = RequireOwnedRestaurant(Restaurant.Id);
         RefreshSharedListings();
         var listings = RestaurantListings.ToDictionary(listing => listing.Id);
-        var orders = new DatabaseService().LoadOrders(restaurant.Id, listings);
-        var localOrders = restaurant.Orders.ToDictionary(order => order.Id);
+        MergeSharedOrders(new DatabaseService().LoadOrders(restaurant.Id, listings));
+    }
+
+    internal void RefreshCustomerOrders()
+    {
+        if (!UsesSharedStock || checkingOut) return;
+
+        var customer = RequireCustomer();
+        RefreshSharedListings();
+        var listings = Listings.ToDictionary(listing => listing.Id);
+        MergeSharedOrders(new DatabaseService().LoadOrders(null, listings, customer.Id));
+    }
+
+    private void MergeSharedOrders(IEnumerable<Order> orders)
+    {
         foreach (var order in orders)
         {
-            if (!localOrders.TryGetValue(order.Id, out var local))
+            var restaurant = FindRestaurant(order.RestaurantId)!;
+            var index = restaurant.Orders.FindIndex(local => local.Id == order.Id);
+            if (index < 0)
+            {
                 restaurant.Orders.Add(order);
-            else if (order.Status == OrderStatus.Cancelled &&
-                local.Status is not (OrderStatus.Completed or OrderStatus.Cancelled))
-                local.Cancel();
+                continue;
+            }
+
+            var local = restaurant.Orders[index];
+            if (local.Status is OrderStatus.Completed or OrderStatus.Cancelled || order.Status <= local.Status)
+                continue;
+
+            restaurant.Orders[index] = order;
+            if (LastOrder?.Id == order.Id) LastOrder = order;
         }
     }
 
@@ -532,11 +554,27 @@ public sealed class DemoSession
         RequireOwnedRestaurant(order.RestaurantId);
         EnsurePickupWindowOpen(order);
         if (preparationMinutes is < 1 or > 240) throw new InvalidOperationException("Waktu persiapan harus antara 1 dan 240 menit.");
+        if (order.Status != OrderStatus.Reserved)
+            throw new InvalidOperationException("Hanya pesanan yang menunggu konfirmasi yang dapat dikonfirmasi.");
+        EnsureNotCheckingOut();
+        if (UsesSharedStock && order.Items.Any(item => sharedListingIds.Contains(item.ListingId)))
+            new DatabaseService().ConfirmOrder(order.Id, order.RestaurantId, preparationMinutes);
         order.Confirm(); order.SetPreparationTime(TimeSpan.FromMinutes(preparationMinutes)); Persist();
     }
 
     public void ReadyOrder(Order order)
-    { EnsureWritable(); RequireOwnedRestaurant(order.RestaurantId); EnsurePickupWindowOpen(order); order.MarkReady(); Persist(); }
+    {
+        EnsureWritable();
+        EnsureNotCheckingOut();
+        RequireOwnedRestaurant(order.RestaurantId);
+        EnsurePickupWindowOpen(order);
+        if (order.Status != OrderStatus.Confirmed)
+            throw new InvalidOperationException("Pesanan harus dikonfirmasi sebelum ditandai siap diambil.");
+        if (UsesSharedStock && order.Items.Any(item => sharedListingIds.Contains(item.ListingId)))
+            new DatabaseService().UpdateOrderStatus(order, OrderStatus.ReadyForPickup);
+        order.MarkReady();
+        Persist();
+    }
 
     public void CancelOrder(Order order) => CancelOrder(order, automatic: false);
 
@@ -599,6 +637,7 @@ public sealed class DemoSession
     public void CompletePickup(Order order, string code)
     {
         EnsureWritable();
+        EnsureNotCheckingOut();
         RequireOwnedRestaurant(order.RestaurantId);
         EnsurePickupWindowOpen(order);
         if (order.Status != OrderStatus.ReadyForPickup) throw new InvalidOperationException("Pesanan belum siap diambil atau sudah selesai.");
@@ -609,6 +648,8 @@ public sealed class DemoSession
                 ?? throw new InvalidOperationException("Catatan produksi untuk pesanan ini tidak ditemukan."), Quantity: g.Sum(i => i.Quantity))).ToList();
         if (changes.Any(c => c.Record.RescuedQuantity + c.Quantity > c.Record.CalculateSurplus()))
             throw new InvalidOperationException("Porsi terselamatkan melebihi catatan surplus. Periksa catatan produksi.");
+        if (UsesSharedStock && order.Items.Any(item => sharedListingIds.Contains(item.ListingId)))
+            new DatabaseService().UpdateOrderStatus(order, OrderStatus.Completed, verification.VerifiedAt);
         verification.CompletePickup();
         foreach (var change in changes) change.Record.UpdateRescuedQuantity(change.Record.RescuedQuantity + change.Quantity);
         Persist();
