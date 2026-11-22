@@ -24,6 +24,7 @@ internal abstract class ModalDialog : Grid
     internal Border Card { get; private set; } = null!;
     internal Button CloseButton { get; }
     internal event Action? Closed;
+    protected virtual Control InitialFocus => CloseButton;
 
     protected ModalDialog(bool keyboard)
     {
@@ -44,7 +45,7 @@ internal abstract class ModalDialog : Grid
         CloseButton.Content = glyph; CloseButton.VerticalAlignment = VerticalAlignment.Top;
         glyph[!Shape.StrokeProperty] = CloseButton[!TemplatedControl.ForegroundProperty];
         AutomationProperties.SetName(CloseButton, "Tutup"); ToolTip.SetTip(CloseButton, "Tutup");
-        AttachedToVisualTree += (_, _) => Dispatcher.UIThread.Post(() => CloseButton.Focus(focusMethod));
+        AttachedToVisualTree += (_, _) => Dispatcher.UIThread.Post(() => InitialFocus.Focus(focusMethod));
     }
 
     // Card

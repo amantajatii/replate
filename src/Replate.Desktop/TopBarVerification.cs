@@ -169,7 +169,10 @@ internal static class TopBarVerification
         Click(bar.ProfileButton); await Settle();
         Ensure(bar.ProfileMenu.IsOpen, "Profile menu opens before Keluar");
         Click(bar.SignOutItem); await Settle();
-        Ensure(window.CurrentPage is SignInView && !window.Session.IsSignedIn && !bar.ProfileMenu.IsOpen && bar.SearchBox.Text == "" &&
+        var confirm = window.SignOutConfirmation;
+        Ensure(confirm is not null && window.Session.IsSignedIn && !bar.ProfileMenu.IsOpen, "Keluar in the profile menu asks for confirmation first");
+        Click(confirm!.ConfirmButton); await Settle();
+        Ensure(window.SignOutConfirmation is null && window.CurrentPage is SignInView && !window.Session.IsSignedIn && !bar.ProfileMenu.IsOpen && bar.SearchBox.Text == "" &&
             !window.GetVisualDescendants().Contains(bar), "Keluar in the profile menu signs out and returns to sign-in");
     }
 

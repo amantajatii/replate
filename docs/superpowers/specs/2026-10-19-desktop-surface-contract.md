@@ -61,8 +61,11 @@ ROUTES AND ROLES:
   "Akun berhasil dibuat.", then routes by role. Kembali ke masuk returns to Masuk.
 - After sign-in: Customer -> Jelajah (marketplace); RestaurantOwner -> Dashboard of
   the restaurant that owner manages.
-- Keluar sits in the customer profile menu and in the restaurant rail. It signs out,
-  clears the displayed page and the top bar search, and returns to Masuk.
+- Keluar sits in the customer profile menu and in the restaurant rail. It first opens
+  the sign-out confirmation ("Keluar dari akun?", Batal and Keluar); Batal, Esc or a
+  click on the scrim close it and keep the user signed in. Keluar in the pop up (or
+  Enter) signs out, clears the displayed page and the top bar search, and returns to
+  Masuk. Automatic sign-outs on guarded routes do not ask.
 - Every customer route (Jelajah, detail makanan, Keranjang, Pesanan saya, detail
   pesanan) requires a Customer; every restaurant route (Dashboard, Menu, Penawaran
   surplus, Produksi, Pesanan, editors, detail pesanan) requires the RestaurantOwner
@@ -100,7 +103,7 @@ CUSTOMER TOP BAR (every customer route, implemented in `CustomerTopBar.cs`):
   border: muted name and email (not clickable), divider, Pesanan saya, Keluar. Click,
   Enter or Space on the circle opens it and focuses Pesanan saya; Up/Down move between
   items; Esc or a click outside closes it. Pesanan saya opens the orders page; Keluar
-  signs out. Opened with the mouse, Pesanan saya takes focus without looking focused;
+  closes the menu and opens the sign-out confirmation. Opened with the mouse, Pesanan saya takes focus without looking focused;
   opened with Enter or Space it shows the keyboard focus fill.
 - Icons are Path geometry on a 24 grid, stroke 1.75, round caps and joins. The cart keeps
   its own line geometry (`CustomerTopBar.CartIcon`); the bold outline cart is only for the
@@ -111,7 +114,9 @@ CUSTOMER TOP BAR (every customer route, implemented in `CustomerTopBar.cs`):
   focus ring, elements and names, removed tabs and old search, hover colors, badge
   colors and count, cart active line, typing without navigation, menu
   contents, keyboard and focus visibility, Keluar, and no overlap at 1040x720 and
-  1920x1080 (search 320 to 720).
+  1920x1080 (search 320 to 720). The sign-out confirmation is verified for both roles
+  by SignOutVerification (opening, Batal, Esc, scrim, focus, confirm, no horizontal
+  scroll at 1040x720 and 1920x1080).
 
 KEYBOARD FOCUS (customer routes, shared `Ui.FocusStyles` in `Ui.cs`):
 - The native Fluent focus adorner (the black double box) is replaced by an empty
