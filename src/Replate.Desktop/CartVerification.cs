@@ -14,11 +14,11 @@ namespace Replate.Desktop;
 
 internal static class CartVerification
 {
-    private static readonly Color Primary = Color.Parse("#245B43");
-    private static readonly Color Divider = Color.Parse("#DDE3DA");
-    private static readonly Color Muted = Color.Parse("#59675D");
-    private static readonly Color Ink = Color.Parse("#23382C");
-    private static readonly Color Selection = Color.Parse("#E0E9DF");
+    private static readonly Color Primary = Color.Parse("#1F6B4F");
+    private static readonly Color Divider = Color.Parse("#D7E4DF");
+    private static readonly Color Muted = Color.Parse("#69736D");
+    private static readonly Color Ink = Color.Parse("#202522");
+    private static readonly Color Selection = Color.Parse("#DDEDE5");
     private const string GroupNote = "Ambil di restoran ini";
     private const string PaymentNote = "Reservasi tidak melibatkan pembayaran.";
 

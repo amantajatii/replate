@@ -31,7 +31,7 @@ Multiline TextBoxes (AcceptsReturn, e.g. Deskripsi) use VerticalContentAlignment
 and padding 10, 10, 6, 5.5 (top equals left); text and placeholder start at the top
 padding (within 1 px). Field heights stay 42 (multiline 88, top bar search 44). Every TextBox has an Indonesian
 PlaceholderText, "Masukkan ..." where it fits (top bar search: "Mulai cari menu atau restoran"), no
-em dash and no exclamation mark. Placeholder color is `muted` (#59675D) at full
+em dash and no exclamation mark. Placeholder color is `muted` (#69736D) at full
 opacity (the Fluent 0.5 placeholder opacity is reset to 1); it disappears once the
 field has content, with no other effect. `--verify-ui` (InputVerification) checks every
 visible TextBox on each captured screen and on the auth surface at all four sizes.
@@ -94,7 +94,7 @@ CUSTOMER TOP BAR (every customer route, implemented in `CustomerTopBar.cs`):
   with a white circular badge holding the portion count in `primary`, hidden at 0;
   profile circle (44, white fill, primary user icon, `selection` fill on hover).
   Automation names and tooltips "Keranjang" and "Akun". Contrast on the green: white
-  about 7.9:1, `selection` about 6.4:1.
+  about 6.4:1, `selection` about 5.3:1.
 - Profile menu: Popup anchored to the circle (BottomEdgeAlignedRight, overlay layer,
   light dismiss). White card, `rounded.card`, `elevation.card`, padding 8, width 260, no
   border: muted name and email (not clickable), divider, Pesanan saya, Keluar. Click,
@@ -132,8 +132,8 @@ PRIMARY BUTTONS (whole app, shared style `Ui.UsePrimaryButtons` in `Ui.cs`):
 - Fill and text/icon color are set on `/template/ ContentPresenter#PART_ContentPresenter`
   for every enabled state, so the Fluent PointerOver/Pressed foreground (black text) never
   wins. Normal: `primary` fill, white text, flat. Hover: `selection` fill, `primary`
-  text (about 6.4:1), shadow `elevation.button-primary-hover` (`0 4 12 0 #4D245B43`).
-  Pressed: `divider` fill, `primary` text (about 6.1:1), same shadow. Disabled: unchanged,
+  text (about 5.3:1), shadow `elevation.button-primary-hover` (`0 4 12 0 #4D1F6B4F`).
+  Pressed: `divider` fill, `primary` text (about 4.9:1), same shadow. Disabled: unchanged,
   no hover or press effect.
 - Compact buttons (Tambah, Tambah ke keranjang, page actions, the owner's Tambah
   menu and Buat penawaran) scale to 1.03 from the center as a render transform on hover,
@@ -164,7 +164,7 @@ PRIMARY BUTTONS (whole app, shared style `Ui.UsePrimaryButtons` in `Ui.cs`):
   every "Kembali ke Jelajah" (collection, search results, Keranjang, Pesanan saya), "Kembali
   ke Pesanan saya", and, without the arrow, "Lihat detail" on order cards. Transparent fill and
   border in every state, set on the Button and on PART_ContentPresenter so Fluent adds no
-  fill; rest and pressed `primary`, hover `primary-hover` #357F5D (about 4.6:1 on the
+  fill; rest and pressed `primary`, hover `primary-hover` #2F7D5F (about 4.7:1 on the
   canvas); no shadow, scale (Fluent's pressed scale is reset), or underline; at least 32
   high; the shared focus ring. `UiVerification.TextLinks` checks it at 1040x720 and
   1920x1080 (CustomerOrdersVerification for the order links): the pixels around the arrow and text match the canvas (rendered with the
@@ -196,13 +196,13 @@ JELAJAH (customer marketplace, `MarketplaceView.cs` and `MarketplaceBanner.cs`):
   starts at 46.2%).
 - Collection cards: Termurah, Segera berakhir, Makanan utama, Roti & kue, Buah & sayur;
   equal widths in one row, 16 apart, height 96, `rounded.card` with the
-  `elevation.card-primary` shadow (`0 6 18 0 #4D245B43`, primary at about 30%) and no
+  `elevation.card-primary` shadow (`0 6 18 0 #4D1F6B4F`, primary at about 30%) and no
   border, filled `primary` with a white 24 line icon above a white 14 label (about
-  7.9:1); no Semua and no selected state. Each card is a link to its collection page
+  6.4:1); no Semua and no selected state. Each card is a link to its collection page
   (`MainWindow.ShowCollection`). Hover: `selection` fill with `primary` icon and label
-  (about 6.4:1), shadow `elevation.card-primary-hover` (`0 10 24 0 #59245B43`), scale
+  (about 5.3:1), shadow `elevation.card-primary-hover` (`0 10 24 0 #591F6B4F`), scale
   1.03 from the center as a RenderTransform (layout unchanged) and ZIndex 1. Press:
-  `divider` fill with `primary` text (about 6.1:1). Color, scale and shadow transition
+  `divider` fill with `primary` text (about 4.9:1). Color, scale and shadow transition
   over 120 ms ease-out and back on leave; this is the only allowed animation. Reduced
   motion is not read. Tab, Enter and Space work with the shared 2 px primary focus
   ring, 2 outside the card on the canvas; it scales with the card and stays on top.
@@ -416,7 +416,7 @@ COLLECTION AND SEARCH PAGES (customer only, `CollectionView.cs`):
 - Same top bar; in the Jelajah content column (at most 1200, inset 32), no banner:
   "Kembali ke Jelajah" link (16 left arrow, stroke 1.75, 8 from the 14 text, centered,
   at least 32 high, primary, transparent in every state; hover only turns the arrow and
-  text primary-hover #357F5D, about 4.6:1 on the canvas, pressed returns to primary; no
+  text primary-hover #2F7D5F, about 4.7:1 on the canvas, pressed returns to primary; no
   fill, border, shadow, scale or underline; primary focus ring), then the title
   (32 bold ink, one line), then on collection pages with listings an intro sentence 8
   under it (16, muted, wrapping; exact copy in DESIGN.md), then listing cards 16 below.
@@ -444,7 +444,7 @@ COLLECTION AND SEARCH PAGES (customer only, `CollectionView.cs`):
 
 AUTH SURFACE (Masuk and Daftar, implemented in `AuthViews.cs` as `AuthSurface`):
 - A two-column Grid fills the page: the left canvas column and the right primary
-  (#245B43) panel, full height. The first column width is set in pixels from the
+  (#1F6B4F) panel, full height. The first column width is set in pixels from the
   plate position (`AuthSurface.Layout`); the panel is about 28% of the width.
 - Left column: canvas background. The green logo `Assets/logo-green.webp` (44 high, Uniform
   stretch, width from the bitmap ratio) sits at the top (inset 32), left-aligned with the card, on a `canvas` band drawn above the scroll area. Below it
@@ -471,7 +471,7 @@ AUTH SURFACE (Masuk and Daftar, implemented in `AuthViews.cs` as `AuthSurface`):
   right, then D shrinks (minimum 320). The scroll area ends at plate left. The logo, the warning and the demo-account
   line share L, and the warning and demo line share the card width.
 - Card: white surface, `rounded.card` (16), `elevation.card` shadow
-  (`0 8 24 0 #1F23382C`), padding 32, fields 20 apart, no border. Hard rule: the
+  (`0 8 24 0 #1F202522`), padding 32, fields 20 apart, no border. Hard rule: the
   plate box never intersects the card box and the gap is at least 24. At 1360x940
   the plate is 526, the card 440 at 163, the gap about 113 and the panel 28%; at
   1283x780 the plate is 437, the card 440 at 154 and the gap about 111; at 1920x1080
@@ -484,7 +484,7 @@ AUTH SURFACE (Masuk and Daftar, implemented in `AuthViews.cs` as `AuthSurface`):
   20x20 password-toggle button (16 icon, same 32 footprint via margin) inside the
   field, always visible, including when the field is empty. Eye and crossed-eye icons
   are Path geometry. Default ink icon, transparent, no border; hover (pointer over the
-  icon only) turns the icon `leaf` (#4FA37E) with no fill, border or transition, and
+  icon only) turns the icon `primary-500` (#59AC87) with no fill, border or transition, and
   it returns to ink on leave; no pressed fill. Keyboard focus (Tab from the field) 2 px
   primary ring; Enter or Space toggles, and Enter on the toggle does not submit. Pressing it switches PasswordChar; its automation name switches
   between "Tampilkan kata sandi" and "Sembunyikan kata sandi". The native Fluent

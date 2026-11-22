@@ -16,12 +16,12 @@ namespace Replate.Desktop;
 
 internal static class MarketplaceVerification
 {
-    private static readonly Color Primary = Color.Parse("#245B43");
-    private static readonly Color Ink = Color.Parse("#23382C");
-    private static readonly Color CanvasColor = Color.Parse("#FAFAF8");
+    private static readonly Color Primary = Color.Parse("#1F6B4F");
+    private static readonly Color Ink = Color.Parse("#202522");
+    private static readonly Color CanvasColor = Color.Parse("#FAF8F3");
     private static readonly Color OnPrimary = Colors.White;
-    private static readonly Color Selection = Color.Parse("#E0E9DF");
-    private static readonly Color Divider = Color.Parse("#DDE3DA");
+    private static readonly Color Selection = Color.Parse("#DDEDE5");
+    private static readonly Color Divider = Color.Parse("#D7E4DF");
 
     internal static async Task Run(MainWindow window)
     {
@@ -37,7 +37,7 @@ internal static class MarketplaceVerification
             view.Section.Children[0] == view.TitleRow && view.Section.Children[1] == view.ListingsPanel, "Banner, filter cards, then the Jelajahi Menu section");
         Ensure(!view.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text?.Contains("menu tersedia") == true), "The N menu tersedia counter is gone");
         Ensure(view.Title.Text == MarketplaceView.SectionTitle && view.Title.FontSize >= 30 && view.Title.FontWeight >= FontWeight.Bold &&
-            ColorOf(view.Title.Foreground) == Color.Parse("#23382C") && view.Title.HorizontalAlignment == Avalonia.Layout.HorizontalAlignment.Left,
+            ColorOf(view.Title.Foreground) == Color.Parse("#202522") && view.Title.HorizontalAlignment == Avalonia.Layout.HorizontalAlignment.Left,
             $"Jelajahi Menu is a bold, left-aligned section title in ink ({view.Title.FontSize:0})");
         Ensure(!view.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text is "Semua restoran" or "Makanan tersedia" || t.Text?.Contains('—') == true),
             "Decorative section titles are removed and no text uses an em dash");

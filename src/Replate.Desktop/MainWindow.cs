@@ -38,12 +38,12 @@ public sealed class MainWindow : Window
         this.startupError = startupError;
         Title = "Replate"; Width = 1360; Height = 940; MinWidth = 1040; MinHeight = 720;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
-        Background = Brush.Parse("#FAFAF8");
+        Background = Ui.Canvas;
         FontFamily = new FontFamily("Helvetica Neue, Segoe UI, sans-serif");
         successBanner = new Border
         {
             Child = successText, IsVisible = false,
-            Background = Brush.Parse("#E0E9DF"), BorderBrush = Ui.Green,
+            Background = Ui.Selection, BorderBrush = Ui.Green,
             BorderThickness = new Thickness(4, 0, 0, 0), CornerRadius = new CornerRadius(6),
             Padding = new Thickness(16, 12), Margin = new Thickness(32, 16, 32, 0)
         };
@@ -274,7 +274,7 @@ public sealed class MainWindow : Window
         Button Nav(string label, Action route)
         {
             var button = Ui.Button(label, route);
-            button.Background = label == active ? Brush.Parse("#E0E9DF") : Brushes.Transparent;
+            button.Background = label == active ? Ui.Selection : Brushes.Transparent;
             button.Foreground = label == active ? Ui.Green : Ui.Muted;
             return button;
         }
@@ -295,8 +295,8 @@ public sealed class MainWindow : Window
             var footer = Ui.Stack(12, Ui.Text(Session.Restaurant.Name, 14, bold: true), Ui.Button("Keluar", SignOut));
             var dock = new DockPanel { Margin = new Thickness(20, 28, 20, 24) };
             DockPanel.SetDock(footer, Dock.Bottom); dock.Children.Add(footer); dock.Children.Add(nav);
-            pageHost.Content = Ui.Columns("208,*", new Border { Child = dock, Background = Brush.Parse("#F1F3EE"),
-                BorderBrush = Brush.Parse("#DDE3DA"), BorderThickness = new Thickness(0, 0, 1, 0) }, area);
+            pageHost.Content = Ui.Columns("208,*", new Border { Child = dock, Background = Ui.Sidebar,
+                BorderBrush = Ui.DividerFill, BorderThickness = new Thickness(0, 0, 1, 0) }, area);
         }
     }
 }

@@ -166,7 +166,7 @@ internal sealed class CustomerTopBar : Border
         MenuCard = new Border
         {
             Width = 260, Padding = new Thickness(8), Background = Brushes.White, CornerRadius = new CornerRadius(16),
-            BoxShadow = BoxShadows.Parse("0 8 24 0 #1F23382C"), Margin = new Thickness(24, 16, 24, 32),
+            BoxShadow = Ui.CardShadow, Margin = new Thickness(24, 16, 24, 32),
             Child = Ui.Stack(0, header, menuDivider, OrdersItem, SignOutItem)
         };
         AutomationProperties.SetName(MenuCard, "Menu akun");

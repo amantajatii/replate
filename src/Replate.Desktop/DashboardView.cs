@@ -123,7 +123,7 @@ public sealed class DashboardView : UserControl
         var card = new Border
         {
             Background = Brushes.White,
-            BorderBrush = Brush.Parse("#DDE3DA"), BorderThickness = new Thickness(1),
+            BorderBrush = Ui.DividerFill, BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(8), Padding = new Thickness(20), MinHeight = 140,
             RenderTransform = scale, RenderTransformOrigin = RelativePoint.Center,
             Cursor = new Cursor(StandardCursorType.Arrow),
@@ -136,7 +136,7 @@ public sealed class DashboardView : UserControl
         };
         card.PointerEntered += (_, _) =>
         {
-            card.Background = Brush.Parse("#E0E9DF");
+            card.Background = Ui.Selection;
             scale.ScaleX = scale.ScaleY = 1.02;
         };
         card.PointerExited += (_, _) =>
@@ -166,7 +166,7 @@ public sealed class DashboardView : UserControl
             text.HorizontalAlignment = i == 0 ? HorizontalAlignment.Left : HorizontalAlignment.Right;
             Grid.SetColumn(text, i); grid.Children.Add(text);
         }
-        return new Border { Child = grid, BorderBrush = Brush.Parse("#DDE3DA"),
+        return new Border { Child = grid, BorderBrush = Ui.DividerFill,
             BorderThickness = new Thickness(0, 0, 0, 1) };
     }
 }

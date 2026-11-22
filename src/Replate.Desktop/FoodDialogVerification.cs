@@ -12,10 +12,10 @@ namespace Replate.Desktop;
 
 internal static class FoodDialogVerification
 {
-    private static readonly Color Primary = Color.Parse("#245B43");
-    private static readonly Color Selection = Color.Parse("#E0E9DF");
-    private static readonly Color Divider = Color.Parse("#DDE3DA");
-    private static readonly Color Muted = Color.Parse("#59675D");
+    private static readonly Color Primary = Color.Parse("#1F6B4F");
+    private static readonly Color Selection = Color.Parse("#DDEDE5");
+    private static readonly Color Divider = Color.Parse("#D7E4DF");
+    private static readonly Color Muted = Color.Parse("#69736D");
 
     internal static async Task Run(MainWindow window)
     {
@@ -52,7 +52,7 @@ internal static class FoodDialogVerification
         Ensure(!dialog.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text?.Contains('—') == true), "No em dash in the dialog");
 
         // Style
-        Ensure(ColorOf(dialog.ScrimLayer.Background) == Color.Parse("#6623382C"), "Scrim is ink at 40% alpha");
+        Ensure(ColorOf(dialog.ScrimLayer.Background) == Color.Parse("#66202522"), "Scrim is ink at 40% alpha");
         Ensure(dialog.Card.Width == FoodDialog.CardWidth && dialog.Card.CornerRadius == new CornerRadius(16) && dialog.Card.BorderThickness == default &&
             dialog.Card.BoxShadow.ToString() == MarketplaceView.CardShadow.ToString() && ColorOf(dialog.Card.Background) == Colors.White,
             "White card, card radius and shadow, no border");

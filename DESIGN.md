@@ -2,17 +2,18 @@
 name: Replate Desktop
 description: Restrained native workspace for surplus food reservation and restaurant operations.
 colors:
-  primary: "#245B43"
-  primary-hover: "#357F5D"
-  ink: "#23382C"
-  muted: "#59675D"
-  canvas: "#FAFAF8"
+  primary: "#1F6B4F"
+  primary-hover: "#2F7D5F"
+  primary-500: "#59AC87"
+  accent: "#F4A261"
+  ink: "#202522"
+  muted: "#69736D"
+  canvas: "#FAF8F3"
   surface: "#FFFFFF"
-  sidebar: "#F1F3EE"
-  selection: "#E0E9DF"
-  divider: "#DDE3DA"
-  leaf: "#4FA37E"
-  scrim: "rgba(35, 56, 44, 0.40)"
+  sidebar: "#EEF4F1"
+  selection: "#DDEDE5"
+  divider: "#D7E4DF"
+  scrim: "rgba(32, 37, 34, 0.40)"
   danger: "#B3261E"
   danger-tint: "#FBE4E1"
   danger-pressed: "#F6D3CE"
@@ -63,29 +64,29 @@ elevation:
     offsetY: "8px"
     blur: "24px"
     spread: "0px"
-    color: "rgba(35, 56, 44, 0.12)"
-    avaloniaBoxShadow: "0 8 24 0 #1F23382C"
+    color: "rgba(32, 37, 34, 0.12)"
+    avaloniaBoxShadow: "0 8 24 0 #1F202522"
   card-primary:
     offsetX: "0px"
     offsetY: "6px"
     blur: "18px"
     spread: "0px"
-    color: "rgba(36, 91, 67, 0.30)"
-    avaloniaBoxShadow: "0 6 18 0 #4D245B43"
+    color: "rgba(31, 107, 79, 0.30)"
+    avaloniaBoxShadow: "0 6 18 0 #4D1F6B4F"
   card-primary-hover:
     offsetX: "0px"
     offsetY: "10px"
     blur: "24px"
     spread: "0px"
-    color: "rgba(36, 91, 67, 0.35)"
-    avaloniaBoxShadow: "0 10 24 0 #59245B43"
+    color: "rgba(31, 107, 79, 0.35)"
+    avaloniaBoxShadow: "0 10 24 0 #591F6B4F"
   button-primary-hover:
     offsetX: "0px"
     offsetY: "4px"
     blur: "12px"
     spread: "0px"
-    color: "rgba(36, 91, 67, 0.30)"
-    avaloniaBoxShadow: "0 4 12 0 #4D245B43"
+    color: "rgba(31, 107, 79, 0.30)"
+    avaloniaBoxShadow: "0 4 12 0 #4D1F6B4F"
   button-danger-hover:
     offsetX: "0px"
     offsetY: "4px"
@@ -300,7 +301,7 @@ components:
     size: "20px"
   password-toggle-hover:
     backgroundColor: "transparent"
-    textColor: "{colors.leaf}"
+    textColor: "{colors.primary-500}"
     rounded: "{rounded.control}"
     size: "20px"
   food-dialog:
@@ -404,29 +405,45 @@ This records the implemented Avalonia desktop system, currently verified on macO
 
 ## Colors
 
-Forest green is a functional accent within a pale, warm-neutral workspace. Frontmatter values are normative; names below explain their use.
+Forest green is a functional accent within a pale, warm-neutral workspace. Frontmatter values are normative; the table maps them to the team palette and the names below explain their use.
+
+| Palette name | Token | Value | Role |
+| --- | --- | --- | --- |
+| Primary 700 | `primary` | `#1F6B4F` | Primary buttons, the customer top bar, the dark Jelajah collection cards, link text, focus rings |
+| Primary 500 | `primary-500` | `#59AC87` | Non-text only: the password-toggle icon on hover |
+| Primary 100 | `selection` | `#DDEDE5` | Primary button hover fill (with `primary` text), selected navigation, hover fills |
+| Accent | `accent` | `#F4A261` | The 1 px border of the Masuk database warning only |
+| Background | `canvas` | `#FAF8F3` | Page canvas |
+| Surface | `surface` | `#FFFFFF` | Cards, panels, dialogs, input fields |
+| Text Primary | `ink` | `#202522` | Default readable text |
+| Text Secondary | `muted` | `#69736D` | Supporting text, placeholders, inactive navigation |
+
+Derived from Primary 700: `primary-hover` `#2F7D5F` (Primary 700 mixed 28% toward Primary 500), `sidebar` `#EEF4F1` (Primary 700 at about 8% over white), `divider` `#D7E4DF` (Primary 700 at about 18% over white), and the `elevation.card-primary`, `elevation.card-primary-hover`, and `elevation.button-primary-hover` shadows. `scrim` and `elevation.card` derive from Text Primary.
+
+Contrast: white on `primary` 6.4:1; `primary` on `selection` 5.3:1; `primary` on `divider` 4.9:1; `primary-hover` 5.0:1 on `surface` and 4.7:1 on `canvas`; `muted` 4.9:1 on `surface` and 4.6:1 on `canvas`; `ink` 15.6:1 on `surface` and 14.7:1 on `canvas`.
 
 ### Primary
-- **Forest Green** (`primary`): primary actions, selected routes and filters, rescue prices, and meaningful operational emphasis.
-- **Bright Forest** (`primary-hover`): the text and icon color of the shared text link on hover only. About 4.6:1 on `canvas`. Never a fill.
+- **Primary 700** (`primary`): primary actions, selected routes and filters, rescue prices, and meaningful operational emphasis.
+- **Primary hover** (`primary-hover`): the text and icon color of the shared text link on hover only. About 4.7:1 on `canvas` and 5.0:1 on `surface`. Never a fill. Primary 500 is never used for text.
+- **Primary 500** (`primary-500`): the hover color of the password-toggle icon only. About 2.7:1 on white, so it never carries text; the icon is `ink` at rest.
+- **Accent** (`accent`): the border of the Masuk database warning only. No other element uses it.
 
 ### Neutral
-- **Deep Leaf Ink** (`ink`): default readable content and secondary button text; also the hover fill of the selected role-button, where white text reaches about 12.5:1.
-- **Muted Leaf** (`muted`): metadata, subtitles, supporting explanations, and inactive navigation.
-- **Warm Canvas** (`canvas`): the main window background.
-- **White Surface** (`surface`): secondary buttons, the search input, the profile menu, and, on the green top bar, the white logo, icons, cart badge, profile circle, and focus ring.
+- **Text Primary** (`ink`): default readable content and secondary button text; also the hover fill of the selected role-button, where white text reaches about 15.6:1.
+- **Text Secondary** (`muted`): metadata, subtitles, supporting explanations, and inactive navigation.
+- **Background** (`canvas`): the main window background.
+- **Surface** (`surface`): cards, panels, dialogs, secondary buttons, the search input, the profile menu, and, on the green top bar, the white logo, icons, cart badge, profile circle, and focus ring.
 - **Pale Sage Sidebar** (`sidebar`): restaurant navigation rail.
-- **Soft Sage Selection** (`selection`): selected navigation, profile menu items on hover and keyboard focus, the profile circle on hover, the cart icon on hover (about 6.4:1 on `primary`), and the Jelajah collection cards and every primary button on hover, where `primary` icon and label reach about 6.4:1.
-- **Sage Divider** (`divider`): row rules and shell separators; also the pressed fill of the Jelajah collection cards and primary buttons, one step under the `selection` hover (`primary` text about 6.1:1).
-- **Light Leaf** (`leaf`): the hover color of the password-toggle icon only. About 3.1:1 on white, enough for an icon, not for body text.
-- **Ink Scrim** (`scrim`): `ink` at 40% alpha (Avalonia `#6623382C`), the flat dimmed layer behind the food dialog and the checkout confirmation only. No blur.
+- **Primary 100** (`selection`): selected navigation, profile menu items on hover and keyboard focus, the profile circle on hover, the cart icon on hover (about 5.3:1 on `primary`), and the Jelajah collection cards and every primary button on hover, where `primary` icon and label reach about 5.3:1.
+- **Sage Divider** (`divider`): row rules and shell separators; also the pressed fill of the Jelajah collection cards and primary buttons, one step under the `selection` hover (`primary` text about 4.9:1).
+- **Ink Scrim** (`scrim`): `ink` at 40% alpha (Avalonia `#66202522`), the flat dimmed layer behind the food dialog and the checkout confirmation only. No blur.
 
 ### Danger
 - **Danger Red** (`danger`): the fill of the danger button (white text about 6.5:1) and its text and icon color on hover and press. Used only for actions that cancel or destroy something.
 - **Danger Tint** (`danger-tint`): the danger button hover fill (`danger` text about 5.4:1).
 - **Danger Pressed** (`danger-pressed`): the danger button pressed fill, one step under `danger-tint` (`danger` text about 4.7:1).
 
-The customer top bar and the Jelajah collection cards are the places `primary` is a surface rather than an accent: white text and icons on it reach about 7.9:1.
+The customer top bar and the Jelajah collection cards are the places `primary` is a surface rather than an accent: white text and icons on it reach about 6.4:1.
 
 **The Functional Green Rule.** Use the accent to communicate action, selection, or useful emphasis.
 
@@ -474,11 +491,11 @@ Reference sizes: at (1360 × 940) the plate is 526, the card 440 starting at 163
 
 Custom application surfaces stay flat. Tonal backgrounds, whitespace, and thin dividers separate shell, rows, and content. The only exception is the card, which may carry one soft shadow: `elevation.card`, or, on the green Jelajah collection cards only, `elevation.card-primary` (and `elevation.card-primary-hover` on hover and press). The non-card shadows are `elevation.button-primary-hover`, on primary buttons while hovered or pressed, and `elevation.button-danger-hover`, the same shadow tinted with `danger`, on the danger button. There are no other shadow tokens and two motion tokens, `motion.collection-card-hover` and `motion.primary-button-hover`.
 
-**The One Shadow Rule.** `elevation.card` is offset (0, 8), blur (24), spread (0), in ink (`#23382C`) at about 12% alpha. In Avalonia this is the `BoxShadow` string `0 8 24 0 #1F23382C` (Avalonia colors are `#AARRGGBB`, and `1F` is 31 of 255, about 12%). The CSS equivalent is `0px 8px 24px 0px rgba(35, 56, 44, 0.12)`. Do not stack shadows, tint them with the primary color, or apply them to rows or the shell; the only button shadow is the primary button hover shadow below.
+**The One Shadow Rule.** `elevation.card` is offset (0, 8), blur (24), spread (0), in ink (`#202522`) at about 12% alpha. In Avalonia this is the `BoxShadow` string `0 8 24 0 #1F202522` (Avalonia colors are `#AARRGGBB`, and `1F` is 31 of 255, about 12%). The CSS equivalent is `0px 8px 24px 0px rgba(32, 37, 34, 0.12)`. Do not stack shadows, tint them with the primary color, or apply them to rows or the shell; the only button shadow is the primary button hover shadow below.
 
-**The primary shadow exception.** A white card's ink shadow disappears under a green fill, so the `primary` collection cards use a shadow tinted with `primary` (`#245B43`) instead: `elevation.card-primary` is offset (0, 6), blur (18), spread (0), at about 30% alpha (Avalonia `0 6 18 0 #4D245B43`, CSS `0px 6px 18px 0px rgba(36, 91, 67, 0.30)`); on hover and press it deepens to `elevation.card-primary-hover`, offset (0, 10), blur (24), about 35% alpha (Avalonia `0 10 24 0 #59245B43`, CSS `0px 10px 24px 0px rgba(36, 91, 67, 0.35)`). Both stay a single soft shadow with no border, glow, or blur filter. No other surface uses them.
+**The primary shadow exception.** A white card's ink shadow disappears under a green fill, so the `primary` collection cards use a shadow tinted with `primary` (`#1F6B4F`) instead: `elevation.card-primary` is offset (0, 6), blur (18), spread (0), at about 30% alpha (Avalonia `0 6 18 0 #4D1F6B4F`, CSS `0px 6px 18px 0px rgba(31, 107, 79, 0.30)`); on hover and press it deepens to `elevation.card-primary-hover`, offset (0, 10), blur (24), about 35% alpha (Avalonia `0 10 24 0 #591F6B4F`, CSS `0px 10px 24px 0px rgba(31, 107, 79, 0.35)`). Both stay a single soft shadow with no border, glow, or blur filter. No other surface uses them.
 
-**The primary button shadow.** Primary buttons are flat at rest. On hover and press they carry `elevation.button-primary-hover`, the same `primary` tint at about 30% alpha but smaller: offset (0, 4), blur (12), spread (0) (Avalonia `0 4 12 0 #4D245B43`, CSS `0px 4px 12px 0px rgba(36, 91, 67, 0.30)`). It is the only shadow a primary button may carry, and only rounded-rectangle primary buttons carry it; round buttons, icon buttons, and secondary buttons stay flat.
+**The primary button shadow.** Primary buttons are flat at rest. On hover and press they carry `elevation.button-primary-hover`, the same `primary` tint at about 30% alpha but smaller: offset (0, 4), blur (12), spread (0) (Avalonia `0 4 12 0 #4D1F6B4F`, CSS `0px 4px 12px 0px rgba(31, 107, 79, 0.30)`). It is the only shadow a primary button may carry, and only rounded-rectangle primary buttons carry it; round buttons, icon buttons, and secondary buttons stay flat.
 
 **The danger button shadow.** The danger button carries `elevation.button-danger-hover` on hover and press: offset (0, 4), blur (12), spread (0), `danger` (`#B3261E`) at about 30% alpha (Avalonia `0 4 12 0 #4DB3261E`, CSS `0px 4px 12px 0px rgba(179, 38, 30, 0.30)`). It is flat at rest and follows the button's corner radius.
 
@@ -499,8 +516,8 @@ Direct, compact action labels. Primary buttons use green with white text; second
 
 **Primary button states.** One shared style (`Ui.Button(..., primary: true)`, registered for the whole app) sets the fill and the text and icon color explicitly on the button's content presenter in every state, so the Fluent hover and pressed colors (which turned the text black) never show through:
 - **Normal:** `primary` fill, white text and icon, flat (no shadow), scale 1.
-- **Hover:** `selection` fill, `primary` text and icon (about 6.4:1), `elevation.button-primary-hover`.
-- **Pressed:** `divider` fill, one step under hover, `primary` text and icon (about 6.1:1), the same shadow.
+- **Hover:** `selection` fill, `primary` text and icon (about 5.3:1), `elevation.button-primary-hover`.
+- **Pressed:** `divider` fill, one step under hover, `primary` text and icon (about 4.9:1), the same shadow.
 - **Disabled:** unchanged; no hover, press, shadow, or scale effect.
 - **Compact vs full width:** compact primary buttons (Tambah on listing cards, Tambah ke keranjang in the food dialog, Pesan on each Keranjang restaurant group, Pesan sekarang in the checkout confirmation, page actions such as Jelajahi menu, Konfirmasi pesanan, and the restaurant owner's Tambah menu and Buat penawaran) also scale to 1.03 from the center as a render transform on hover, so the layout never moves, and rise above their neighbours (ZIndex 1). Full-width primary buttons (Masuk and Daftar on the auth surface) get the color and shadow change only, without scale. The Fluent press shrink does not apply to primary buttons.
 - **Motion:** fill, text, shadow, and (compact only) scale share the 120 ms ease-out `motion.primary-button-hover`.
@@ -525,13 +542,13 @@ Visible labels sit above native TextBox, NumericUpDown, ComboBox, DatePicker, an
 
 - **Vertical centering:** every single-line TextBox (including the one inside NumericUpDown and every Kata sandi field) centers its content vertically with balanced padding (10, 5.5, 6, 5.5: top equals bottom). Typed text, the placeholder, password dots, and the password-toggle share the field's vertical center. One shared rule (`Ui.UseInputs` in `Ui.cs`) applies this app-wide; individual fields do not set it. Field heights are unchanged.
 - **Multiline fields:** a TextBox that accepts returns (Deskripsi on Daftar and in the menu editor) aligns its placeholder and text to the top instead, with padding (10, 10, 6, 5.5): the top padding equals the left. The same shared rule applies it.
-- **Placeholder:** every TextBox carries an Indonesian placeholder following "Masukkan ..." (for example "Masukkan email Anda", "Masukkan kata sandi Anda", "Masukkan nama restoran", "Masukkan harga"); the top bar search field reads "Mulai cari menu atau restoran". Placeholder text uses `muted` at full opacity (about 5.9:1 on white), disappears once the field has content, and has no other effect. No em dashes and no exclamation marks.
+- **Placeholder:** every TextBox carries an Indonesian placeholder following "Masukkan ..." (for example "Masukkan email Anda", "Masukkan kata sandi Anda", "Masukkan nama restoran", "Masukkan harga"); the top bar search field reads "Mulai cari menu atau restoran". Placeholder text uses `muted` at full opacity (about 4.9:1 on white), disappears once the field has content, and has no other effect. No em dashes and no exclamation marks.
 
 ### Auth controls
 These three components exist only on the auth surface. Their states are documented here because they replace the native Fluent look; they use only the color tokens above, with no blur, glow, gradient, or animation.
 
 - **role-button:** the Daftar sebagai choice (Pelanggan / Pemilik restoran). Two equal-width buttons that together span the card (12 apart), `rounded.control`, no visible border. They keep RadioButton semantics: one group, arrow keys move and select, automation names match the labels. Unselected: sidebar fill with ink text; hover: selection fill with primary text. Selected: primary fill with white text; hover: ink fill with white text. Keyboard focus shows a 2 px ink ring.
-- **password-toggle:** a 20 × 20 button hugging its 16 icon, inside the right edge of every Kata sandi field (Masuk, and Kata sandi and Ulangi kata sandi on Daftar), always visible, even when the field is empty. Its eye and crossed-eye icons are drawn as Path geometry (no icon package). Default: an ink icon with no fill or border. Hover, only while the pointer is over the icon: the icon turns `leaf`; there is still no fill, border, box, or transition, and the icon returns to ink when the pointer leaves. Pressing changes nothing else. Keyboard focus (Tab from the field): 2 px primary ring; Enter or Space toggles it, and Enter on the toggle does not submit the form. Pressing it switches the field between masked and plain text, and its automation name switches between "Tampilkan kata sandi" and "Sembunyikan kata sandi". Submitting the form returns every password field to masked mode; sign-in and an accepted registration also clear them.
+- **password-toggle:** a 20 × 20 button hugging its 16 icon, inside the right edge of every Kata sandi field (Masuk, and Kata sandi and Ulangi kata sandi on Daftar), always visible, even when the field is empty. Its eye and crossed-eye icons are drawn as Path geometry (no icon package). Default: an ink icon with no fill or border. Hover, only while the pointer is over the icon: the icon turns `primary-500`; there is still no fill, border, box, or transition, and the icon returns to ink when the pointer leaves. Pressing changes nothing else. Keyboard focus (Tab from the field): 2 px primary ring; Enter or Space toggles it, and Enter on the toggle does not submit the form. Pressing it switches the field between masked and plain text, and its automation name switches between "Tampilkan kata sandi" and "Sembunyikan kata sandi". Submitting the form returns every password field to masked mode; sign-in and an accepted registration also clear them.
 - **time-field:** Jam buka and Jam tutup in the restaurant profile. A white pill (`rounded.full`, height 42) with the same border as native text fields, holding a native hour ComboBox (00 to 23), a ":" separator, and a native minute ComboBox (00 to 59). No AM/PM and no shadow. Picking an hour fills the minute with 00. The two fields share one row (16 apart) with visible labels above each; automation names follow the pattern "Jam buka, jam" and "Jam buka, menit". The value is a 24-hour `TimeOnly`. The hour and minute boxes share the pill width equally, so both stay inside the pill at the narrowest card (360).
 
 ### Focus
@@ -556,7 +573,7 @@ The brand is shown only as a bitmap logo; there is no text wordmark. `Assets/log
 Selected routes share pale sage fill and forest-green text; inactive items use muted text. The only customer filter is the status filter on Pesanan saya (see Pesanan saya). Jelajah has no filters: the collection cards below are links to their own pages, not a chip shape or a selection. Customer navigation is the top bar below and has no route tabs; restaurant navigation is the vertical rail.
 
 ### Top Bar
-The customer shell (`CustomerTopBar.cs`) is one persistent bar on every customer page: `primary` fill, height (72), side padding (32). No bottom rule, no shadow, and no border. Text and icons on it are white (about 7.9:1). It holds three groups in an `Auto, *, Auto` grid:
+The customer shell (`CustomerTopBar.cs`) is one persistent bar on every customer page: `primary` fill, height (72), side padding (32). No bottom rule, no shadow, and no border. Text and icons on it are white (about 6.4:1). It holds three groups in an `Auto, *, Auto` grid:
 
 - **Logo:** the white logo (`logo-white.webp`, 36 high, width from the bitmap ratio). It is a button that opens Jelajah, named "Replate"; see Logo.
 - **Search:** the `search-input`, a white pill (`rounded.full`, height 44, no border) that fills the middle column with (32) on each side, at most (720) and at least (320), centered between the logo and the icons. A `muted` magnifier icon sits inside on the left; the placeholder reads "Mulai cari menu atau restoran" in `muted`, typed text is `ink`; automation name "Cari menu atau restoran". While focused, a 2 px white ring sits 2 outside the pill; the field never shows a dark border. It replaces the old search field and its label on Jelajah. The magnifier is a small button (40, `rounded.full`, transparent, `muted` icon that turns `primary` on hover, named "Cari", not a Tab stop). Typing alone changes nothing; Enter in the field or a click on the magnifier opens the search result page (see Collection Page). An empty or blank field does nothing. On the result page the field keeps the keyword, and searching again replaces the results. Every other customer page, including Jelajah, opens with an empty field; Keluar clears it too.
@@ -577,7 +594,7 @@ The first block on Jelajah: `rounded.card` corners, no border, no shadow, center
 - **Text block:** overlaid on the empty top-left of the image, left inset (40), centered vertically in the area above the cabinets (which start at 87.8% of the height). Its right edge stays at or left of 45% of the banner width; the illustration's nearest object starts at 46.2% and the empty area reaches about 55% at the top, so the text never covers the illustration at any size.
 
 ### Collection Card
-Five equal cards in one row, (24) under the banner and (24) above the section title, (16) apart: Termurah (tag icon), Segera berakhir (clock), Makanan utama (fork and spoon), Roti & kue (bread), Buah & sayur (leaf). Each is a button styled as a card: `primary` fill, `rounded.card`, `elevation.card-primary`, no border, height (96); a 24 line icon in white (`surface`, Path geometry, stroke 1.75, round caps) above a 14 white label (about 7.9:1 on `primary`). The icon stroke follows the card's text color. Hover: the fill changes to `selection` and the icon and label to `primary` (about 6.4:1), the shadow deepens to `elevation.card-primary-hover`, and the card scales to 1.03 from its center as a render transform, so no other card moves or resizes; the hovered card sits above its neighbours (ZIndex 1), and the 16 gap keeps the grown card clear of them. Pressing changes the fill to `divider` (`primary` text about 6.1:1). Leaving returns to `primary`, white, scale 1.0, and the resting shadow. Color, scale, and shadow share the 120 ms ease-out `motion.collection-card-hover`, the only animation in the customer app. There is no selected state. Keyboard focus: the shared 2 px `primary` ring 2 outside the card, drawn on the canvas (about 7.6:1), never white on green; the ring is part of the card, so it scales and rises with it and is never covered. Enter or Space opens it. Each card is a link: it opens that collection's page (see Collection Page), and Jelajah itself always lists every available listing in the default order. There is no Semua card. At (1040) the cards narrow and stay in one row.
+Five equal cards in one row, (24) under the banner and (24) above the section title, (16) apart: Termurah (tag icon), Segera berakhir (clock), Makanan utama (fork and spoon), Roti & kue (bread), Buah & sayur (leaf). Each is a button styled as a card: `primary` fill, `rounded.card`, `elevation.card-primary`, no border, height (96); a 24 line icon in white (`surface`, Path geometry, stroke 1.75, round caps) above a 14 white label (about 6.4:1 on `primary`). The icon stroke follows the card's text color. Hover: the fill changes to `selection` and the icon and label to `primary` (about 5.3:1), the shadow deepens to `elevation.card-primary-hover`, and the card scales to 1.03 from its center as a render transform, so no other card moves or resizes; the hovered card sits above its neighbours (ZIndex 1), and the 16 gap keeps the grown card clear of them. Pressing changes the fill to `divider` (`primary` text about 4.9:1). Leaving returns to `primary`, white, scale 1.0, and the resting shadow. Color, scale, and shadow share the 120 ms ease-out `motion.collection-card-hover`, the only animation in the customer app. There is no selected state. Keyboard focus: the shared 2 px `primary` ring 2 outside the card, drawn on the canvas (about 6.0:1), never white on green; the ring is part of the card, so it scales and rises with it and is never covered. Enter or Space opens it. Each card is a link: it opens that collection's page (see Collection Page), and Jelajah itself always lists every available listing in the default order. There is no Semua card. At (1040) the cards narrow and stay in one row.
 
 ### Collection Page
 One reused view (`CollectionView.cs`) for the five collections and for search results, under the same top bar and in the same content column as Jelajah (at most 1200, inset 32), with no banner. From top to bottom:

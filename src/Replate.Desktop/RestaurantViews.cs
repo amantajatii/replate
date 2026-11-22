@@ -117,7 +117,7 @@ public sealed class MenuEditorView : UserControl
             ["price"] = PriceInput, ["weight"] = WeightInput
         };
         var outlines = new Dictionary<string, Border>();
-        var red = Avalonia.Media.Brush.Parse("#B3261E");
+        var red = Ui.Danger;
         var attempted = false;
         Control Field(string key, string label)
         {
@@ -300,7 +300,7 @@ public sealed class ProductionView : UserControl
         var inputs = new Dictionary<string, Control>
         { ["menu"] = MenuInput, ["date"] = DateInput, ["produced"] = ProducedInput, ["sold"] = SoldInput };
         var outlines = new Dictionary<string, Border>();
-        var red = Avalonia.Media.Brush.Parse("#B3261E");
+        var red = Ui.Danger;
         var attempted = false;
         var refreshing = false;
         DateOnly? SelectedDate() => DateInput.SelectedDate is { } date ? DateOnly.FromDateTime(date.Date) : null;
