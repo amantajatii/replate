@@ -4,6 +4,10 @@ namespace Replate.Domain.Entities;
 
 public sealed class Order
 {
+    public Order() { }
+
+    public Order(OrderStatus status) => Status = status;
+
     public Guid Id { get; init; } = Guid.NewGuid();
     public Guid CustomerId { get; set; }
     public Guid RestaurantId { get; set; }

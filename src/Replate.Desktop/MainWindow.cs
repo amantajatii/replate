@@ -179,7 +179,9 @@ public sealed class MainWindow : Window
     }
     internal void ShowRestaurantOrders()
     {
-        if (Allowed(true)) Render(true, new OrdersView(this, Session, true), "Pesanan");
+        if (!Allowed(true)) return;
+        Render(true, new OrdersView(this, Session, true), "Pesanan");
+        Run(Session.RefreshRestaurantOrders, () => Render(true, new OrdersView(this, Session, true), "Pesanan"));
     }
 
     // Dialog

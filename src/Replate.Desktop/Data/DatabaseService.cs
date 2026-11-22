@@ -1,6 +1,7 @@
 using System.Security.Authentication;
 using Npgsql;
 using Replate.Domain.Entities;
+using Replate.Domain.Enums;
 
 namespace Replate.Desktop.Data;
 
@@ -282,6 +283,62 @@ internal sealed class DatabaseService : IOrderStore
         catch (NpgsqlException e)
         {
             throw new InvalidOperationException("Pembatalan gagal disimpan ke PostgreSQL.", e);
+        }
+    }
+
+    internal List<Order> LoadOrders(Guid restaurantId, IReadOnlyDictionary<Guid, SurplusListing> listings)
+    {
+        try
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+            using var command = new NpgsqlCommand("""
+                SELECT o.id, o.customer_id, o.pickup_code, o.total_price, o.status, o.ordered_at,
+                       item.id, item.listing_id, item.menu_name, item.quantity, item.unit_price
+                FROM public.orders AS o
+                JOIN public.order_items AS item ON item.order_id = o.id
+                WHERE o.restaurant_id = @restaurant_id
+                ORDER BY o.ordered_at DESC, o.id, item.id
+                """, connection);
+            command.Parameters.AddWithValue("restaurant_id", restaurantId);
+            using var reader = command.ExecuteReader();
+            var orders = new Dictionary<Guid, Order>();
+            var incomplete = new HashSet<Guid>();
+            while (reader.Read())
+            {
+                var id = reader.GetGuid(0);
+                var listingId = reader.GetGuid(7);
+                if (!listings.TryGetValue(listingId, out var listing) || listing.Menu.RestaurantId != restaurantId)
+                {
+                    incomplete.Add(id);
+                    continue;
+                }
+
+                if (!orders.TryGetValue(id, out var order))
+                {
+                    if (!Enum.TryParse<OrderStatus>(reader.GetString(4), out var status) || !Enum.IsDefined(status))
+                        throw new InvalidOperationException("Status pesanan dari PostgreSQL tidak dikenali.");
+
+                    order = new Order(status)
+                    {
+                        Id = id, CustomerId = reader.GetGuid(1), RestaurantId = restaurantId,
+                        PickupCode = reader.GetString(2), TotalPrice = reader.GetDecimal(3), OrderedAt = reader.GetDateTime(5)
+                    };
+                    orders.Add(id, order);
+                }
+
+                order.Items.Add(new OrderItem
+                {
+                    Id = reader.GetGuid(6), OrderId = id, ListingId = listingId, Listing = listing,
+                    MenuName = reader.GetString(8), Quantity = reader.GetInt32(9), UnitPrice = reader.GetDecimal(10)
+                });
+            }
+
+            return orders.Values.Where(order => !incomplete.Contains(order.Id)).ToList();
+        }
+        catch (NpgsqlException e)
+        {
+            throw new InvalidOperationException("Pesanan restoran dari PostgreSQL gagal dimuat.", e);
         }
     }
 

@@ -184,6 +184,25 @@ public sealed class DemoSession
         ApplySharedListings(new DatabaseService().LoadListings());
     }
 
+    internal void RefreshRestaurantOrders()
+    {
+        if (!UsesSharedStock || checkingOut) return;
+
+        var restaurant = RequireOwnedRestaurant(Restaurant.Id);
+        RefreshSharedListings();
+        var listings = RestaurantListings.ToDictionary(listing => listing.Id);
+        var orders = new DatabaseService().LoadOrders(restaurant.Id, listings);
+        var localOrders = restaurant.Orders.ToDictionary(order => order.Id);
+        foreach (var order in orders)
+        {
+            if (!localOrders.TryGetValue(order.Id, out var local))
+                restaurant.Orders.Add(order);
+            else if (order.Status == OrderStatus.Cancelled &&
+                local.Status is not (OrderStatus.Completed or OrderStatus.Cancelled))
+                local.Cancel();
+        }
+    }
+
     internal void ApplySharedListings(IEnumerable<SurplusListing> sharedListings)
     {
         sharedListingIds.Clear();
