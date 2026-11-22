@@ -1,6 +1,5 @@
 using System.Security.Authentication;
 using Npgsql;
-using NpgsqlTypes;
 using Replate.Domain.Entities;
 using Replate.Domain.Enums;
 using Replate.Domain.ValueObjects;
@@ -64,8 +63,7 @@ internal sealed class DatabaseService : IOrderStore
             CREATE TABLE IF NOT EXISTS public.restaurants (
                 id uuid PRIMARY KEY,
                 name text NOT NULL,
-                address text NOT NULL,
-                owner_id uuid
+                address text NOT NULL
             );
             ALTER TABLE public.restaurants
                 ADD COLUMN IF NOT EXISTS latitude double precision,
@@ -74,12 +72,18 @@ internal sealed class DatabaseService : IOrderStore
                 ADD COLUMN IF NOT EXISTS phone text NOT NULL DEFAULT '',
                 ADD COLUMN IF NOT EXISTS opening_time time,
                 ADD COLUMN IF NOT EXISTS closing_time time;
-            CREATE INDEX IF NOT EXISTS restaurants_owner_id_idx ON public.restaurants (owner_id);
             CREATE TABLE IF NOT EXISTS public.menus (
                 id uuid PRIMARY KEY,
                 restaurant_id uuid NOT NULL REFERENCES public.restaurants(id),
                 name text NOT NULL
             );
+            ALTER TABLE public.menus
+                ADD COLUMN IF NOT EXISTS description text,
+                ADD COLUMN IF NOT EXISTS category text,
+                ADD COLUMN IF NOT EXISTS normal_price numeric,
+                ADD COLUMN IF NOT EXISTS weight_per_portion numeric,
+                ADD COLUMN IF NOT EXISTS is_active boolean NOT NULL DEFAULT true,
+                ADD COLUMN IF NOT EXISTS deleted_at timestamptz;
             CREATE TABLE IF NOT EXISTS public.surplus_listings (
                 id uuid PRIMARY KEY,
                 menu_id uuid NOT NULL,
@@ -139,7 +143,7 @@ internal sealed class DatabaseService : IOrderStore
             using var connection = CreateConnection();
             connection.Open();
             using var command = new NpgsqlCommand("""
-                SELECT id, name, address, description, phone, opening_time, closing_time, latitude, longitude
+                SELECT id, name, address, phone, description, opening_time, closing_time, latitude, longitude
                 FROM public.restaurants WHERE owner_id = @owner_id
                 ORDER BY name, id
                 """, connection);
@@ -151,7 +155,8 @@ internal sealed class DatabaseService : IOrderStore
                 var restaurant = new Restaurant
                 {
                     Id = reader.GetGuid(0), Name = reader.GetString(1), Address = reader.GetString(2),
-                    Description = reader.GetString(3), Phone = reader.GetString(4),
+                    Phone = reader.IsDBNull(3) ? "" : reader.GetString(3),
+                    Description = reader.IsDBNull(4) ? "" : reader.GetString(4),
                     OpeningTime = reader.IsDBNull(5) ? default : reader.GetFieldValue<TimeOnly>(5),
                     ClosingTime = reader.IsDBNull(6) ? default : reader.GetFieldValue<TimeOnly>(6)
                 };
@@ -174,10 +179,12 @@ internal sealed class DatabaseService : IOrderStore
             connection.Open();
             using var command = new NpgsqlCommand("""
                 SELECT listing.id, listing.menu_id, COALESCE(menu.name, listing.menu_name),
-                       listing.description, listing.category, listing.normal_price,
-                       listing.weight_per_portion, listing.rescue_price, listing.quantity,
+                       COALESCE(menu.description, listing.description), COALESCE(menu.category, listing.category),
+                       COALESCE(menu.normal_price, listing.normal_price),
+                       COALESCE(menu.weight_per_portion, listing.weight_per_portion), listing.rescue_price, listing.quantity,
                        listing.pickup_start, listing.pickup_end, listing.closed,
-                       restaurant.id, restaurant.name, restaurant.address, restaurant.latitude, restaurant.longitude
+                       restaurant.id, restaurant.name, restaurant.address, COALESCE(menu.is_active, true),
+                       restaurant.latitude, restaurant.longitude
                 FROM public.surplus_listings AS listing
                 LEFT JOIN public.menus AS menu ON menu.id = listing.menu_id
                 LEFT JOIN public.restaurants AS restaurant ON restaurant.id = menu.restaurant_id
@@ -190,6 +197,7 @@ internal sealed class DatabaseService : IOrderStore
                 var menu = new Menu { Id = reader.GetGuid(1) };
                 menu.UpdateMenu(reader.GetString(2), reader.GetString(3), reader.GetString(4),
                     reader.GetDecimal(5), reader.GetDecimal(6));
+                if (!reader.GetBoolean(15)) menu.Deactivate();
                 if (!reader.IsDBNull(12))
                 {
                     menu.RestaurantId = reader.GetGuid(12);
@@ -197,7 +205,7 @@ internal sealed class DatabaseService : IOrderStore
                     {
                         Id = menu.RestaurantId, Name = reader.GetString(13), Address = reader.GetString(14)
                     };
-                    if (ReadLocation(reader, 15, 16) is { } location) menu.Restaurant.SetLocation(location);
+                    if (ReadLocation(reader, 16, 17) is { } location) menu.Restaurant.SetLocation(location);
                 }
                 var listing = new SurplusListing
                 {
@@ -225,40 +233,7 @@ internal sealed class DatabaseService : IOrderStore
         reader.IsDBNull(latitude) || reader.IsDBNull(longitude)
             ? null : new GeoPoint(reader.GetDouble(latitude), reader.GetDouble(longitude));
 
-    public void SaveRestaurantProfile(Restaurant restaurant)
-    {
-        try
-        {
-            using var connection = CreateConnection();
-            connection.Open();
-            using var command = new NpgsqlCommand("""
-                INSERT INTO public.restaurants
-                    (id, name, address, owner_id, description, phone, opening_time, closing_time, latitude, longitude)
-                VALUES (@id, @name, @address, @owner_id, @description, @phone, @opening, @closing, @latitude, @longitude)
-                ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, address = EXCLUDED.address,
-                    owner_id = EXCLUDED.owner_id, description = EXCLUDED.description, phone = EXCLUDED.phone,
-                    opening_time = EXCLUDED.opening_time, closing_time = EXCLUDED.closing_time,
-                    latitude = EXCLUDED.latitude, longitude = EXCLUDED.longitude
-                """, connection);
-            command.Parameters.AddWithValue("id", restaurant.Id);
-            command.Parameters.AddWithValue("name", restaurant.Name);
-            command.Parameters.AddWithValue("address", restaurant.Address);
-            command.Parameters.AddWithValue("owner_id", restaurant.OwnerId);
-            command.Parameters.AddWithValue("description", restaurant.Description);
-            command.Parameters.AddWithValue("phone", restaurant.Phone);
-            command.Parameters.AddWithValue("opening", NpgsqlDbType.Time, restaurant.OpeningTime);
-            command.Parameters.AddWithValue("closing", NpgsqlDbType.Time, restaurant.ClosingTime);
-            command.Parameters.AddWithValue("latitude", NpgsqlDbType.Double, (object?)restaurant.Location?.Latitude ?? DBNull.Value);
-            command.Parameters.AddWithValue("longitude", NpgsqlDbType.Double, (object?)restaurant.Location?.Longitude ?? DBNull.Value);
-            command.ExecuteNonQuery();
-        }
-        catch (NpgsqlException e)
-        {
-            throw new InvalidOperationException("Profil restoran gagal disimpan ke PostgreSQL.", e);
-        }
-    }
-
-    internal void SaveListing(Restaurant restaurant, SurplusListing listing, int? expectedQuantity)
+    internal void SaveListing(Restaurant restaurant, SurplusListing listing, int? expectedQuantity, bool preserveCatalog)
     {
         try
         {
@@ -271,23 +246,50 @@ internal sealed class DatabaseService : IOrderStore
                 VALUES (@id, @name, @address)
                 ON CONFLICT (id) DO UPDATE
                 SET name = EXCLUDED.name, address = EXCLUDED.address
+                WHERE NOT @preserve
                 """, connection, transaction);
             saveRestaurant.Parameters.AddWithValue("id", restaurant.Id);
             saveRestaurant.Parameters.AddWithValue("name", restaurant.Name);
             saveRestaurant.Parameters.AddWithValue("address", restaurant.Address);
+            saveRestaurant.Parameters.AddWithValue("preserve", preserveCatalog);
             saveRestaurant.ExecuteNonQuery();
 
             using var saveMenu = new NpgsqlCommand("""
-                INSERT INTO public.menus AS menu (id, restaurant_id, name)
-                VALUES (@id, @restaurant_id, @name)
-                ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name
-                WHERE menu.restaurant_id = EXCLUDED.restaurant_id
+                INSERT INTO public.menus AS menu (id, restaurant_id, name, description, category, normal_price, weight_per_portion)
+                VALUES (@id, @restaurant_id, @name, @description, @category, @normal_price, @weight)
+                ON CONFLICT (id) DO UPDATE SET name = CASE WHEN @preserve THEN menu.name ELSE EXCLUDED.name END
+                WHERE menu.restaurant_id = EXCLUDED.restaurant_id AND menu.deleted_at IS NULL
+                    AND (NOT @preserve OR (menu.is_active AND COALESCE(menu.normal_price, @normal_price) >= @rescue_price))
                 """, connection, transaction);
             saveMenu.Parameters.AddWithValue("id", listing.MenuId);
             saveMenu.Parameters.AddWithValue("restaurant_id", restaurant.Id);
             saveMenu.Parameters.AddWithValue("name", listing.Menu.Name);
+            saveMenu.Parameters.AddWithValue("description", listing.Menu.Description);
+            saveMenu.Parameters.AddWithValue("category", listing.Menu.Category);
+            saveMenu.Parameters.AddWithValue("normal_price", listing.Menu.NormalPrice);
+            saveMenu.Parameters.AddWithValue("weight", listing.Menu.WeightPerPortion);
+            saveMenu.Parameters.AddWithValue("rescue_price", listing.RescuePrice);
+            saveMenu.Parameters.AddWithValue("preserve", preserveCatalog);
             if (saveMenu.ExecuteNonQuery() != 1)
-                throw new InvalidOperationException("Menu sudah terdaftar untuk restoran lain di PostgreSQL.");
+                throw new InvalidOperationException("Menu sudah berubah atau tidak tersedia. Buka kembali daftar menu.");
+
+            if (preserveCatalog)
+            {
+                using var checkProduction = new NpgsqlCommand("""
+                    SELECT (p.produced_quantity::bigint - p.regular_sold_quantity - p.rescued_quantity
+                        - public.replate_allocated_portions(p.menu_id, p.record_date, @listing_id))
+                    FROM public.production_records AS p
+                    WHERE p.menu_id = @menu_id AND p.record_date = (@pickup_start AT TIME ZONE 'Asia/Jakarta')::date
+                    FOR UPDATE OF p
+                    """, connection, transaction);
+                checkProduction.Parameters.AddWithValue("listing_id", listing.Id);
+                checkProduction.Parameters.AddWithValue("menu_id", listing.MenuId);
+                checkProduction.Parameters.AddWithValue("pickup_start", listing.PickupStart);
+                if (checkProduction.ExecuteScalar() is not long available)
+                    throw new InvalidOperationException("Simpan catatan produksi di Supabase untuk tanggal pengambilan terlebih dahulu.");
+                if (available < listing.Quantity)
+                    throw new InvalidOperationException("Stok melebihi surplus yang belum dialokasikan.");
+            }
 
             var sql = expectedQuantity.HasValue
                 ? """
@@ -297,6 +299,11 @@ internal sealed class DatabaseService : IOrderStore
                         rescue_price = @price, quantity = @quantity,
                         pickup_start = @start, pickup_end = @end
                     WHERE id = @id AND menu_id = @menu_id AND NOT closed AND quantity = @expected
+                        AND ((pickup_start = @start AND pickup_end = @end) OR NOT EXISTS (
+                            SELECT 1 FROM public.order_items AS item
+                            JOIN public.orders AS o ON o.id = item.order_id
+                            WHERE item.listing_id = @id AND o.status IN ('Reserved', 'Confirmed', 'ReadyForPickup', 'Completed')
+                        ))
                     """
                 : """
                     INSERT INTO public.surplus_listings
@@ -319,7 +326,7 @@ internal sealed class DatabaseService : IOrderStore
             command.Parameters.AddWithValue("end", listing.PickupEnd);
             if (expectedQuantity is int previous) command.Parameters.AddWithValue("expected", previous);
             if (command.ExecuteNonQuery() == 0)
-                throw new InvalidOperationException("Stok penawaran sudah berubah. Buka ulang daftar penawaran sebelum mengedit.");
+                throw new InvalidOperationException("Stok atau jadwal tidak bisa diubah. Buka ulang daftar penawaran dan periksa pesanan terkait.");
             transaction.Commit();
         }
         catch (NpgsqlException e)

@@ -18,7 +18,7 @@ internal static class MarketplaceVerification
 {
     private static readonly Color Primary = Color.Parse("#1F6B4F");
     private static readonly Color Ink = Color.Parse("#202522");
-    private static readonly Color CanvasColor = Color.Parse("#FAF8F3");
+    private static readonly Color CanvasColor = ((ISolidColorBrush)Ui.Canvas).Color;
     private static readonly Color OnPrimary = Colors.White;
     private static readonly Color Selection = Color.Parse("#DDEDE5");
     private static readonly Color Divider = Color.Parse("#D7E4DF");

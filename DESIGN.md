@@ -8,7 +8,8 @@ colors:
   accent: "#F4A261"
   ink: "#202522"
   muted: "#69736D"
-  canvas: "#FAF8F3"
+  canvas: "#FFFFFF"
+  workspace-fill: "#FFFFFF"
   surface: "#FFFFFF"
   sidebar: "#EEF4F1"
   selection: "#DDEDE5"
@@ -56,6 +57,7 @@ typography:
     fontWeight: 700
 rounded:
   control: "6px"
+  field: "12px"
   card: "16px"
   full: "9999px"
 elevation:
@@ -375,6 +377,24 @@ components:
     typography: "14px semibold"
     rounded: "{rounded.full}"
     height: "36px"
+  status-filter:
+    backgroundColor: "{colors.surface}"
+    borderColor: "{colors.divider}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.full}"
+    height: "36px"
+    padding: "0px 16px"
+  status-filter-hover:
+    backgroundColor: "{colors.selection}"
+    textColor: "{colors.primary}"
+    rounded: "{rounded.full}"
+    height: "36px"
+  status-filter-selected:
+    backgroundColor: "{colors.primary}"
+    textColor: "{colors.surface}"
+    typography: "14px semibold"
+    rounded: "{rounded.full}"
+    height: "36px"
   order-card:
     backgroundColor: "{colors.surface}"
     rounded: "{rounded.card}"
@@ -384,6 +404,52 @@ components:
     backgroundColor: "{colors.surface}"
     rounded: "{rounded.card}"
     shadow: "{elevation.card}"
+    padding: "24px"
+  field:
+    backgroundColor: "{colors.surface}"
+    borderColor: "{colors.divider}"
+    textColor: "{colors.ink}"
+    placeholderColor: "{colors.muted}"
+    iconColor: "{colors.muted}"
+    rounded: "{rounded.field}"
+    height: "48px"
+    padding: "0px 16px"
+  field-hover:
+    borderColor: "{colors.primary-500}"
+  field-focus:
+    borderColor: "{colors.primary}"
+    ring: "{components.focus-ring} (keyboard focus only)"
+  field-invalid:
+    borderColor: "{colors.danger}"
+  select-list:
+    backgroundColor: "{colors.surface}"
+    borderColor: "{colors.divider}"
+    rounded: "{rounded.field}"
+    padding: "4px"
+  select-option-hover:
+    backgroundColor: "{colors.selection}"
+    textColor: "{colors.primary}"
+  select-option-selected:
+    typography: "semibold"
+  calendar-day-selected:
+    backgroundColor: "{colors.primary}"
+    textColor: "{colors.surface}"
+    rounded: "{rounded.full}"
+    size: "36px"
+  calendar-day-hover:
+    backgroundColor: "{colors.selection}"
+    textColor: "{colors.primary}"
+    typography: "medium"
+    rounded: "{rounded.full}"
+  calendar-month-hover:
+    backgroundColor: "{colors.selection}"
+    textColor: "{colors.primary}"
+    typography: "medium"
+    rounded: "8px"
+  restaurant-form-card:
+    backgroundColor: "{colors.surface}"
+    borderColor: "{colors.divider}"
+    rounded: "{rounded.card}"
     padding: "24px"
 ---
 
@@ -410,28 +476,30 @@ Forest green is a functional accent within a pale, warm-neutral workspace. Front
 | Palette name | Token | Value | Role |
 | --- | --- | --- | --- |
 | Primary 700 | `primary` | `#1F6B4F` | Primary buttons, the customer top bar, the dark Jelajah collection cards, link text, focus rings |
-| Primary 500 | `primary-500` | `#59AC87` | Non-text only: the password-toggle icon on hover |
+| Primary 500 | `primary-500` | `#59AC87` | Non-text only: the password-toggle icon on hover and the shared field border on hover |
 | Primary 100 | `selection` | `#DDEDE5` | Primary button hover fill (with `primary` text), selected navigation, hover fills |
 | Accent | `accent` | `#F4A261` | The 1 px border of the Masuk database warning only |
-| Background | `canvas` | `#FAF8F3` | Page canvas |
+| Background | `canvas` | `#FFFFFF` | Page canvas. Deliberately deviates from the team palette. |
+| Workspace | `workspace-fill` | `#FFFFFF` | Restaurant workspace area, same as `canvas` |
 | Surface | `surface` | `#FFFFFF` | Cards, panels, dialogs, input fields |
 | Text Primary | `ink` | `#202522` | Default readable text |
 | Text Secondary | `muted` | `#69736D` | Supporting text, placeholders, inactive navigation |
 
 Derived from Primary 700: `primary-hover` `#2F7D5F` (Primary 700 mixed 28% toward Primary 500), `sidebar` `#EEF4F1` (Primary 700 at about 8% over white), `divider` `#D7E4DF` (Primary 700 at about 18% over white), and the `elevation.card-primary`, `elevation.card-primary-hover`, and `elevation.button-primary-hover` shadows. `scrim` and `elevation.card` derive from Text Primary.
 
-Contrast: white on `primary` 6.4:1; `primary` on `selection` 5.3:1; `primary` on `divider` 4.9:1; `primary-hover` 5.0:1 on `surface` and 4.7:1 on `canvas`; `muted` 4.9:1 on `surface` and 4.6:1 on `canvas`; `ink` 15.6:1 on `surface` and 14.7:1 on `canvas`.
+Contrast: white on `primary` 6.4:1; `primary` on `selection` 5.3:1; `primary` on `divider` 4.9:1; `primary-hover` 5.0:1 on `surface` and `canvas`; `muted` 4.9:1 on `surface` and `canvas`; `ink` 15.6:1 on `surface` and `canvas`.
 
 ### Primary
 - **Primary 700** (`primary`): primary actions, selected routes and filters, rescue prices, and meaningful operational emphasis.
-- **Primary hover** (`primary-hover`): the text and icon color of the shared text link on hover only. About 4.7:1 on `canvas` and 5.0:1 on `surface`. Never a fill. Primary 500 is never used for text.
-- **Primary 500** (`primary-500`): the hover color of the password-toggle icon only. About 2.7:1 on white, so it never carries text; the icon is `ink` at rest.
+- **Primary hover** (`primary-hover`): the text and icon color of the shared text link on hover only. About 5.0:1 on `canvas` and `surface`. Never a fill. Primary 500 is never used for text.
+- **Primary 500** (`primary-500`): the hover color of the password-toggle icon and of the shared field border (see Replate fields). About 2.7:1 on white, so it never carries text; the icon is `ink` at rest and the field border is `divider` at rest.
 - **Accent** (`accent`): the border of the Masuk database warning only. No other element uses it.
 
 ### Neutral
 - **Text Primary** (`ink`): default readable content and secondary button text; also the hover fill of the selected role-button, where white text reaches about 15.6:1.
 - **Text Secondary** (`muted`): metadata, subtitles, supporting explanations, and inactive navigation.
 - **Background** (`canvas`): the main window background.
+- **Workspace** (`workspace-fill`): the restaurant screens' work area background, the same white as `canvas`.
 - **Surface** (`surface`): cards, panels, dialogs, secondary buttons, the search input, the profile menu, and, on the green top bar, the white logo, icons, cart badge, profile circle, and focus ring.
 - **Pale Sage Sidebar** (`sidebar`): restaurant navigation rail.
 - **Primary 100** (`selection`): selected navigation, profile menu items on hover and keyboard focus, the profile circle on hover, the cart icon on hover (about 5.3:1 on `primary`), and the Jelajah collection cards and every primary button on hover, where `primary` icon and label reach about 5.3:1.
@@ -470,7 +538,7 @@ Shared pages use an inset of (32) and vertical section gaps of (24). The rhythm 
 
 Customer navigation is a fixed top bar (72 high) above the page: logo, search, cart, and profile; see Top Bar under Components. Restaurant navigation occupies a dedicated rail (208 wide). Role-specific route names and exact shell topology are defined in `docs/superpowers/specs/2026-10-19-desktop-surface-contract.md`.
 
-Jelajah centers its content at most (1200) wide (inset 32 on narrower windows) and scrolls vertically under the fixed top bar. Its vertical rhythm is one section gap (24) from the top bar to the banner, from the banner to the collection cards, and from the collection cards to the "Jelajahi Menu" title; (16) from the title to the first listing card, the same as between cards; and (32) below the page. Collection and search result pages use the same column and `Ui.Spacing` constants: (24) from the top bar to the back link, (16) from the back link to the title, (16) from the title to the first card, and (32) below the page. Full-page menu/listing forms are left-aligned (640 wide), food details use (680), and the production editor uses (760). Data grids combine flexible description columns with consistent fixed action, time, and price columns. Dashboard numeric columns align right.
+Jelajah centers its content at most (1200) wide (inset 32 on narrower windows) and scrolls vertically under the fixed top bar. Its vertical rhythm is one section gap (24) from the top bar to the banner, from the banner to the collection cards, and from the collection cards to the "Jelajahi Menu" title; (16) from the title to the first listing card, the same as between cards; and (32) below the page. Collection and search result pages use the same column and `Ui.Spacing` constants: (24) from the top bar to the back link, (16) from the back link to the title, (16) from the title to the first card, and (32) below the page. Full-page menu/listing forms are left-aligned (640 wide), food details use (680), and the production editor is one form card at most (860) wide (see Catatan produksi). Data grids combine flexible description columns with consistent fixed action, time, and price columns. Dashboard numeric columns align right.
 
 ### Auth surface
 
@@ -503,7 +571,7 @@ The current build applies `elevation.card` to the auth-card, the profile menu, t
 
 **The one motion exception.** New animations and transitions are not allowed. The single exception is the hover motion of the Jelajah collection cards (`motion.collection-card-hover`) and, extended from it, of the compact primary buttons and the compact danger button (`motion.primary-button-hover`): scale 1.03 from the center plus the fill, text, icon, and shadow change, all over 120 ms ease-out, and back the same way. Full-width primary buttons share the color and shadow change over the same 120 ms but never scale. Reduced-motion system settings are not read (Avalonia exposes no portable setting), so the transition always runs; it is short and never moves layout. The restaurant dashboard metric cards keep their earlier 180 ms hover transition, which predates this rule; nothing else animates.
 
-Native Avalonia Fluent controls retain their theme behavior; this document does not override native popups or interaction states. The exceptions are the thin scrollbar of the auth scroll area, described under Auth surface, and keyboard focus on customer routes, described under Focus.
+Native Avalonia Fluent controls retain their theme behavior; this document does not override native popups or interaction states. The exceptions are the thin scrollbar of the auth scroll area, described under Auth surface, keyboard focus on customer routes, described under Focus, and the Replate fields with their select list and calendar popups, described under Inputs / Fields.
 
 ## Shapes
 
@@ -544,6 +612,17 @@ Visible labels sit above native TextBox, NumericUpDown, ComboBox, DatePicker, an
 - **Multiline fields:** a TextBox that accepts returns (Deskripsi on Daftar and in the menu editor) aligns its placeholder and text to the top instead, with padding (10, 10, 6, 5.5): the top padding equals the left. The same shared rule applies it.
 - **Placeholder:** every TextBox carries an Indonesian placeholder following "Masukkan ..." (for example "Masukkan email Anda", "Masukkan kata sandi Anda", "Masukkan nama restoran", "Masukkan harga"); the top bar search field reads "Mulai cari menu atau restoran". Placeholder text uses `muted` at full opacity (about 4.9:1 on white), disappears once the field has content, and has no other effect. No em dashes and no exclamation marks.
 
+### Replate fields
+One shared field style (`Ui.cs`, registered app-wide by `Ui.UseInputs`) replaces the native Fluent chrome where a screen opts in. It is used on Catatan produksi only; other restaurant forms can adopt it without new styles.
+
+- **Frame** (`FieldFrame`, class `field` on its face Border): `surface` fill, 1 px `divider` border, `rounded.field` (12), height 48, the text inset 16 from each side, `ink` text, `muted` placeholder. The inner native control (TextBox, NumericUpDown, or ComboBox, class `bare` or the select theme) draws no border, fill, or focus visual of its own.
+- **States:** hover turns the border `primary-500`; focus from the keyboard or a click turns it `primary` (Primary 700); keyboard focus (Tab or arrow keys) also shows the shared focus ring (2 px `primary`, 2 outside the field, radius 16), never after a click. There is no native black focus box. An invalid field keeps a `danger` border in every state, with the inline error under it. No shadow, no transition.
+- **Factories:** `Ui.TextField(TextBox)`, `Ui.NumberField(NumericUpDown)`, `Ui.SelectField(ComboBox)`, plus the `DateField` and `NumberStepper` components below, and `FieldGrid` for the two-column layout.
+- **Select** (`Ui.SelectField`, `Ui.SelectTheme`): the selected value or the `muted` placeholder on the left and a thin outline chevron on the right (20, Path on a 24 grid, stroke 1.75, round caps, `muted`). The list opens 4 under the field, as wide as the field: a `surface` sheet with a 1 px `divider` border, `rounded.field`, padding 4, at most 280 high and scrolling vertically. Options (`Ui.OptionTheme`) are 14 `ink` rows, padding 12 by 10, radius 8; hover and keyboard focus use the `selection` fill with `primary` text, press uses `divider`, and the selected option is semibold. While the list is open the field keeps the `primary` border. Keyboard behavior is the native ComboBox (arrows, Enter, Esc, Alt+Down).
+- **Date** (`DateField`): one field showing the date in Indonesian ("22 November 2026", format `d MMMM yyyy`, culture `id-ID`) with a 20 outline calendar icon in `muted` on the right. Click, Enter, Space, F4, or Alt+Down opens a small calendar (the native Avalonia Calendar) 4 under the field, in the same sheet as the select list with padding 8. The whole calendar is `surface` white inside the sheet: the native grey day-grid layer, header band, and navigation hover are replaced, so no grey remains. Day names are Indonesian (Sen, Sel, Rab, Kam, Jum, Sab, Min, Monday first) at 12 in `muted`, and the month header always reads in Indonesian (`MMMM yyyy`, `id-ID`). Days are 36 circles with nothing clipping them: `ink` text, adjacent months `muted` at 60% (paler, with the same hover as other days), today (when not selected) a thin `primary` ring without fill and semibold `primary` text, hover `selection` with medium `primary` text (about 5.3:1) and no border, the circle keeping its size and position, press `divider`, the selected day a `primary` fill with semibold white text that stays the same on hover; keyboard focus (`:focus-visible`) draws a `primary` ring on the circle. Months (in Indonesian: Jan, Feb, Mar, Apr, Mei, Jun, Jul, Agu, Sep, Okt, Nov, Des) and years use the same states on 60 by 48 rounded cells with radius 8: hover `selection` with medium `primary` text and no border, the cell keeping its size and position, the shown month or year a `primary` fill with white text and no outline, and the current month or year (when not shown) a thin `primary` ring without fill. Day, month, and year cells have no border at rest; only the today or current ring and keyboard focus draw one. The month title is transparent with `ink` text and hover `selection`; the previous and next arrows are 32 round icon buttons (`Ui.Round`) with a round `selection` hover and no square behind them. Picking a day closes the calendar and returns focus to the field; arrow keys move the date, Enter or Esc closes. The value and the latest selectable date (31 December of the current year, as the old DatePicker year limit) are unchanged.
+- **Stepper** (`NumberStepper`): the shared round `stepper-button` minus and plus (36, from `QuantityStepper.StepButton`) 12 left and right of a centered number field. The native spinner is hidden. Minus is disabled at the field minimum and plus at its maximum; typed numbers and the inline validation are unchanged.
+- **Layout** (`FieldGrid`): two equal columns 16 apart with rows 16 apart, so second-row fields are exactly as wide as the fields above them; when the window is 900 wide or less (below the 1040 minimum, so only on a future smaller window) the fields stack in one column. Labels sit 8 above the field (14 semibold `ink`).
+
 ### Auth controls
 These three components exist only on the auth surface. Their states are documented here because they replace the native Fluent look; they use only the color tokens above, with no blur, glow, gradient, or animation.
 
@@ -557,7 +636,7 @@ Customer routes (top bar, profile menu, Jelajah, Keranjang, Pesanan saya, detail
 - **Ring:** buttons and collection cards show a 2 px ring 2 outside their edge, following their corner radius: `primary` on light surfaces, white (`surface`) on the green top bar. The control's own border, fill, and size do not change. Primary buttons keep a visible ring because it sits outside the green fill.
 - **Menu items:** profile menu items show the `selection` fill with `primary` text instead of a ring, the same as hover. Opened with the mouse, the menu focuses Pesanan saya without showing it; opened with Enter or Space, Pesanan saya shows the fill.
 - **Other controls:** ComboBox uses a `primary` border on `:focus-visible`. Text fields keep their native focus border, except the top bar search, which shows the white ring while focused.
-- The auth surface and restaurant routes keep their current focus treatment.
+- The auth surface and restaurant routes keep their current focus treatment, except Menu restoran, Penawaran surplus, and Catatan produksi, which use the shared focus style; on Catatan produksi the fields show the field ring described under Replate fields.
 
 ### Logo
 The brand is shown only as a bitmap logo; there is no text wordmark. `Assets/logo-white.webp` (white, transparent background) sits on `primary` surfaces, and `Assets/logo-green.webp` (green, transparent background) sits on light surfaces. Both are 1500 by 347 and shown with Uniform stretch at a fixed height; the width follows the bitmap ratio and is never set, so the logo is never distorted. Heights: 36 in the customer top bar, 32 in the restaurant rail (so it fits the 208 rail), and 44 on the auth surface. The logo carries the automation name "Replate".
@@ -594,7 +673,7 @@ The first block on Jelajah: `rounded.card` corners, no border, no shadow, center
 - **Text block:** overlaid on the empty top-left of the image, left inset (40), centered vertically in the area above the cabinets (which start at 87.8% of the height). Its right edge stays at or left of 45% of the banner width; the illustration's nearest object starts at 46.2% and the empty area reaches about 55% at the top, so the text never covers the illustration at any size.
 
 ### Collection Card
-Five equal cards in one row, (24) under the banner and (24) above the section title, (16) apart: Termurah (tag icon), Segera berakhir (clock), Makanan utama (fork and spoon), Roti & kue (bread), Buah & sayur (leaf). Each is a button styled as a card: `primary` fill, `rounded.card`, `elevation.card-primary`, no border, height (96); a 24 line icon in white (`surface`, Path geometry, stroke 1.75, round caps) above a 14 white label (about 6.4:1 on `primary`). The icon stroke follows the card's text color. Hover: the fill changes to `selection` and the icon and label to `primary` (about 5.3:1), the shadow deepens to `elevation.card-primary-hover`, and the card scales to 1.03 from its center as a render transform, so no other card moves or resizes; the hovered card sits above its neighbours (ZIndex 1), and the 16 gap keeps the grown card clear of them. Pressing changes the fill to `divider` (`primary` text about 4.9:1). Leaving returns to `primary`, white, scale 1.0, and the resting shadow. Color, scale, and shadow share the 120 ms ease-out `motion.collection-card-hover`, the only animation in the customer app. There is no selected state. Keyboard focus: the shared 2 px `primary` ring 2 outside the card, drawn on the canvas (about 6.0:1), never white on green; the ring is part of the card, so it scales and rises with it and is never covered. Enter or Space opens it. Each card is a link: it opens that collection's page (see Collection Page), and Jelajah itself always lists every available listing in the default order. There is no Semua card. At (1040) the cards narrow and stay in one row.
+Five equal cards in one row, (24) under the banner and (24) above the section title, (16) apart: Termurah (tag icon), Segera berakhir (clock), Makanan utama (fork and spoon), Roti & kue (bread), Buah & sayur (leaf). Each is a button styled as a card: `primary` fill, `rounded.card`, `elevation.card-primary`, no border, height (96); a 24 line icon in white (`surface`, Path geometry, stroke 1.75, round caps) above a 14 white label (about 6.4:1 on `primary`). The icon stroke follows the card's text color. Hover: the fill changes to `selection` and the icon and label to `primary` (about 5.3:1), the shadow deepens to `elevation.card-primary-hover`, and the card scales to 1.03 from its center as a render transform, so no other card moves or resizes; the hovered card sits above its neighbours (ZIndex 1), and the 16 gap keeps the grown card clear of them. Pressing changes the fill to `divider` (`primary` text about 4.9:1). Leaving returns to `primary`, white, scale 1.0, and the resting shadow. Color, scale, and shadow share the 120 ms ease-out `motion.collection-card-hover`, the only animation in the customer app. There is no selected state. Keyboard focus: the shared 2 px `primary` ring 2 outside the card, drawn on the canvas (about 6.4:1), never white on green; the ring is part of the card, so it scales and rises with it and is never covered. Enter or Space opens it. Each card is a link: it opens that collection's page (see Collection Page), and Jelajah itself always lists every available listing in the default order. There is no Semua card. At (1040) the cards narrow and stay in one row.
 
 ### Collection Page
 One reused view (`CollectionView.cs`) for the five collections and for search results, under the same top bar and in the same content column as Jelajah (at most 1200, inset 32), with no banner. From top to bottom:
@@ -643,7 +722,7 @@ The customer cart page (`CartView.cs`), under the same top bar and in the same c
 No animation other than the shared primary button hover; no blur, glow, or gradient. No em dashes in its text.
 
 ### Pesanan saya
-The customer orders page (`OrdersView`, customer part in `CustomerOrdersView.cs`), under the same top bar and in the same content column as Keranjang (at most 1200, centered, inset 32, top 24). From top to bottom, (16) apart (`Ui.Spacing.Related`): the shared "Kembali ke Jelajah" text link (`CollectionView.CreateBackLink`), the title "Pesanan saya" (32, bold, `ink`, the size of "Keranjang" and "Jelajahi Menu"), the status filter, and the list. Only the list scrolls (vertical only), with the Keranjang 24 inset so card shadows are not cut; it ends (32) under the last card. The restaurant orders page keeps its own table and dropdown.
+The customer orders page (`OrdersView`, customer part in `CustomerOrdersView.cs`), under the same top bar and in the same content column as Keranjang (at most 1200, centered, inset 32, top 24). From top to bottom, (16) apart (`Ui.Spacing.Related`): the shared "Kembali ke Jelajah" text link (`CollectionView.CreateBackLink`), the title "Pesanan saya" (32, bold, `ink`, the size of "Keranjang" and "Jelajahi Menu"), the status filter, and the list. Only the list scrolls (vertical only), with the Keranjang 24 inset so card shadows are not cut; it ends (32) under the last card. The restaurant orders page keeps its own table; its status filter is pills too (see Pesanan restoran).
 
 **Status filter** (`order-filter`): one row of four pill buttons, 8 apart: Semua, Aktif, Selesai, Dibatalkan; pick one, Semua by default. Each pill is 36 high with `CornerRadius` 18 (half its height), padding 0 by 16, 14 text, no border. At rest: transparent with `muted` text; hover: `sidebar` fill with `ink` text; pressed: `divider` fill. Selected (`order-filter-selected`): `selection` fill with semibold `primary` text, also on hover; pressed `divider`. Every fill is painted on the pill itself (hover follows the shape): no box outside the pill, no shadow, no scale, no transition. The shared `:focus-visible` ring follows the pill. The groups map the existing `OrderStatus` values: Aktif is Reserved (Menunggu Konfirmasi), Confirmed (Diproses), and ReadyForPickup (Siap Diambil); Selesai is Completed; Dibatalkan is Cancelled; Semua shows all five. The filter row is hidden while the customer has no orders at all.
 
@@ -656,6 +735,18 @@ The customer orders page (`OrdersView`, customer part in `CustomerOrdersView.cs`
 **Empty states:** both are centered under the header with the 80 bold outline receipt icon (`Ui.EmptyIcon(Ui.ReceiptOutline)`, stroke 6.4, `primary`, see Outline icons) and a 22 semibold `ink` title. With no orders at all: "Belum ada pesanan", "Pesananmu akan muncul di sini setelah kamu memesan." (15, `muted`), and the compact primary "Jelajahi menu" (opens Jelajah); the filter row is hidden. When the chosen filter has no orders: "Tidak ada pesanan di sini" and, 24 under the title and centered, the compact primary "Lihat semua pesanan" (the same shared button as "Jelajahi menu" on the empty cart), which selects Semua again.
 
 Checkout is unchanged: ordering the last restaurant in the cart still opens the detail page of the new order with "Pesanan berhasil dibuat.", and the new orders sit at the top of Pesanan saya. At (1040 × 720) and (1920 × 1080) nothing scrolls sideways or is cut off. No animation; no blur, glow, or gradient. No em dashes in its text.
+
+### Pesanan restoran
+The restaurant orders page (`OrdersView`, restaurant part in `CustomerViews.cs`) keeps its heading and order table. Under the heading, the label "Status pesanan" (14 semibold, `ink`) and, (8) under it, the status filter (`status-filter`); the table follows (24) under the filter. The filter is one pill per status, in this order: Aktif (default), Semua, Selesai, Dibatalkan; pick one. The pills come from the same shared helper as the Pesanan saya filter (`Ui.Pill` and `Ui.PillStyles` in `Ui.cs`): 36 high, `CornerRadius` 18, padding 0 by 16, 14 text, 8 apart, with no shadow, scale, or transition, and the shared `:focus-visible` ring. Only the palette differs (`Ui.SolidPills`): at rest a `surface` fill with a 1 px `divider` border and `ink` text; hover `selection` fill with `primary` text; pressed `divider` fill; selected (`status-filter-selected`) a `primary` fill with semibold white text, also on hover and press. The pills sit in a wrap panel: when the width is short they move to the next line (8 apart), so nothing scrolls sideways at (1040 × 720) and (1920 × 1080). Each pill carries its label as its automation name and is reached with Tab and activated with Enter or Space. The mapping is unchanged: Aktif is every order that is neither Completed nor Cancelled, Selesai is Completed, Dibatalkan is Cancelled, Semua shows all. Other restaurant screens keep their native ComboBox controls, except the Menu field on Catatan produksi (see Replate fields).
+
+### Catatan produksi
+The restaurant production page (`ProductionView` in `RestaurantViews.cs`) keeps its heading, subtitle, and the "Ringkasan tanggal terpilih" table. Under the heading (24), one `restaurant-form-card` in the form area (at most 860 wide, left-aligned with the heading): `surface`, 1 px `divider` border, `rounded.card` (16), padding 24, no shadow. Inside, 24 apart:
+
+- **Fields:** the `FieldGrid` with Menu and Tanggal produksi on the first row and Diproduksi (porsi) and Terjual reguler (porsi) on the second, all Replate fields (select, date, and two steppers). Inline errors stay under their field in 14 `danger` text, with the field border in `danger`.
+- **Divider:** a thin `divider` rule.
+- **Footer:** on the left the summary block: "Terselamatkan" (12, `muted`), the rescued number (28, bold, `primary`) followed by " porsi" (14, `muted`) on one line, and "Bertambah setelah kode pengambilan diverifikasi." (14, `muted`); on the right, aligned with the card's bottom and right content edges, the shared compact primary button "Simpan catatan".
+
+Saving, validation, the default date and menu, and the summary numbers are unchanged. No horizontal scroll and no cut text at (1040 × 720) and (1920 × 1080). No animation other than the shared primary button hover; no blur, glow, or gradient. No em dashes in its text.
 
 ### Detail pesanan
 The customer order detail (`OrderDetailView`, customer part in `CustomerOrdersView.cs`), in the same content column (at most 1200, inset 32, top 24, 32 below), scrolling vertically as one page. From top to bottom, (16) apart: the shared text link "Kembali ke Pesanan saya" (opens Pesanan saya); the title "Detail pesanan" (32, bold, `ink`) with the status badge (16) beside it, vertically centered; (8) under it the existing status sentence (14, `muted`); then two columns, (24) apart, about 60% and 40% of the column (`3*,2*`). The minimum window (1040) already fits both, so the layout never stacks and never scrolls sideways. All cards are `order-detail-card` (`surface`, `rounded.card`, `elevation.card`, padding 24, no border), (16) apart.
@@ -671,7 +762,7 @@ No animation other than the shared primary and danger button hover; no blur, glo
 Shared operational rows use minimum heights (40 header / 64 body), while compact dashboard tables use (36 / 48). All use the divider token. Avoid wrapping each datum in a separate card.
 
 ### Cards
-Implemented on the auth surface, the profile menu, Jelajah (collection cards and listing cards), collection and search result pages (listing cards), Keranjang (item cards), Pesanan saya (order cards), the order detail page (items, pickup code, and restaurant cards), and the food dialog and checkout confirmation cards. A card is a white surface (`surface`) with `rounded.card` corners (the Jelajah collection cards are the one exception: a `primary` fill and the `elevation.card-primary` shadow, see Collection Card) and the `elevation.card` shadow. It has no border of any kind: no colored border, no accent stripe, and no thin outline. Separation comes from the shadow and the canvas around it. Use a card to hold one coherent unit of work, not to wrap each datum. Table and list row dividers are unchanged and stay as described under Lists and Tables.
+Implemented on the auth surface, the profile menu, Jelajah (collection cards and listing cards), collection and search result pages (listing cards), Keranjang (item cards), Pesanan saya (order cards), the order detail page (items, pickup code, and restaurant cards), and the food dialog and checkout confirmation cards. A card is a white surface (`surface`) with `rounded.card` corners (the Jelajah collection cards are the one exception: a `primary` fill and the `elevation.card-primary` shadow, see Collection Card) and the `elevation.card` shadow. It has no border of any kind: no colored border, no accent stripe, and no thin outline. Separation comes from the shadow and the canvas around it. Restaurant workspace cards (the menu and listing rows, the menu editor panels, and the Catatan produksi `restaurant-form-card`) are the exception: flat, with a 1 px `divider` border instead of the shadow. Use a card to hold one coherent unit of work, not to wrap each datum. Table and list row dividers are unchanged and stay as described under Lists and Tables.
 
 ### Auth Card
 The auth-card is the card used on the auth surface. It holds the sign-in or registration form: the bold auth title, visible field labels, inputs, inline errors, the primary action, and the link to switch between Masuk and Daftar. It uses the card treatment with padding (32) and a width of (440), narrowing to no less than (360) to keep its gap from the plate. It is the only card on the auth surface.
@@ -713,4 +804,4 @@ Empty lists preserve a direct recovery path when applicable. Operational errors 
 - **Don't** pair Space Grotesk with Instrument Serif.
 - **Don't** add grain or noise overlays on gradients.
 
-Source evidence: `src/Replate.Desktop/Ui.cs` (shared primitives), `MainWindow.cs` (font, palette, shell), `CustomerTopBar.cs` (customer top bar and profile menu), `MarketplaceView.cs` and `MarketplaceBanner.cs` (Jelajah banner, collection cards), `ListingFeed.cs` (listing cards, Tambah), `CollectionView.cs` (collection and search result pages and the shared back link), `ModalDialog.cs` (the shared overlay, scrim, close button, and focus cycle), `FoodDialog.cs` (the food dialog), `CheckoutDialog.cs` (the checkout confirmation), `QuantityStepper.cs` (the shared stepper), `CartView.cs` (Keranjang), `DashboardView.cs` (aligned data tables), `CustomerViews.cs` and `RestaurantViews.cs` (full-page forms and states), `AuthViews.cs` (auth surface, role-button, password-toggle, and time-field), and `Program.cs` (light FluentTheme). The photo asset `src/Replate.Desktop/Assets/auth-hero.png` is loaded by `AuthViews.cs`; the logos `logo-green.webp` and `logo-white.webp` are loaded once by `Ui.cs` and verified (source, height, bitmap ratio within 1%) in the top bar, the restaurant rail, and the auth surface. The `elevation.card`, `elevation.card-primary`, `elevation.card-primary-hover`, `elevation.button-primary-hover`, `motion.collection-card-hover`, `motion.primary-button-hover`, `rounded.card`, and `rounded.full` tokens, the auth-card, role-button, password-toggle, and time-field components, and the auth surface layout and thin scrollbar are implemented and verified by `--verify-ui` (`AuthVerification.cs`; input centering and placeholders by `InputVerification.cs`) at (1360 × 940), (1040 × 720), (1283 × 780), and (1920 × 1080). The top bar, profile menu, and their focus behavior are verified by `TopBarVerification.cs`, the Jelajah banner, collection cards, section title, rhythm, and listing cards by `MarketplaceVerification.cs`, at (1040 × 720), (1360 × 940), and (1920 × 1080), the collection and search result pages by `CollectionVerification.cs` at (1040 × 720) and (1920 × 1080), the food dialog by `FoodDialogVerification.cs` at (1040 × 720) and (1920 × 1080), and Keranjang (header, restaurant group headings with only the name and note, the group divider and footer with the total on the left and Pesan on the right aligned with the card edges, 32 between groups, no summary card, item cards, stepper and stock limit, remove, unavailable items per group, the checkout confirmation content, closing, focus, failed save and single-restaurant order, empty state, alignment with Jelajah, no overlap or horizontal scroll, the confirmation fully visible) by `CartVerification.cs` at (1040 × 720) and (1920 × 1080). The primary button states (normal, hover, pressed, disabled, compact scale, unmoved layout, no horizontal scroll) are verified by `UiVerification.cs` on Masuk, Daftar, Tambah, Tambah ke keranjang, and the owner's Tambah menu, at (1040 × 720) and (1920 × 1080); the hover shape (no tint outside the rounded or round shape, the hover fill inside, half-size radius on round buttons, no shadow or scale on round and icon buttons, an unclipped compact shadow) is verified by a `RenderTargetBitmap` pixel check (`UiVerification.HoverShape`) on Tambah, Tambah ke keranjang, the dialog plus, minus, and close, and the Keranjang plus, minus, trash, and Pesan. The shared text link (`UiVerification.TextLinks`) is verified on the collection page, search results, and Keranjang at (1040 × 720) and (1920 × 1080): transparent fill, border, and pixels behind the link in hover and pressed (each sampled pixel outside the arrow and text matches the canvas with the link hidden), `primary-hover` text and arrow on hover at 4.5:1 or more on the canvas, `primary` at rest and pressed, no shadow, scale, or underline, at least 32 high, the `:focus-visible` ring, and no horizontal scroll. The empty-state outline icons (`UiVerification.EmptyIcon`) are verified on the empty Keranjang and the empty Pesanan saya at (1040 × 720) and (1920 × 1080): 80 square, a stroke of 8% with round caps and joins and no fill, the `primary` token, strokes inside the box and no clipping, centered in the empty state, rendered pixels in `primary`, and no horizontal scroll; the top bar cart keeps its original line icon (`CustomerTopBar.CartIcon`, 24, stroke 1.75) and its 44 hit area (`UiVerification.NavbarCart`). The filter-empty "Lihat semua pesanan" (`UiVerification.FilterEmptyButton`) is verified at (1040 × 720) and (1920 × 1080): the shared compact primary button (filled, not transparent), at least 40 high, 24 under the title and centered, the primary hover, pressed, and focus states, the hover shape, and no horizontal scroll. Product guardrails come from `PRODUCT.md`. The sidecar contains browser-panel translations of five native patterns; its HTML/CSS focus outlines, native-control approximations, and synthesized tonal ramps are preview metadata, not additional application tokens or verified native state styles. No HTML/CSS implementation or iOS/Android behavior is claimed.
+Source evidence: `src/Replate.Desktop/Ui.cs` (shared primitives), `MainWindow.cs` (font, palette, shell), `CustomerTopBar.cs` (customer top bar and profile menu), `MarketplaceView.cs` and `MarketplaceBanner.cs` (Jelajah banner, collection cards), `ListingFeed.cs` (listing cards, Tambah), `CollectionView.cs` (collection and search result pages and the shared back link), `ModalDialog.cs` (the shared overlay, scrim, close button, and focus cycle), `FoodDialog.cs` (the food dialog), `CheckoutDialog.cs` (the checkout confirmation), `QuantityStepper.cs` (the shared stepper), `CartView.cs` (Keranjang), `DashboardView.cs` (aligned data tables), `CustomerViews.cs` and `RestaurantViews.cs` (full-page forms and states), `AuthViews.cs` (auth surface, role-button, password-toggle, and time-field), and `Program.cs` (light FluentTheme). The photo asset `src/Replate.Desktop/Assets/auth-hero.png` is loaded by `AuthViews.cs`; the logos `logo-green.webp` and `logo-white.webp` are loaded once by `Ui.cs` and verified (source, height, bitmap ratio within 1%) in the top bar, the restaurant rail, and the auth surface. The `elevation.card`, `elevation.card-primary`, `elevation.card-primary-hover`, `elevation.button-primary-hover`, `motion.collection-card-hover`, `motion.primary-button-hover`, `rounded.card`, and `rounded.full` tokens, the auth-card, role-button, password-toggle, and time-field components, and the auth surface layout and thin scrollbar are implemented and verified by `--verify-ui` (`AuthVerification.cs`; input centering and placeholders by `InputVerification.cs`) at (1360 × 940), (1040 × 720), (1283 × 780), and (1920 × 1080). The top bar, profile menu, and their focus behavior are verified by `TopBarVerification.cs`, the Jelajah banner, collection cards, section title, rhythm, and listing cards by `MarketplaceVerification.cs`, at (1040 × 720), (1360 × 940), and (1920 × 1080), the collection and search result pages by `CollectionVerification.cs` at (1040 × 720) and (1920 × 1080), the food dialog by `FoodDialogVerification.cs` at (1040 × 720) and (1920 × 1080), and Keranjang (header, restaurant group headings with only the name and note, the group divider and footer with the total on the left and Pesan on the right aligned with the card edges, 32 between groups, no summary card, item cards, stepper and stock limit, remove, unavailable items per group, the checkout confirmation content, closing, focus, failed save and single-restaurant order, empty state, alignment with Jelajah, no overlap or horizontal scroll, the confirmation fully visible) by `CartVerification.cs` at (1040 × 720) and (1920 × 1080). The primary button states (normal, hover, pressed, disabled, compact scale, unmoved layout, no horizontal scroll) are verified by `UiVerification.cs` on Masuk, Daftar, Tambah, Tambah ke keranjang, and the owner's Tambah menu, at (1040 × 720) and (1920 × 1080); the hover shape (no tint outside the rounded or round shape, the hover fill inside, half-size radius on round buttons, no shadow or scale on round and icon buttons, an unclipped compact shadow) is verified by a `RenderTargetBitmap` pixel check (`UiVerification.HoverShape`) on Tambah, Tambah ke keranjang, the dialog plus, minus, and close, and the Keranjang plus, minus, trash, and Pesan. The shared text link (`UiVerification.TextLinks`) is verified on the collection page, search results, and Keranjang at (1040 × 720) and (1920 × 1080): transparent fill, border, and pixels behind the link in hover and pressed (each sampled pixel outside the arrow and text matches the canvas with the link hidden), `primary-hover` text and arrow on hover at 4.5:1 or more on the canvas, `primary` at rest and pressed, no shadow, scale, or underline, at least 32 high, the `:focus-visible` ring, and no horizontal scroll. The empty-state outline icons (`UiVerification.EmptyIcon`) are verified on the empty Keranjang and the empty Pesanan saya at (1040 × 720) and (1920 × 1080): 80 square, a stroke of 8% with round caps and joins and no fill, the `primary` token, strokes inside the box and no clipping, centered in the empty state, rendered pixels in `primary`, and no horizontal scroll; the top bar cart keeps its original line icon (`CustomerTopBar.CartIcon`, 24, stroke 1.75) and its 44 hit area (`UiVerification.NavbarCart`). The Catatan produksi fields (`UiVerification.ProductionFields`) are verified at (1040 × 720) and (1920 × 1080): white fields with a 1 px `divider` border, radius 12 and height 48, the `primary-500` hover border, the `primary` focus border with the 2 px ring on keyboard focus only and no native focus box, the select chevron, list sheet, semibold selected option and `selection` hover, the Indonesian date text, the calendar opening on the selected date and picking a day, the calendar look (`UiVerification.CalendarLook`: a white calendar and header with no default grey pixels, Indonesian day names and month header, a round `selection` day hover with `primary` text at 4.5:1 or more, no border, an unmoved circle, and white square corners, the paler adjacent-month days with the same hover, the unchanged selected day on hover with no outline, the today ring, the round arrow hovers, and in the month and year views no grey pixels, Indonesian month names, and a borderless rounded hover that keeps the cell size), both steppers changing the number and holding their minimum and maximum, the unchanged sold-over-produced error with the `danger` border, two equal columns 16 apart with labels 8 above, one column at 900 or less, the form card, the summary block, Simpan catatan in the bottom right, 24 under the heading, no horizontal scroll, and no cut text. The filter-empty "Lihat semua pesanan" (`UiVerification.FilterEmptyButton`) is verified at (1040 × 720) and (1920 × 1080): the shared compact primary button (filled, not transparent), at least 40 high, 24 under the title and centered, the primary hover, pressed, and focus states, the hover shape, and no horizontal scroll. Product guardrails come from `PRODUCT.md`. The sidecar contains browser-panel translations of five native patterns; its HTML/CSS focus outlines, native-control approximations, and synthesized tonal ramps are preview metadata, not additional application tokens or verified native state styles. No HTML/CSS implementation or iOS/Android behavior is claimed.

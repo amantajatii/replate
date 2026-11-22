@@ -85,7 +85,7 @@ internal sealed class ListingFeed
         var photo = new MenuPhotoView(session.PhotoPath(listing.Menu.ImageUrl), 96, 96) { Margin = new Thickness(0, 0, 16, 0) };
         var card = new Border
         {
-            Child = Ui.Columns("112,*,136,120,90", photo, description, pickup, price, add),
+            Child = Ui.Columns("112,*,136,120,Auto", photo, description, pickup, price, add),
             Background = Brushes.White, CornerRadius = new CornerRadius(16), BoxShadow = MarketplaceView.CardShadow, Padding = new Thickness(20),
             Cursor = new Cursor(StandardCursorType.Hand)
         };

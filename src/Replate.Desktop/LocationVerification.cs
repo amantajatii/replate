@@ -157,6 +157,11 @@ internal static class LocationVerification
         session.AsOwner();
         window.ShowDashboard();
         await Settle();
+        Click(window.GetVisualDescendants().OfType<Button>().Single(button => button.Content is "Ubah profil"));
+        await Settle();
+        Ensure(window.CurrentPage is RestaurantProfileView, "Dashboard opens the same mapped profile");
+        window.ShowDashboard();
+        await Settle();
         Click(window.GetVisualDescendants().OfType<Button>().Single(button => AutomationProperties.GetName(button) == "Profil"));
         await Settle();
         var profile = window.CurrentPage as RestaurantProfileView ?? throw new InvalidOperationException("Owner sidebar opens Profil");

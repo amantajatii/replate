@@ -152,6 +152,7 @@ internal static class StateVerification
         var remotePath = Path.Combine(directory, "remote-state.json");
         var remoteSession = new DemoSession(remotePath).AsCustomer();
         var remoteRestaurant = new Replate.Domain.Entities.Restaurant { Name = "Restoran dari Supabase", Address = "Alamat pengambilan" };
+        remoteRestaurant.SetLocation(VerificationGeoFakes.GeocodedPoint);
         var remoteMenu = new Replate.Domain.Entities.Menu
         {
             Restaurant = remoteRestaurant, RestaurantId = remoteRestaurant.Id, Name = "Menu bersama",
@@ -168,8 +169,14 @@ internal static class StateVerification
         remoteSession = new DemoSession(remotePath).AsCustomer();
         Ensure(remoteSession.Cart.GroupByRestaurant().Single().RestaurantId == remoteRestaurant.Id &&
             remoteSession.RestaurantLine(remoteRestaurant.Id).Contains(remoteRestaurant.Address) &&
-            remoteSession.FindRestaurant(remoteRestaurant.Id)?.Owner is null,
-            "Imported restaurant and cart survive restart without creating a local owner");
+            remoteSession.FindRestaurant(remoteRestaurant.Id) is { Owner: null } imported &&
+            imported.Location == VerificationGeoFakes.GeocodedPoint,
+            "Imported restaurant, coordinates and cart survive restart without creating a local owner");
+        remoteRestaurant.Address = "Alamat baru tanpa koordinat";
+        remoteRestaurant.SetLocation(null);
+        remoteSession.ApplySharedListings([remoteListing]);
+        Ensure(remoteSession.FindRestaurant(remoteRestaurant.Id) is { Location: null } updated && updated.Address == remoteRestaurant.Address,
+            "Shared listing with a new address drops the old restaurant coordinates");
         Console.WriteLine("All Replate desktop state checks passed.");
     }
 

@@ -1,4 +1,7 @@
 using System.Text.Json.Nodes;
+using System.Text.Json;
+using System.Net;
+using System.Net.Sockets;
 using Replate.Desktop.Data;
 using Replate.Domain.Services;
 
@@ -23,9 +26,51 @@ internal static class LocationStateVerification
             await VerifyProfileRollbackAsync(directory.FullName);
             await VerifyLocationProvidersAsync(Path.Combine(directory.FullName, "providers.json"));
             await BrowserLocationVerification.RunAsync();
+            await VerifyCatalogRpcAsync();
         }
         finally { directory.Delete(true); }
         Console.WriteLine("All Replate location state checks passed.");
+    }
+
+    private static async Task VerifyCatalogRpcAsync()
+    {
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var listener = new HttpListener();
+        using (var port = new TcpListener(IPAddress.Loopback, 0))
+        {
+            port.Start();
+            listener.Prefixes.Add($"http://127.0.0.1:{((IPEndPoint)port.LocalEndpoint).Port}/");
+        }
+        listener.Start();
+        var owner = new SupabaseAuth.Identity(Guid.NewGuid(), "pemilik@example.test", null);
+        var session = new SupabaseAuth.Session(new Uri(listener.Prefixes.Single()), "fake-publishable-key", owner, "fake-owner-token");
+        var restaurant = Guid.NewGuid();
+        var point = VerificationGeoFakes.GeocodedPoint;
+        var profile = new RestaurantProfile("Dapur Bumi", "Jl. Malioboro", "0274 555 0101",
+            new TimeOnly(9, 0), new TimeOnly(21, 0));
+
+        async Task CheckCall(Task call, string rpc, bool hasPoint)
+        {
+            var context = await listener.GetContextAsync().WaitAsync(deadline.Token);
+            using var payload = await JsonDocument.ParseAsync(context.Request.InputStream, cancellationToken: deadline.Token);
+            var body = payload.RootElement;
+            var latitude = body.GetProperty("p_latitude");
+            var longitude = body.GetProperty("p_longitude");
+            Ensure(context.Request.RawUrl == "/rest/v1/rpc/" + rpc && context.Request.HttpMethod == "POST" &&
+                context.Request.Headers["Authorization"] == "Bearer fake-owner-token" &&
+                body.GetProperty("p_restaurant_id").GetGuid() == restaurant &&
+                (hasPoint ? latitude.GetDouble() == point.Latitude && longitude.GetDouble() == point.Longitude
+                    : latitude.ValueKind == JsonValueKind.Null && longitude.ValueKind == JsonValueKind.Null),
+                "Catalog RPC uses owner authentication and serializes the coordinate pair");
+            context.Response.StatusCode = 204;
+            context.Response.Close();
+            await call.WaitAsync(deadline.Token);
+        }
+
+        await CheckCall(SupabaseCatalog.SaveRestaurantAsync(session, restaurant, profile, point), "replate_save_restaurant_profile", true);
+        await CheckCall(SupabaseCatalog.SaveRestaurantAsync(session, restaurant, profile), "replate_save_restaurant_profile", false);
+        await CheckCall(SupabaseCatalog.SaveRestaurantLocationAsync(session, restaurant, point), "replate_save_restaurant_location", true);
+        Console.WriteLine("Replate restaurant catalog RPC payload checks passed.");
     }
 
     private static async Task VerifyCustomerAsync(DemoSession session)

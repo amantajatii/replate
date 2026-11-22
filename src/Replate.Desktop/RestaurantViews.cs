@@ -17,7 +17,7 @@ public sealed class MenusView : UserControl
         Background = Ui.WorkspaceFill;
         Styles.Add(Ui.FocusStyles());
         var list = Ui.Stack(Ui.Spacing.Related);
-        foreach (var menu in session.Restaurant.Menus)
+        foreach (var menu in session.RestaurantMenus)
         {
             var description = Ui.Text(menu.Description, 13, Ui.Muted);
             description.MaxLines = 2;
@@ -388,43 +388,56 @@ public sealed class ListingEditorView : UserControl
 
 public sealed class ProductionView : UserControl
 {
+    internal const string RescuedLabel = "Terselamatkan";
+    internal const string RescuedNoteText = "Bertambah setelah kode pengambilan diverifikasi.";
     internal ComboBox MenuInput { get; private set; } = null!;
-    internal DatePicker DateInput { get; private set; } = null!;
+    internal DateField DateInput { get; private set; } = null!;
     internal NumericUpDown ProducedInput { get; private set; } = null!;
     internal NumericUpDown SoldInput { get; private set; } = null!;
+    internal NumberStepper ProducedStepper { get; private set; } = null!;
+    internal NumberStepper SoldStepper { get; private set; } = null!;
     internal Button SaveButton { get; private set; } = null!;
+    internal Border FormCard { get; private set; } = null!;
+    internal FieldGrid Fields { get; private set; } = null!;
+    internal Avalonia.Controls.Documents.Run RescuedCount { get; private set; } = null!;
+    internal TextBlock RescuedNote { get; private set; } = null!;
+    internal Dictionary<string, FieldFrame> Frames { get; } = new();
     internal Dictionary<string, TextBlock> FieldErrors { get; } = new();
     internal ProductionView(MainWindow host, DemoSession session)
     {
-        var menus = session.Restaurant.Menus.ToList();
+        Background = Ui.WorkspaceFill;
+        Styles.Add(Ui.FocusStyles());
+        var menus = session.RestaurantMenus.ToList();
         if (menus.Count == 0)
         {
             Content = Ui.Page(Ui.Heading("Catatan produksi", "Tambahkan menu sebelum mencatat produksi."), Ui.Button("Tambah menu", () => host.ShowMenuEditor(), true)); return;
         }
-        DateInput = new DatePicker { SelectedDate = DateTimeOffset.Now, MaxYear = DateTimeOffset.Now };
-        MenuInput = new ComboBox { ItemsSource = menus, SelectedIndex = 0, MinWidth = 220, MinHeight = 42,
-            ItemTemplate = new Avalonia.Controls.Templates.FuncDataTemplate<Menu>((m, _) => Ui.Text(m?.Name ?? "")) };
+        DateInput = new DateField(new DateTime(DateTime.Today.Year, 12, 31)) { SelectedDate = DateTimeOffset.Now };
+        MenuInput = new ComboBox { ItemsSource = menus, SelectedIndex = 0, PlaceholderText = "Pilih menu",
+            ItemTemplate = new Avalonia.Controls.Templates.FuncDataTemplate<Menu>((m, _) => new TextBlock
+            { Text = m?.Name ?? "", VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis }) };
         ProducedInput = Ui.Number("Masukkan jumlah produksi"); SoldInput = Ui.Number("Masukkan jumlah terjual");
-        var rescued = Ui.SupportingText("");
+        ProducedStepper = new NumberStepper(ProducedInput, "Diproduksi (porsi)");
+        SoldStepper = new NumberStepper(SoldInput, "Terjual reguler (porsi)");
+        Frames["menu"] = Ui.SelectField(MenuInput); Frames["date"] = DateInput.Frame;
+        Frames["produced"] = ProducedStepper.Frame; Frames["sold"] = SoldStepper.Frame;
+        RescuedCount = new Avalonia.Controls.Documents.Run("0") { FontSize = 28, FontWeight = FontWeight.Bold, Foreground = Ui.Green };
         var table = Ui.Stack(0);
         var inputs = new Dictionary<string, Control>
         { ["menu"] = MenuInput, ["date"] = DateInput, ["produced"] = ProducedInput, ["sold"] = SoldInput };
-        var outlines = new Dictionary<string, Border>();
-        var red = Ui.Danger;
+        var shells = new Dictionary<string, Control>
+        { ["menu"] = Frames["menu"], ["date"] = DateInput, ["produced"] = ProducedStepper, ["sold"] = SoldStepper };
         var attempted = false;
         var refreshing = false;
         DateOnly? SelectedDate() => DateInput.SelectedDate is { } date ? DateOnly.FromDateTime(date.Date) : null;
         int? ReadNumber(NumericUpDown input) => int.TryParse(input.Text, input.ParsingNumberStyle, input.NumberFormat, out var value) ? value : null;
+        Control Target(Control input) => input is DateField date ? date.Face : input;
         Control Field(string key, string label)
         {
-            inputs[key].HorizontalAlignment = inputs[key] is DatePicker or TimePicker ? HorizontalAlignment.Left : HorizontalAlignment.Stretch;
             var error = Ui.FieldError(); error.IsVisible = false;
             FieldErrors[key] = error;
-            var outline = new Border { Child = inputs[key], CornerRadius = new CornerRadius(6),
-                BorderThickness = new Thickness(1), BorderBrush = Avalonia.Media.Brushes.Transparent };
-            outlines[key] = outline;
-            Avalonia.Automation.AutomationProperties.SetName(inputs[key], label);
-            return Ui.Stack(8, Ui.Text(label, 14, bold: true), outline, error);
+            Avalonia.Automation.AutomationProperties.SetName(Target(inputs[key]), label);
+            return Ui.Stack(Ui.FieldGap, Ui.Text(label, 14, bold: true), shells[key], error);
         }
         Dictionary<string, string> Errors()
         {
@@ -447,8 +460,8 @@ public sealed class ProductionView : UserControl
                 var invalid = errors.TryGetValue(pair.Key, out var message);
                 FieldErrors[pair.Key].Text = message ?? "";
                 FieldErrors[pair.Key].IsVisible = invalid;
-                outlines[pair.Key].BorderBrush = invalid ? red : Avalonia.Media.Brushes.Transparent;
-                Avalonia.Automation.AutomationProperties.SetHelpText(pair.Value, message ?? "");
+                Frames[pair.Key].Invalid = invalid;
+                Avalonia.Automation.AutomationProperties.SetHelpText(Target(pair.Value), message ?? "");
             }
         }
         void Revalidate() { if (attempted && !refreshing) Display(Errors()); }
@@ -461,7 +474,10 @@ public sealed class ProductionView : UserControl
             {
                 var record = selected.ProductionRecords.SingleOrDefault(r => r.RecordDate == selectedDate);
                 ProducedInput.Value = record?.ProducedQuantity ?? 0; SoldInput.Value = record?.RegularSoldQuantity ?? 0;
-                rescued.Text = $"Terselamatkan: {record?.RescuedQuantity ?? 0} porsi. Bertambah setelah kode pengambilan diverifikasi.";
+                RescuedCount.Text = (record?.RescuedQuantity ?? 0).ToString();
+                RescuedNote.Text = record is not null && !session.IsDashboardProduction(record)
+                    ? RescuedNoteText + " Catatan ini masih di komputer. Simpan catatan untuk mengirimnya ke Supabase."
+                    : RescuedNoteText;
             }
             table.Children.Clear();
             table.Children.Add(Ui.TableRow("1.6*,*,*,*,*", true, Ui.Text("Menu", 13, Ui.Muted), Ui.Text("Produksi", 13, Ui.Muted),
@@ -485,15 +501,22 @@ public sealed class ProductionView : UserControl
             {
                 var first = inputs.First(p => errors.ContainsKey(p.Key)).Value;
                 first.BringIntoView();
-                if (first is NumericUpDown number) number.GetVisualDescendants().OfType<TextBox>().FirstOrDefault()?.Focus(); else first.Focus();
+                if (first is NumericUpDown number) number.GetVisualDescendants().OfType<TextBox>().FirstOrDefault()?.Focus(); else Target(first).Focus();
                 return;
             }
             host.Run(() => session.SaveProduction((Menu)MenuInput.SelectedItem!, SelectedDate()!.Value,
                 ReadNumber(ProducedInput)!.Value, ReadNumber(SoldInput)!.Value), Refresh);
         }, true);
-        var editor = Ui.Stack(20, Ui.FormPair(Field("menu", "Menu"), Field("date", "Tanggal produksi")),
-            Ui.FormPair(Field("produced", "Diproduksi (porsi)"), Field("sold", "Terjual reguler (porsi)")),
-            rescued, SaveButton);
+        Fields = new FieldGrid(Field("menu", "Menu"), Field("date", "Tanggal produksi"),
+            Field("produced", "Diproduksi (porsi)"), Field("sold", "Terjual reguler (porsi)"));
+        var amount = new TextBlock { Inlines = new Avalonia.Controls.Documents.InlineCollection
+            { RescuedCount, new Avalonia.Controls.Documents.Run(" porsi") { FontSize = 14, Foreground = Ui.Muted } } };
+        RescuedNote = Ui.Text(RescuedNoteText, 14, Ui.Muted);
+        var summary = Ui.Stack(4, Ui.Text(RescuedLabel, 12, Ui.Muted), amount, RescuedNote);
+        SaveButton.VerticalAlignment = VerticalAlignment.Bottom;
+        var footer = Ui.Columns("*,Auto", summary, SaveButton);
+        footer.ColumnSpacing = Ui.Spacing.Related;
+        FormCard = Ui.FormCard(Ui.Stack(Ui.Spacing.Section, Fields, Ui.Divider(), footer));
         DateInput.SelectedDateChanged += (_, _) => Refresh(); MenuInput.SelectionChanged += (_, _) => Refresh();
         foreach (var number in new[] { ProducedInput, SoldInput })
             number.PropertyChanged += (_, e) =>
@@ -501,7 +524,7 @@ public sealed class ProductionView : UserControl
                 if (e.Property == NumericUpDown.TextProperty || e.Property == NumericUpDown.ValueProperty) Revalidate();
             };
         Refresh();
-        Content = Ui.Page(Ui.Heading("Catatan produksi", "Catat produksi dan penjualan reguler untuk menghitung surplus per menu."), Ui.Form(editor),
+        Content = Ui.Page(Ui.Heading("Catatan produksi", "Catat produksi dan penjualan reguler untuk menghitung surplus per menu."), Ui.Form(FormCard),
             Ui.Divider(), Ui.Text("Ringkasan tanggal terpilih", 20, bold: true), table);
     }
 }

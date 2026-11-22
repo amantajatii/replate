@@ -277,9 +277,11 @@ internal static class CollectionVerification
             $"{label}: top bar, then back link, title and listing cards, no banner");
         Ensure(page.Title.FontSize == MarketplaceView.TitleSize && page.Title.FontWeight == FontWeight.Bold && ColorOf(page.Title.Foreground) == Color.Parse("#202522") &&
             page.Title.TextLayout.TextLines.Count == 1, $"{label}: title is {MarketplaceView.TitleSize:0} bold ink on one line");
+        var contentGap = Ui.Spacing.Related + (page.VisibleListings.Count == 0 ? ListingFeed.EmptyStateTopGap : 0);
         Ensure(Math.Abs(link.Y - bar.Bottom - Ui.Spacing.Section) <= 1 && Math.Abs(row.Y - link.Bottom - Ui.Spacing.Related) <= 1 &&
-            (panel.Children.Count == 0 || Math.Abs(Rect(panel.Children[0], window).Y - header.Bottom - Ui.Spacing.Related) <= 1) && panel.Spacing == Ui.Spacing.Related &&
-            page.Body.Margin.Bottom == Ui.Spacing.Page, $"{label}: rhythm 24 to the back link, 16 to the title, 16 to the first card ({link.Y - bar.Bottom:0.#}/{row.Y - link.Bottom:0.#})");
+            (panel.Children.Count == 0 || Math.Abs(Rect(panel.Children[0], window).Y - header.Bottom - contentGap) <= 1) &&
+            panel.Spacing == Ui.Spacing.Related && page.Body.Margin.Bottom == Ui.Spacing.Page,
+            $"{label}: rhythm 24 to the back link, 16 to the title, {contentGap:0} to the results or empty state");
         Ensure(Math.Abs(title.X - body.X) <= 1 && Math.Abs(glyph.X - body.X) <= 1, $"{label}: back arrow and title align with the content edge ({glyph.X:0}, {title.X:0}, {body.X:0})");
         Ensure(page.Scroll.HorizontalScrollBarVisibility == ScrollBarVisibility.Disabled && page.Scroll.Extent.Width <= page.Scroll.Viewport.Width + .5,
             $"{label}: no horizontal scrolling");

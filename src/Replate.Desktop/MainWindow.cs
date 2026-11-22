@@ -216,11 +216,19 @@ public sealed class MainWindow : Window
     // Restaurant area
     internal void ShowDashboard()
     {
-        if (Allowed(true)) Render(true, new DashboardView(this, Session), "Dashboard");
+        if (!Allowed(true)) return;
+        Render(true, new DashboardView(this, Session), "Dashboard");
+        Run(() =>
+        {
+            Session.RefreshRestaurantProduction();
+            Session.RefreshRestaurantOrders();
+        }, () => Render(true, new DashboardView(this, Session), "Dashboard"));
     }
     internal void ShowMenus()
     {
-        if (Allowed(true)) Render(true, new MenusView(this, Session), "Menu");
+        if (!Allowed(true)) return;
+        Render(true, new MenusView(this, Session), "Menu");
+        Run(Session.RefreshRestaurantMenus, () => Render(true, new MenusView(this, Session), "Menu"));
     }
     internal void ShowMenuEditor(Menu? menu = null)
     {
@@ -240,7 +248,9 @@ public sealed class MainWindow : Window
     }
     internal void ShowProduction()
     {
-        if (Allowed(true)) Render(true, new ProductionView(this, Session), "Produksi");
+        if (!Allowed(true)) return;
+        Render(true, new ProductionView(this, Session), "Produksi");
+        Run(Session.RefreshRestaurantProduction, () => Render(true, new ProductionView(this, Session), "Produksi"));
     }
     internal void ShowRestaurantProfile()
     {

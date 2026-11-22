@@ -35,13 +35,13 @@ public sealed partial class OrdersView : UserControl
     internal OrdersView(MainWindow host, DemoSession session, bool restaurant)
     {
         if (!restaurant) { BuildCustomer(host, session); return; }
-        var filter = new ComboBox { ItemsSource = new[] { "Aktif", "Semua", "Selesai", "Dibatalkan" }, SelectedIndex = 0, FontSize = 15 };
         var list = Ui.Stack(0);
         void Refresh()
         {
+            foreach (var button in statusButtons) button.Classes.Set(Ui.PillSelectedClass, statusButtons.IndexOf(button) == StatusIndex);
             list.Children.Clear();
             var allOrders = session.RestaurantOrders.OrderByDescending(o => o.OrderedAt).ToList();
-            var orders = allOrders.Where(o => filter.SelectedIndex switch {
+            var orders = allOrders.Where(o => StatusIndex switch {
                 0 => o.Status is not (OrderStatus.Completed or OrderStatus.Cancelled),
                 2 => o.Status == OrderStatus.Completed, 3 => o.Status == OrderStatus.Cancelled, _ => true }).ToList();
             if (orders.Count == 0)
@@ -57,7 +57,7 @@ public sealed partial class OrdersView : UserControl
                 return;
             }
             foreach (var order in orders)
-                list.Children.Add(Ui.TableRow("*,190,160,130", false,
+                list.Children.Add(Ui.TableRow("*,190,160,Auto", false,
                     Ui.Stack(6, Ui.Text($"#{order.Id.ToString("N")[..8].ToUpperInvariant()}", 16, bold: true),
                         Ui.Text(string.Join(", ", order.Items.Select(i => $"{i.Quantity} × {i.MenuName}")), 14),
                         Ui.Text(order.OrderedAt.ToLocalTime().ToString("dd MMM yyyy, HH:mm"), 12, Ui.Muted)),
@@ -65,11 +65,29 @@ public sealed partial class OrdersView : UserControl
                     Ui.Text(DemoSession.Rupiah(order.TotalPrice), 16, bold: true),
                     Ui.Button("Lihat pesanan", () => host.ShowOrder(order, true))));
         }
-        filter.SelectionChanged += (_, _) => Refresh(); Refresh();
+        StatusRow = new WrapPanel { Orientation = Orientation.Horizontal, ItemSpacing = Ui.PillGap, LineSpacing = Ui.PillGap };
+        StatusRow.Styles.Add(Ui.PillStyles(StatusClass, Ui.SolidPills));
+        StatusRow.Styles.Add(Ui.FocusStyles());
+        for (var i = 0; i < StatusOptions.Length; i++)
+        {
+            var index = i;
+            var button = Ui.Pill(StatusOptions[i], StatusClass, 1, () => { StatusIndex = index; Refresh(); });
+            statusButtons.Add(button); StatusRow.Children.Add(button);
+        }
+        Refresh();
         var heading = Ui.Heading("Pesanan restoran", "Konfirmasi pesanan dan verifikasi pengambilan pelanggan.");
-        var filterField = Ui.Form(Ui.Field("Status pesanan", filter), 320);
+        var filterField = Ui.Stack(8, Ui.Text(StatusLabel, 14, bold: true), StatusRow);
         Content = Ui.Page(heading, filterField, list);
     }
+
+    // Restaurant filter
+    internal const string StatusLabel = "Status pesanan";
+    internal const string StatusClass = "status-filter";
+    internal static readonly string[] StatusOptions = ["Aktif", "Semua", "Selesai", "Dibatalkan"];
+    private readonly List<Button> statusButtons = [];
+    internal int StatusIndex { get; private set; }
+    internal WrapPanel? StatusRow { get; private set; }
+    internal IReadOnlyList<Button> StatusButtons => statusButtons;
 }
 
 public sealed partial class OrderDetailView : UserControl
