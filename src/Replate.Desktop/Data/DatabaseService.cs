@@ -106,10 +106,15 @@ internal sealed class DatabaseService : IOrderStore
             using var connection = CreateConnection();
             connection.Open();
             using var command = new NpgsqlCommand("""
-                SELECT id, menu_id, menu_name, description, category, normal_price,
-                       weight_per_portion, rescue_price, quantity, pickup_start, pickup_end, closed
-                FROM public.surplus_listings
-                ORDER BY pickup_start, id
+                SELECT listing.id, listing.menu_id, COALESCE(menu.name, listing.menu_name),
+                       listing.description, listing.category, listing.normal_price,
+                       listing.weight_per_portion, listing.rescue_price, listing.quantity,
+                       listing.pickup_start, listing.pickup_end, listing.closed,
+                       restaurant.id, restaurant.name, restaurant.address
+                FROM public.surplus_listings AS listing
+                LEFT JOIN public.menus AS menu ON menu.id = listing.menu_id
+                LEFT JOIN public.restaurants AS restaurant ON restaurant.id = menu.restaurant_id
+                ORDER BY listing.pickup_start, listing.id
                 """, connection);
             using var reader = command.ExecuteReader();
             var listings = new List<SurplusListing>();
@@ -118,6 +123,14 @@ internal sealed class DatabaseService : IOrderStore
                 var menu = new Menu { Id = reader.GetGuid(1) };
                 menu.UpdateMenu(reader.GetString(2), reader.GetString(3), reader.GetString(4),
                     reader.GetDecimal(5), reader.GetDecimal(6));
+                if (!reader.IsDBNull(12))
+                {
+                    menu.RestaurantId = reader.GetGuid(12);
+                    menu.Restaurant = new Restaurant
+                    {
+                        Id = menu.RestaurantId, Name = reader.GetString(13), Address = reader.GetString(14)
+                    };
+                }
                 var listing = new SurplusListing
                 {
                     Id = reader.GetGuid(0),
@@ -140,12 +153,37 @@ internal sealed class DatabaseService : IOrderStore
         }
     }
 
-    internal void SaveListing(SurplusListing listing, int? expectedQuantity)
+    internal void SaveListing(Restaurant restaurant, SurplusListing listing, int? expectedQuantity)
     {
         try
         {
             using var connection = CreateConnection();
             connection.Open();
+            using var transaction = connection.BeginTransaction();
+
+            using var saveRestaurant = new NpgsqlCommand("""
+                INSERT INTO public.restaurants (id, name, address)
+                VALUES (@id, @name, @address)
+                ON CONFLICT (id) DO UPDATE
+                SET name = EXCLUDED.name, address = EXCLUDED.address
+                """, connection, transaction);
+            saveRestaurant.Parameters.AddWithValue("id", restaurant.Id);
+            saveRestaurant.Parameters.AddWithValue("name", restaurant.Name);
+            saveRestaurant.Parameters.AddWithValue("address", restaurant.Address);
+            saveRestaurant.ExecuteNonQuery();
+
+            using var saveMenu = new NpgsqlCommand("""
+                INSERT INTO public.menus AS menu (id, restaurant_id, name)
+                VALUES (@id, @restaurant_id, @name)
+                ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name
+                WHERE menu.restaurant_id = EXCLUDED.restaurant_id
+                """, connection, transaction);
+            saveMenu.Parameters.AddWithValue("id", listing.MenuId);
+            saveMenu.Parameters.AddWithValue("restaurant_id", restaurant.Id);
+            saveMenu.Parameters.AddWithValue("name", listing.Menu.Name);
+            if (saveMenu.ExecuteNonQuery() != 1)
+                throw new InvalidOperationException("Menu sudah terdaftar untuk restoran lain di PostgreSQL.");
+
             var sql = expectedQuantity.HasValue
                 ? """
                     UPDATE public.surplus_listings
@@ -153,7 +191,7 @@ internal sealed class DatabaseService : IOrderStore
                         normal_price = @normal_price, weight_per_portion = @weight,
                         rescue_price = @price, quantity = @quantity,
                         pickup_start = @start, pickup_end = @end
-                    WHERE id = @id AND NOT closed AND quantity = @expected
+                    WHERE id = @id AND menu_id = @menu_id AND NOT closed AND quantity = @expected
                     """
                 : """
                     INSERT INTO public.surplus_listings
@@ -162,7 +200,7 @@ internal sealed class DatabaseService : IOrderStore
                     VALUES (@id, @menu_id, @menu_name, @description, @category, @normal_price,
                             @weight, @price, @quantity, @start, @end)
                     """;
-            using var command = new NpgsqlCommand(sql, connection);
+            using var command = new NpgsqlCommand(sql, connection, transaction);
             command.Parameters.AddWithValue("id", listing.Id);
             command.Parameters.AddWithValue("menu_id", listing.MenuId);
             command.Parameters.AddWithValue("menu_name", listing.Menu.Name);
@@ -177,6 +215,7 @@ internal sealed class DatabaseService : IOrderStore
             if (expectedQuantity is int previous) command.Parameters.AddWithValue("expected", previous);
             if (command.ExecuteNonQuery() == 0)
                 throw new InvalidOperationException("Stok penawaran sudah berubah. Buka ulang daftar penawaran sebelum mengedit.");
+            transaction.Commit();
         }
         catch (NpgsqlException e)
         {

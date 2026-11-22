@@ -36,7 +36,7 @@ public sealed class DemoSession
         StorePath = storePath;
         if (storePath is not null && File.Exists(storePath))
         {
-            try { SessionStore.Load(this, storePath); DemoAccounts.Ensure(Users, Restaurants, Carts); return; }
+            try { SessionStore.Load(this, storePath); DemoAccounts.Ensure(Users, Restaurants.Where(r => !ImportedRestaurantIds.Contains(r.Id)), Carts); return; }
             catch (Exception e) when (e is System.Text.Json.JsonException or IOException or InvalidDataException or ArgumentException or KeyNotFoundException or InvalidOperationException or NullReferenceException)
             { StorageError = "Data lokal tidak dapat dibaca. Berkas asli dipertahankan; perubahan dinonaktifkan. " + e.Message; }
         }
@@ -174,29 +174,51 @@ public sealed class DemoSession
              l.Menu.Restaurant?.Name.Contains(query, StringComparison.OrdinalIgnoreCase) == true));
 
     private readonly HashSet<Guid> sharedListingIds = [];
+    internal HashSet<Guid> ImportedRestaurantIds { get; } = [];
     private bool UsesSharedStock => StorePath == DefaultStorePath;
 
     internal void RefreshSharedListings()
     {
         if (!UsesSharedStock || checkingOut) return;
 
-        var sharedListings = new DatabaseService().LoadListings();
+        ApplySharedListings(new DatabaseService().LoadListings());
+    }
+
+    internal void ApplySharedListings(IEnumerable<SurplusListing> sharedListings)
+    {
         sharedListingIds.Clear();
         foreach (var shared in sharedListings)
         {
+            var remoteRestaurant = shared.Menu.Restaurant;
+            var menu = Restaurants.SelectMany(r => r.Menus).FirstOrDefault(candidate => candidate.Id == shared.MenuId);
+            if (remoteRestaurant is not null && menu is not null && menu.RestaurantId != remoteRestaurant.Id)
+                continue;
+
             sharedListingIds.Add(shared.Id);
+            var restaurant = remoteRestaurant is null ? null : FindRestaurant(remoteRestaurant.Id);
+            if (restaurant is not null && remoteRestaurant is not null && ImportedRestaurantIds.Contains(restaurant.Id))
+            {
+                restaurant.Name = remoteRestaurant.Name;
+                restaurant.Address = remoteRestaurant.Address;
+            }
+
             var listing = Listings.Find(candidate => candidate.Id == shared.Id);
             if (listing is null)
             {
-                var menu = Restaurants.SelectMany(restaurant => restaurant.Menus)
-                    .FirstOrDefault(candidate => candidate.Id == shared.MenuId);
                 if (menu is null)
                 {
-                    if (Restaurants.Count != 1) continue;
+                    if (remoteRestaurant is null) continue;
+                    if (restaurant is null)
+                    {
+                        restaurant = remoteRestaurant;
+                        Restaurants.Add(restaurant);
+                        ImportedRestaurantIds.Add(restaurant.Id);
+                    }
+
                     menu = shared.Menu;
-                    menu.Restaurant = Restaurant;
-                    menu.RestaurantId = Restaurant.Id;
-                    Restaurant.Menus.Add(menu);
+                    menu.Restaurant = restaurant;
+                    menu.RestaurantId = restaurant.Id;
+                    restaurant.Menus.Add(menu);
                 }
 
                 shared.Menu = menu;
@@ -398,8 +420,10 @@ public sealed class DemoSession
     public SurplusListing SaveListing(SurplusListing? existing, Menu menu, decimal price, int quantity, DateTime start, DateTime end)
     {
         EnsureWritable();
-        RequireOwnedRestaurant(menu.RestaurantId);
+        var restaurant = RequireOwnedRestaurant(menu.RestaurantId);
         if (existing is not null) RequireOwnedRestaurant(existing.Menu.RestaurantId);
+        if (existing is not null && existing.MenuId != menu.Id)
+            throw new InvalidOperationException("Menu pada penawaran yang sudah dibuat tidak dapat diganti.");
         if (!menu.IsActive) throw new InvalidOperationException("Aktifkan menu sebelum membuat penawaran.");
         if (price <= 0 || price > menu.NormalPrice) throw new InvalidOperationException("Harga penawaran harus lebih dari nol dan tidak melebihi harga normal.");
         if (quantity < 1) throw new InvalidOperationException("Stok tersedia harus minimal satu porsi.");
@@ -423,7 +447,7 @@ public sealed class DemoSession
                 Id = listing.Id, Menu = menu, MenuId = menu.Id, RescuePrice = price,
                 Quantity = quantity, PickupStart = start.ToUniversalTime(), PickupEnd = end.ToUniversalTime()
             };
-            new DatabaseService().SaveListing(proposed, sharedListingIds.Contains(listing.Id) ? listing.Quantity : null);
+            new DatabaseService().SaveListing(restaurant, proposed, sharedListingIds.Contains(listing.Id) ? listing.Quantity : null);
             sharedListingIds.Add(listing.Id);
         }
         listing.RescuePrice = price; listing.PickupStart = start.ToUniversalTime(); listing.PickupEnd = end.ToUniversalTime(); listing.UpdateStock(quantity);

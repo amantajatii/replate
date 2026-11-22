@@ -149,6 +149,27 @@ internal static class StateVerification
         var allErrors = allocationSession.ValidateProduction(null, DateOnly.FromDateTime(DateTime.Today.AddDays(1)), -1, -2);
         Ensure(allErrors.Count == 4, "Production validation reports all fields together");
         CheckLegacyCategory();
+        var remotePath = Path.Combine(directory, "remote-state.json");
+        var remoteSession = new DemoSession(remotePath).AsCustomer();
+        var remoteRestaurant = new Replate.Domain.Entities.Restaurant { Name = "Restoran dari Supabase", Address = "Alamat pengambilan" };
+        var remoteMenu = new Replate.Domain.Entities.Menu
+        {
+            Restaurant = remoteRestaurant, RestaurantId = remoteRestaurant.Id, Name = "Menu bersama",
+            NormalPrice = 20000m, WeightPerPortion = .25m
+        };
+        var remoteListing = new Replate.Domain.Entities.SurplusListing
+        {
+            Menu = remoteMenu, MenuId = remoteMenu.Id, RescuePrice = 10000m, Quantity = 2,
+            PickupStart = DateTime.UtcNow.AddMinutes(-1), PickupEnd = DateTime.UtcNow.AddHours(1)
+        };
+        remoteSession.ApplySharedListings([remoteListing]);
+        remoteSession.ApplySharedListings([remoteListing]);
+        remoteSession.AddToCart(remoteListing, 1);
+        remoteSession = new DemoSession(remotePath).AsCustomer();
+        Ensure(remoteSession.Cart.GroupByRestaurant().Single().RestaurantId == remoteRestaurant.Id &&
+            remoteSession.RestaurantLine(remoteRestaurant.Id).Contains(remoteRestaurant.Address) &&
+            remoteSession.FindRestaurant(remoteRestaurant.Id)?.Owner is null,
+            "Imported restaurant and cart survive restart without creating a local owner");
         Console.WriteLine("All Replate desktop state checks passed.");
     }
 
