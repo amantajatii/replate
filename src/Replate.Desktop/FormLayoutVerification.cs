@@ -65,10 +65,10 @@ internal static class FormLayoutVerification
                         Bounds(editor.PriceInput).Right < Bounds(editor.WeightInput).X &&
                         Bounds(editor.SaveButton).Bottom <= window.Bounds.Height,
                         "Menu details, photo, and save are visible on first load");
-                    var photoCard = editor.PhotoPreview.GetVisualAncestors().OfType<Border>().First(b => b.BorderBrush == Ui.CardBorder);
-                    var detailsCard = editor.NameInput.GetVisualAncestors().OfType<Border>().First(b => b.BorderBrush == Ui.CardBorder);
+                    var photoCard = editor.PhotoCard;
+                    var detailsCard = editor.DetailsCard;
                     var save = Bounds(editor.SaveButton);
-                    Ensure(Math.Abs(save.Y - Bounds(photoCard).Bottom - 12) <= 1 &&
+                    Ensure(Math.Abs(Bounds(editor.Actions).Y - Bounds(photoCard).Bottom - Ui.Spacing.Related) <= 1 &&
                         Math.Abs(save.Right - Bounds(photoCard).Right) <= 1, "Menu actions sit directly below the photo card");
                     Ensure(Math.Abs(Bounds(photoCard).Y - Bounds(detailsCard).Y) <= 1 &&
                         Math.Abs(save.Bottom - Bounds(detailsCard).Bottom) <= 1 && editor.PhotoPreview.Bounds.Height > 156,
@@ -90,8 +90,8 @@ internal static class FormLayoutVerification
                 {
                     window.ShowListingEditor(edit ? session.Listings[0] : null); await Settle();
                     var form = CheckForm(edit ? "Ubah penawaran" : "Buat penawaran");
-                    Ensure(form.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text?.StartsWith("Stok tidak boleh") == true).FontSize >= 14,
-                        "Listing instructions are readable");
+                    Ensure(form.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text?.StartsWith("Stok tidak boleh") == true).FontSize == ListingEditorView.NoteSize,
+                        "Listing instructions use the 13 supporting note");
                     var save = form.GetVisualDescendants().OfType<Button>().Single(b => b.Content as string == "Simpan penawaran");
                     await Reach(save);
                     Shot($"form-listing-{(edit ? "edit" : "add")}-{size}");

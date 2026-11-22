@@ -63,19 +63,30 @@ internal sealed class DatabaseService : IOrderStore
             CREATE TABLE IF NOT EXISTS public.restaurants (
                 id uuid PRIMARY KEY,
                 name text NOT NULL,
-                address text NOT NULL
+                address text NOT NULL,
+                phone text,
+                description text,
+                opening_time time,
+                closing_time time
             );
             ALTER TABLE public.restaurants
                 ADD COLUMN IF NOT EXISTS latitude double precision,
                 ADD COLUMN IF NOT EXISTS longitude double precision,
-                ADD COLUMN IF NOT EXISTS description text NOT NULL DEFAULT '',
-                ADD COLUMN IF NOT EXISTS phone text NOT NULL DEFAULT '',
+                ADD COLUMN IF NOT EXISTS phone text,
+                ADD COLUMN IF NOT EXISTS description text,
                 ADD COLUMN IF NOT EXISTS opening_time time,
                 ADD COLUMN IF NOT EXISTS closing_time time;
+
             CREATE TABLE IF NOT EXISTS public.menus (
                 id uuid PRIMARY KEY,
                 restaurant_id uuid NOT NULL REFERENCES public.restaurants(id),
-                name text NOT NULL
+                name text NOT NULL,
+                description text,
+                category text,
+                normal_price numeric,
+                weight_per_portion numeric,
+                is_active boolean NOT NULL DEFAULT true,
+                deleted_at timestamptz
             );
             ALTER TABLE public.menus
                 ADD COLUMN IF NOT EXISTS description text,
@@ -84,6 +95,7 @@ internal sealed class DatabaseService : IOrderStore
                 ADD COLUMN IF NOT EXISTS weight_per_portion numeric,
                 ADD COLUMN IF NOT EXISTS is_active boolean NOT NULL DEFAULT true,
                 ADD COLUMN IF NOT EXISTS deleted_at timestamptz;
+
             CREATE TABLE IF NOT EXISTS public.surplus_listings (
                 id uuid PRIMARY KEY,
                 menu_id uuid NOT NULL,
@@ -349,6 +361,23 @@ internal sealed class DatabaseService : IOrderStore
         catch (NpgsqlException e)
         {
             throw new InvalidOperationException("Penawaran gagal ditutup di PostgreSQL.", e);
+        }
+    }
+
+    internal void ReopenListing(Guid listingId)
+    {
+        try
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+            using var command = new NpgsqlCommand(
+                "UPDATE public.surplus_listings SET closed = false WHERE id = @id", connection);
+            command.Parameters.AddWithValue("id", listingId);
+            command.ExecuteNonQuery();
+        }
+        catch (NpgsqlException e)
+        {
+            throw new InvalidOperationException("Penawaran gagal dibuka kembali di PostgreSQL.", e);
         }
     }
 

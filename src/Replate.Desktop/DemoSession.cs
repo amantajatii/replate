@@ -670,6 +670,7 @@ public sealed class DemoSession
             listing.PickupEnd = shared.PickupEnd;
             listing.UpdateStock(shared.Quantity);
             if (shared.Status == ListingStatus.Cancelled) listing.Cancel();
+            else if (listing.Status == ListingStatus.Cancelled) listing.Reopen();
         }
     }
 
@@ -1012,6 +1013,28 @@ public sealed class DemoSession
         RequireOwnedRestaurant(listing.Menu.RestaurantId);
         if (UsesSharedStock && sharedListingIds.Contains(listing.Id)) new DatabaseService().CloseListing(listing.Id);
         listing.Cancel();
+        Persist();
+    }
+
+    internal static string? ReopenBlocker(SurplusListing listing, DateTime now) =>
+        listing.Status != ListingStatus.Cancelled ? "Penawaran belum ditutup." :
+        listing.PickupEnd <= now ? "Jendela pengambilan sudah berakhir" :
+        listing.Quantity <= 0 ? "Stok habis" : null;
+
+    public void ReopenListing(SurplusListing listing)
+    {
+        EnsureWritable();
+        RequireOwnedRestaurant(listing.Menu.RestaurantId);
+        if (ReopenBlocker(listing, DateTime.UtcNow) is { } blocker) throw new InvalidOperationException(blocker.TrimEnd('.') + ".");
+        if (supabaseSession is null)
+        {
+            var date = DateOnly.FromDateTime(listing.PickupStart.ToLocalTime());
+            var record = listing.Menu.ProductionRecords.SingleOrDefault(r => r.RecordDate == date);
+            if (record is null || listing.Quantity + Allocated(listing.Menu, date, listing) > record.CalculateSurplus() - record.RescuedQuantity)
+                throw new InvalidOperationException("Stok melebihi surplus yang belum dialokasikan. Periksa catatan produksi dan penawaran lain.");
+        }
+        if (UsesSharedStock && sharedListingIds.Contains(listing.Id)) new DatabaseService().ReopenListing(listing.Id);
+        listing.Reopen();
         Persist();
     }
 

@@ -135,6 +135,7 @@ internal static class UiVerification
             TopBarVerification.CheckRatio(window.RailLogo!, "restaurant rail logo");
             await Shot("dashboard");
             window.ShowMenus(); await Shot("menus");
+            await CardActions(window, "Menu restoran");
             var menusScroll = window.CurrentPage!.GetVisualDescendants().OfType<ScrollViewer>().First();
             await PrimaryButton(window.CurrentPage.GetVisualDescendants().OfType<Button>().First(b => b.Content as string == "Tambah menu"), true, menusScroll, menusScroll, "Restoran Tambah menu");
             CollectionVerification.NoLegacyCategory(window, "Menu list");
@@ -184,10 +185,16 @@ internal static class UiVerification
             window.Run(() => throw new IOException("Simulated persistence failure"), successMessage: "Menu berhasil disimpan.");
             Ensure(window.SuccessMessage is null, "Persistence failure has no success notification");
             Ensure(window.Session.Restaurant.Menus.Count == 5, "Menu form saves");
+            await MenuEditorFields(window, output);
             window.ShowListings(); await Shot("listings");
+            await CardActions(window, "Penawaran surplus");
+            await ReopenAction(window);
             window.ShowListingEditor(); await Shot("listing-editor");
+            await ListingEditorFields(window, output);
             window.ShowProduction(); await Shot("production");
             await ProductionFields(window, output);
+            await DashboardPeriod(window, output);
+            await RestaurantProfileFields(window, output);
             window.ShowRestaurantOrders(); await Shot("restaurant-orders");
             await RestaurantStatusPills(window);
             await LabelWidths(window);
@@ -287,6 +294,10 @@ internal static class UiVerification
         }
         catch (Exception exception) { Console.Error.WriteLine(exception); desktop.Shutdown(1); }
     }
+    // Move focus to a real focusable control: Window.Focus() does not clear text/dropdown focus on macOS.
+    private static Button ProfileButton(Control view) =>
+        view.GetVisualDescendants().OfType<Button>().First(button => button.Content is "Ubah profil");
+
     private static async Task Settle()
     { await Task.Delay(250); await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Render); }
 
@@ -466,6 +477,86 @@ internal static class UiVerification
         Ensure(!Near(shaded(bx, by), surface(bx, by)), $"{label}: the hover shadow shows below the button ({shaded(bx, by)} on {surface(bx, by)})");
         Ensure(button.GetVisualAncestors().OfType<Visual>().Where(v => v.ClipToBounds).All(v => v.TransformToVisual(window) is { } m && new Rect(v.Bounds.Size).TransformToAABB(m).Contains(reach)),
             $"{label}: no container clips the hover shadow ({reach})");
+    }
+    // Card actions
+    private static async Task CardActions(MainWindow window, string page)
+    {
+        var buttons = window.CurrentPage!.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains(Ui.CardActionClass)).ToList();
+        Ensure(buttons.Count > 0, $"{page}: card action buttons exist");
+        foreach (var button in buttons)
+        {
+            var label = $"{page} {button.Content}";
+            var (hover, pressed, text) =
+                button.Classes.Contains(Ui.PrimaryClass) ? (Selection, DividerColor, Primary) :
+                button.Classes.Contains(Ui.CardActionDangerClass) ? (DangerTint, DangerPressed, Danger) :
+                button.Classes.Contains(Ui.CardActionTonalClass) ? (Primary, Primary, Colors.White) :
+                button.Classes.Contains(Ui.CardActionNeutralClass) ? (Selection, DividerColor, Primary) :
+                throw new InvalidOperationException($"{label}: card action has a role class");
+            var presenter = Presenter(button);
+            button.BringIntoView(); await Settle();
+            var (restFill, restText, restBorder) = (Fill(presenter.Background), Fill(presenter.Foreground), Fill(presenter.BorderBrush));
+            var (bounds, thickness, radius) = (button.Bounds, presenter.BorderThickness, presenter.CornerRadius);
+            Ensure(!button.ClipToBounds && radius == button.CornerRadius && button.Classes.Contains(Ui.CompactClass) &&
+                presenter.BoxShadow.Count == 0 && Math.Abs(Scale(button) - 1) <= .005,
+                $"{label}: at rest the face uses the button radius, is not clipped, and is flat at scale 1");
+            foreach (var (state, fill) in new[] { (":pointerover", hover), (":pressed", pressed) })
+            {
+                await Hold(button, state, true);
+                var (shownFill, ink, edge) = (Fill(presenter.Background), Fill(presenter.Foreground), Fill(presenter.BorderBrush));
+                var contrast = TopBarVerification.Contrast(ink, shownFill);
+                Ensure(shownFill == fill && shownFill != restFill && ink == text && contrast >= 4.5,
+                    $"{label} {state}: {shownFill} fill with {ink} text, expected {fill} and {text}, unlike rest {restFill} ({contrast:0.0}:1)");
+                Ensure(edge == restBorder && presenter.BorderThickness == thickness && presenter.CornerRadius == radius,
+                    $"{label} {state}: border stays {restBorder} at {thickness} ({edge}, {presenter.BorderThickness})");
+                Ensure(button.Bounds == bounds, $"{label} {state}: layout bounds stay {bounds} ({button.Bounds})");
+                if (state == ":pointerover")
+                    Ensure(Math.Abs(Scale(button) - Ui.PrimaryHoverScale) <= .005 && presenter.BoxShadow.Count > 0,
+                        $"{label} hover: the shared compact scale and soft shadow ({Scale(button):0.###})");
+                await Hold(button, state, false);
+            }
+            Ensure(Fill(presenter.Background) == restFill && Fill(presenter.Foreground) == restText && Fill(presenter.BorderBrush) == restBorder &&
+                button.Bounds == bounds, $"{label}: returns to its normal colors and size");
+            await HoverShape(window, button, label);
+        }
+    }
+    // Reopen action
+    private static async Task ReopenAction(MainWindow window)
+    {
+        var now = DateTime.UtcNow;
+        var listing = window.Session.RestaurantListings.FirstOrDefault(l => l.IsAvailable(now) && l.Menu.IsActive)
+            ?? throw new InvalidOperationException("Penawaran surplus: an open listing exists to close for Buka kembali");
+        listing.Cancel();
+        try
+        {
+            Ensure(DemoSession.ReopenBlocker(listing, now) is null, "Penawaran surplus: the closed listing can be reopened");
+            window.ShowListings(); await Settle();
+            var page = window.CurrentPage!;
+            var cardButtons = page.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains(Ui.CardActionClass)).ToList();
+            var reopen = cardButtons.Single(b => b.Content as string == "Buka kembali");
+            var edit = cardButtons.FirstOrDefault(b => b.Content as string == "Ubah");
+            const string label = "Penawaran surplus Buka kembali";
+            Ensure(reopen.Classes.Contains(Ui.PrimaryClass) && reopen.Classes.Contains(Ui.CompactClass) &&
+                !reopen.Classes.Contains(Ui.CardActionTonalClass) && !reopen.Classes.Contains(Ui.CardActionNeutralClass),
+                $"{label}: uses the shared primary button");
+            Ensure(edit is null || (reopen.Bounds.Height == edit.Bounds.Height && reopen.CornerRadius == edit.CornerRadius &&
+                reopen.Padding == edit.Padding && reopen.FontSize == edit.FontSize),
+                $"{label}: same compact height and radius as Ubah ({reopen.Bounds.Height} vs {edit?.Bounds.Height})");
+            reopen.BringIntoView(); await Settle();
+            var presenter = Presenter(reopen);
+            Ensure(Fill(presenter.Background) == Primary, $"{label}: rest fill is the primary token ({Fill(presenter.Background)})");
+            var restFill = Fill(presenter.Background);
+            await Hold(reopen, ":pointerover", true);
+            Ensure(Fill(presenter.Background) != restFill, $"{label}: hover changes the fill ({Fill(presenter.Background)})");
+            await Hold(reopen, ":pointerover", false);
+            var scroll = reopen.GetVisualAncestors().OfType<ScrollViewer>().First();
+            await PrimaryButton(reopen, true, scroll, scroll, label);
+            await DisabledPrimary(reopen, label);
+        }
+        finally
+        {
+            listing.Reopen();
+            window.ShowListings(); await Settle();
+        }
     }
     // Restaurant status pills
     private static async Task RestaurantStatusPills(MainWindow window)
@@ -709,6 +800,618 @@ internal static class UiVerification
             Capture(window, Path.Combine(output, $"production-fields-{size}.png"));
         }
         window.Width = width; window.Height = height; window.ShowProduction(); await Settle();
+    }
+
+    // Menu editor fields
+    private static async Task MenuEditorFields(MainWindow window, string output)
+    {
+        var (width, height) = (window.Width, window.Height);
+        void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        byte[] png;
+        using (var bitmap = new Avalonia.Media.Imaging.RenderTargetBitmap(new PixelSize(8, 8)))
+        using (var stream = new MemoryStream())
+        {
+            bitmap.Save(stream, PngBitmapEncoderOptions.Default);
+            png = stream.ToArray();
+        }
+        var menus = window.Session.Restaurant.Menus.ToList();
+        var saved = menus.Select(m => (m.Name, m.NormalPrice, m.WeightPerPortion, m.ImageUrl)).ToList();
+        foreach (var (w, h) in new[] { (1040d, 720d), (1920d, 1080d) })
+        {
+            window.Width = w; window.Height = h;
+            foreach (var edit in new[] { false, true })
+            {
+                var size = $"{w:0}x{h:0} {(edit ? "Ubah menu" : "Tambah menu")}";
+                var menu = edit ? menus.First(m => string.IsNullOrEmpty(m.ImageUrl)) : null;
+                window.ShowMenuEditor(menu); await Settle();
+                var view = (MenuEditorView)window.CurrentPage!;
+                var frames = view.Frames;
+                Ensure(frames.Keys.SequenceEqual(new[] { "name", "category", "price", "weight", "description" }), $"{size}: every menu field uses the shared field");
+                Ensure(!view.PriceInput.ShowButtonSpinner && !view.WeightInput.ShowButtonSpinner && view.CategoryInput.Theme == Ui.SelectTheme &&
+                    view.CategoryInput.ItemContainerTheme == Ui.OptionTheme, $"{size}: no native spinner and the shared dropdown");
+
+                Avalonia.Input.InputElement Target(string key) => key is "price" or "weight"
+                    ? frames[key].Input.GetVisualDescendants().OfType<TextBox>().First() : (Avalonia.Input.InputElement)frames[key].Input;
+                foreach (var (key, frame) in frames)
+                {
+                    var face = frame.Face;
+                    var tall = key == "description" ? MenuEditorView.DescriptionHeight : Ui.FieldHeight;
+                    Ensure(Fill(face.Background) == Colors.White && Fill(face.BorderBrush) == DividerColor && Fill(face.BorderBrush) != Colors.Black &&
+                        face.BorderThickness == new Thickness(1) && face.CornerRadius == new CornerRadius(Ui.FieldRadius) && Math.Abs(face.Bounds.Height - tall) < .5,
+                        $"{size} {key}: white field, thin divider border (not black), radius 12, {tall:0} high ({Fill(face.BorderBrush)}, {face.Bounds.Height:0.#})");
+                    if (frame.Input is TextBox text)
+                        Ensure(Fill(text.BorderBrush) == Colors.Transparent && text.BorderThickness == default && Math.Abs(text.Padding.Left - Ui.FieldInset) < .5,
+                            $"{size} {key}: the text box draws no border of its own and is inset 16");
+                    await Hold(face, ":pointerover", true);
+                    Ensure(Fill(face.BorderBrush) == Primary500, $"{size} {key}: hover turns the border Primary 500 ({Fill(face.BorderBrush)})");
+                    await Hold(face, ":pointerover", false);
+                    Ensure(Fill(face.BorderBrush) == DividerColor, $"{size} {key}: leaving restores the divider border");
+
+                    view.CancelLink.Focus(); await Settle();
+                    Target(key).Focus(Avalonia.Input.NavigationMethod.Tab); await Settle();
+                    var ring = frame.Ring;
+                    Ensure(frame.KeyboardFocus && ring.IsVisible && Fill(ring.BorderBrush) == Primary && ring.BorderThickness == new Thickness(Ui.FocusRingWidth) &&
+                        ring.Margin == new Thickness(-(Ui.FocusRingWidth + Ui.FocusRingOffset)) && Fill(face.BorderBrush) == Primary,
+                        $"{size} {key}: keyboard focus shows the Primary 700 border and the shared ring");
+                    Ensure(Target(key) is Control focused && (focused.FocusAdorner is null || focused.FocusAdorner == Ui.NoFocusAdorner),
+                        $"{size} {key}: no native black focus box");
+                    view.CancelLink.Focus(); await Settle();
+                    Ensure(!ring.IsVisible && Fill(face.BorderBrush) == DividerColor, $"{size} {key}: leaving the field hides the ring");
+                    Target(key).Focus(Avalonia.Input.NavigationMethod.Pointer); await Settle();
+                    Ensure(!ring.IsVisible && Fill(face.BorderBrush) == Primary, $"{size} {key}: a click focus shows the Primary 700 border without the ring");
+                    view.CancelLink.Focus(); await Settle();
+                }
+                Ensure(view.DescriptionInput.AcceptsReturn && view.DescriptionInput.TextWrapping == TextWrapping.Wrap &&
+                    view.DescriptionInput.Padding.Top >= 12 && view.DescriptionInput.Padding.Top <= 16, $"{size}: Deskripsi wraps with a 12 to 16 inset");
+
+                var chevron = view.CategoryInput.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Path>().FirstOrDefault();
+                Ensure(chevron is { Fill: null } && chevron.StrokeThickness > 0 && chevron.StrokeThickness <= 2 && Fill(chevron.Stroke) == MutedColor,
+                    $"{size}: Kategori shows a thin outline chevron");
+                view.CategoryInput.IsDropDownOpen = true; await Settle();
+                var popup = view.CategoryInput.GetVisualDescendants().OfType<Popup>().First();
+                Ensure(popup.IsOpen && popup.Child is Avalonia.Controls.Border { BorderThickness.Left: 1 } sheet && Fill(sheet.BorderBrush) == DividerColor &&
+                    sheet.CornerRadius == new CornerRadius(Ui.FieldRadius), $"{size}: the Kategori list opens in the shared sheet");
+                var other = Enumerable.Range(0, view.CategoryInput.ItemCount).Where(i => i != view.CategoryInput.SelectedIndex)
+                    .Select(i => view.CategoryInput.ContainerFromIndex(i) as ComboBoxItem).FirstOrDefault(i => i is not null);
+                Ensure(other is not null && (other.FocusAdorner is null || other.FocusAdorner == Ui.NoFocusAdorner), $"{size}: Kategori options have no black focus box");
+                await Hold(other!, ":pointerover", true);
+                Ensure(Fill(other!.Background) == Selection, $"{size}: a hovered category uses the Primary 100 fill");
+                await Hold(other, ":pointerover", false);
+                view.CategoryInput.IsDropDownOpen = false; await Settle();
+
+                foreach (var stepper in new[] { view.PriceStepper, view.WeightStepper })
+                {
+                    var input = stepper.Input;
+                    var original = input.Value;
+                    var format = input.FormatString;
+                    Ensure(new[] { stepper.MinusButton, stepper.PlusButton }.All(b => b.Classes.Contains(Ui.RoundClass) && Math.Abs(b.Bounds.Width - QuantityStepper.ButtonSize) < .5 &&
+                            b.Bounds.Width == b.Bounds.Height) && stepper.MinusButton.Bounds.Right <= stepper.Frame.Bounds.Left && stepper.PlusButton.Bounds.Left >= stepper.Frame.Bounds.Right,
+                        $"{size}: round minus and plus sit left and right of {Avalonia.Automation.AutomationProperties.GetName(input)}");
+                    input.Value = original; await Settle();
+                    Click(stepper.PlusButton); await Settle();
+                    Ensure(input.Value == original + input.Increment && input.Text == (original + input.Increment)?.ToString(format), $"{size}: plus adds one step ({input.Text})");
+                    Click(stepper.MinusButton); await Settle();
+                    Ensure(input.Value == original && input.Text == original?.ToString(format), $"{size}: minus removes one step ({input.Text})");
+                    input.Value = input.Minimum; await Settle();
+                    Ensure(!stepper.MinusButton.IsEnabled, $"{size}: minus is disabled at the minimum");
+                    stepper.Step(-1); await Settle();
+                    Ensure(input.Value == input.Minimum, $"{size}: the minimum holds");
+                    input.Value = input.Maximum; await Settle();
+                    Ensure(!stepper.PlusButton.IsEnabled, $"{size}: plus is disabled at the maximum");
+                    stepper.Step(1); await Settle();
+                    Ensure(input.Value == input.Maximum, $"{size}: the maximum holds");
+                    input.Value = original; await Settle();
+                }
+                Ensure(edit || view.PriceInput.Text == "20000" && view.WeightInput.Text == 0.3m.ToString("0.000"), $"{size}: default price and weight are unchanged");
+
+                var numbers = view.NumberRow;
+                var (price, weight) = (numbers.Children[0], numbers.Children[1]);
+                Ensure(Math.Abs(price.Bounds.Width - weight.Bounds.Width) < .5 && Math.Abs(price.Bounds.Y - weight.Bounds.Y) < .5 &&
+                    Math.Abs(weight.Bounds.X - price.Bounds.Right - Ui.Spacing.Related) < .5, $"{size}: Harga and Berat sit in two equal columns 16 apart");
+                foreach (var stack in view.DetailsCard.GetVisualDescendants().OfType<StackPanel>().Where(s => s.Children.Count == 3 && s.Children[0] is TextBlock && s.Spacing == Ui.FieldGap))
+                {
+                    var label = (TextBlock)stack.Children[0];
+                    var gap = stack.Children[1].Bounds.Top - label.Bounds.Bottom;
+                    Ensure(label.FontSize == 14 && label.FontWeight == FontWeight.SemiBold && Math.Abs(gap - Ui.FieldGap) < .5, $"{size} {label.Text}: semibold 14 label 8 above the field");
+                }
+                foreach (var card in new[] { view.DetailsCard, view.PhotoCard })
+                    Ensure(Fill(card.Background) == Colors.White && Fill(card.BorderBrush) == DividerColor && card.BorderThickness == new Thickness(1) &&
+                        card.CornerRadius == new CornerRadius(Ui.FormCardRadius) && card.Padding == new Thickness(Ui.Spacing.Section),
+                        $"{size}: white card, thin border, radius 16, padding 24");
+
+                var preview = view.PhotoPreview;
+                Ensure(Fill(preview.Background) == Selection && preview.CornerRadius.TopLeft > 0 && preview.Bounds.Right <= view.PhotoCard.Bounds.Width,
+                    $"{size}: the photo preview keeps the Primary 100 rounded area inside the card");
+                Ensure(preview.HasPhoto || preview.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == "Foto belum tersedia" && Fill(t.Foreground) == MutedColor),
+                    $"{size}: an empty preview reads Foto belum tersedia in Text Secondary");
+                Ensure(view.PhotoNote.Text == MenuEditorView.PhotoNoteText && view.PhotoNote.FontSize == MenuEditorView.PhotoNoteSize && Fill(view.PhotoNote.Foreground) == MutedColor,
+                    $"{size}: the photo note is 13 Text Secondary");
+                var (pick, remove) = (view.PickPhotoButton, view.RemovePhotoButton);
+                Ensure(pick.Classes.Contains(Ui.CardActionTonalClass) && Math.Abs(pick.Bounds.Height - MenuEditorView.PhotoButtonHeight) < .5 &&
+                    Fill(pick.Background) == Selection && Fill(pick.Foreground) == Primary, $"{size}: Pilih foto is the 44 high tonal button");
+                Ensure(!remove.IsEnabled && remove.Classes.Contains(Ui.CardActionNeutralClass) && Math.Abs(remove.Bounds.Height - MenuEditorView.PhotoButtonHeight) < .5,
+                    $"{size}: Hapus foto is disabled without a photo");
+                var removeFace = Presenter(remove);
+                Ensure(Fill(removeFace.Background) == Fill(Ui.Sidebar) && Fill(removeFace.Foreground) == Fill(Ui.MutedFaint) &&
+                    removeFace.Foreground is ISolidColorBrush { Opacity: < 1 } && Fill(removeFace.Background) != Fill(Ui.DividerFill),
+                    $"{size}: disabled Hapus foto uses the soft surface with pale Text Secondary ({Fill(removeFace.Background)}, {Fill(removeFace.Foreground)})");
+                await Hold(remove, ":pointerover", true);
+                Ensure(Fill(removeFace.Background) == Fill(Ui.Sidebar) && Math.Abs(Scale(remove) - 1) <= .005, $"{size}: disabled Hapus foto has no hover");
+                await Hold(remove, ":pointerover", false);
+                await view.SelectPhoto(new MemoryStream(png), "menu.png"); await Settle();
+                Ensure(remove.IsEnabled && view.PhotoPreview.HasPhoto && Fill(Presenter(remove).Background) == Colors.White &&
+                    Fill(Presenter(remove).Foreground) == Fill(Ui.Ink) && Fill(Presenter(remove).BorderBrush) == DividerColor,
+                    $"{size}: Hapus foto turns active with the outlined white style once a photo is chosen");
+                await CardActions(window, size);
+                Click(remove); await Settle();
+                Ensure(!view.RemovePhotoButton.IsEnabled && !view.PhotoPreview.HasPhoto, $"{size}: removing the photo disables Hapus foto again");
+
+                var save = view.SaveButton;
+                var link = view.CancelLink;
+                Rect At(Control c) => new(c.TranslatePoint(default, window)!.Value, c.Bounds.Size);
+                Ensure(save.Classes.Contains(Ui.PrimaryClass) && save.Classes.Contains(Ui.CompactClass) && link.Classes.Contains(CollectionView.TextLinkClass) &&
+                    At(link).Right <= At(save).X + .5 && Math.Abs(At(save).Right - At(view.PhotoCard).Right) < 1 &&
+                    Math.Abs(At(view.Actions).Y - At(view.PhotoCard).Bottom - Ui.Spacing.Related) < 1 &&
+                    Math.Abs(At(view.PhotoCard).X - At(view.DetailsCard).Right - Ui.Spacing.Related) < 1,
+                    $"{size}: Batal then Simpan menu in the bottom right, aligned with the photo card and 16 under it");
+                var scroll = view.GetVisualDescendants().OfType<ScrollViewer>().First(s => s.Content is StackPanel);
+                await TextLink(window, link, () => Fits(scroll), $"{size} Batal", "Batal");
+                await PrimaryButton(save, true, scroll, scroll, $"{size} Simpan menu");
+                Ensure(Fits(scroll), $"{size}: no horizontal scrolling");
+                foreach (var text in view.GetVisualDescendants().OfType<TextBlock>().Where(t => t.IsEffectivelyVisible && !string.IsNullOrEmpty(t.Text)))
+                    Ensure(text.TextLayout.TextLines.All(l => !l.HasCollapsed) && text.Text?.Contains('—') == false, $"{size}: \"{text.Text}\" is shown in full");
+                await LabelFits(window, view, size);
+                Capture(window, Path.Combine(output, $"menu-editor-{(edit ? "edit" : "add")}-{w:0}x{h:0}.png"));
+                Click(link); await Settle();
+                Ensure(window.CurrentPage is MenusView, $"{size}: Batal still opens the menu list");
+            }
+        }
+        Ensure(menus.Select(m => (m.Name, m.NormalPrice, m.WeightPerPortion, m.ImageUrl)).SequenceEqual(saved), "Menu form checks leave every menu unchanged");
+        window.Width = width; window.Height = height;
+    }
+
+    // Listing editor fields
+    private static async Task ListingEditorFields(MainWindow window, string output)
+    {
+        var (width, height) = (window.Width, window.Height);
+        void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        var listings = window.Session.RestaurantListings.ToList();
+        var saved = listings.Select(l => (l.RescuePrice, l.Quantity, l.PickupStart, l.PickupEnd, l.Status)).ToList();
+        var count = window.Session.Listings.Count;
+        foreach (var (w, h) in new[] { (1040d, 720d), (1920d, 1080d) })
+        {
+            window.Width = w; window.Height = h;
+            foreach (var edit in new[] { false, true })
+            {
+                var size = $"{w:0}x{h:0} {(edit ? "Ubah penawaran" : "Buat penawaran")}";
+                var listing = edit ? listings.First() : null;
+                window.ShowListingEditor(listing); await Settle();
+                var view = (ListingEditorView)window.CurrentPage!;
+                var frames = view.Frames;
+                Ensure(frames.Keys.SequenceEqual(new[] { "menu", "price", "stock", "date", "startHour", "startMinute", "endHour", "endMinute" }),
+                    $"{size}: every listing field uses the shared field");
+                Ensure(!view.GetVisualDescendants().OfType<DatePicker>().Any() && !view.GetVisualDescendants().OfType<TimePicker>().Any() &&
+                    !view.PriceInput.ShowButtonSpinner && !view.StockInput.ShowButtonSpinner && view.MenuInput.Theme == Ui.SelectTheme &&
+                    view.MenuInput.ItemContainerTheme == Ui.OptionTheme, $"{size}: no native date, time, or spinner controls remain");
+
+                Avalonia.Input.InputElement Target(string key) => key switch
+                {
+                    "price" or "stock" => frames[key].Input.GetVisualDescendants().OfType<TextBox>().First(),
+                    "date" => view.DateInput.Face,
+                    _ => frames[key].Input
+                };
+                foreach (var (key, frame) in frames)
+                {
+                    var face = frame.Face;
+                    Ensure(Fill(face.Background) == Colors.White && Fill(face.BorderBrush) == DividerColor && Fill(face.BorderBrush) != Colors.Black &&
+                        face.BorderThickness == new Thickness(1) && face.CornerRadius == new CornerRadius(Ui.FieldRadius) && Math.Abs(face.Bounds.Height - Ui.FieldHeight) < .5,
+                        $"{size} {key}: white field, thin divider border (not black), radius 12, 48 high ({Fill(face.BorderBrush)}, {face.Bounds.Height:0.#})");
+                    await Hold(face, ":pointerover", true);
+                    Ensure(Fill(face.BorderBrush) == Primary500, $"{size} {key}: hover turns the border Primary 500 ({Fill(face.BorderBrush)})");
+                    await Hold(face, ":pointerover", false);
+                    Ensure(Fill(face.BorderBrush) == DividerColor, $"{size} {key}: leaving restores the divider border");
+                    if (key == "menu" && edit) continue;
+                    view.CancelLink.Focus(); await Settle();
+                    Target(key).Focus(Avalonia.Input.NavigationMethod.Tab); await Settle();
+                    var ring = frame.Ring;
+                    Ensure(frame.KeyboardFocus && ring.IsVisible && Fill(ring.BorderBrush) == Primary && ring.BorderThickness == new Thickness(Ui.FocusRingWidth) &&
+                        ring.Margin == new Thickness(-(Ui.FocusRingWidth + Ui.FocusRingOffset)) && Fill(face.BorderBrush) == Primary,
+                        $"{size} {key}: keyboard focus shows the Primary 700 border and the shared ring");
+                    Ensure(Target(key) is Control focused && (focused.FocusAdorner is null || focused.FocusAdorner == Ui.NoFocusAdorner),
+                        $"{size} {key}: no native black focus box");
+                    view.CancelLink.Focus(); await Settle();
+                    Ensure(!ring.IsVisible && Fill(face.BorderBrush) == DividerColor, $"{size} {key}: leaving the field hides the ring");
+                    Target(key).Focus(Avalonia.Input.NavigationMethod.Pointer); await Settle();
+                    Ensure(!ring.IsVisible && Fill(face.BorderBrush) == Primary, $"{size} {key}: a click focus shows the Primary 700 border without the ring");
+                    view.CancelLink.Focus(); await Settle();
+                }
+                Ensure(view.MenuInput.IsEnabled == !edit, $"{size}: the menu can be changed only on a new listing");
+
+                if (!edit)
+                {
+                    var chevron = view.MenuInput.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Path>().FirstOrDefault();
+                    Ensure(chevron is { Fill: null } && chevron.StrokeThickness > 0 && chevron.StrokeThickness <= 2 && Fill(chevron.Stroke) == MutedColor,
+                        $"{size}: the Menu dropdown shows a thin outline chevron");
+                    view.MenuInput.IsDropDownOpen = true; await Settle();
+                    var popup = view.MenuInput.GetVisualDescendants().OfType<Popup>().First();
+                    Ensure(popup.IsOpen && popup.Child is Avalonia.Controls.Border { BorderThickness.Left: 1 } sheet && Fill(sheet.BorderBrush) == DividerColor &&
+                        sheet.CornerRadius == new CornerRadius(Ui.FieldRadius), $"{size}: the Menu list opens in the shared sheet");
+                    var other = Enumerable.Range(0, view.MenuInput.ItemCount).Where(i => i != view.MenuInput.SelectedIndex)
+                        .Select(i => view.MenuInput.ContainerFromIndex(i) as ComboBoxItem).FirstOrDefault(i => i is not null);
+                    if (other is not null)
+                    {
+                        Ensure(other.FocusAdorner is null || other.FocusAdorner == Ui.NoFocusAdorner, $"{size}: menu options have no black focus box");
+                        await Hold(other, ":pointerover", true);
+                        Ensure(Fill(other.Background) == Selection, $"{size}: a hovered menu uses the Primary 100 fill");
+                        await Hold(other, ":pointerover", false);
+                    }
+                    view.MenuInput.IsDropDownOpen = false; await Settle();
+                }
+
+                foreach (var stepper in new[] { view.PriceStepper, view.StockStepper })
+                {
+                    var input = stepper.Input;
+                    var original = input.Value;
+                    Ensure(new[] { stepper.MinusButton, stepper.PlusButton }.All(b => b.Classes.Contains(Ui.RoundClass) && Math.Abs(b.Bounds.Width - QuantityStepper.ButtonSize) < .5 &&
+                            b.Bounds.Width == b.Bounds.Height) && stepper.MinusButton.Bounds.Right <= stepper.Frame.Bounds.Left && stepper.PlusButton.Bounds.Left >= stepper.Frame.Bounds.Right,
+                        $"{size}: round minus and plus sit left and right of {Avalonia.Automation.AutomationProperties.GetName(input)}");
+                    input.Value = input.Minimum; await Settle();
+                    Ensure(!stepper.MinusButton.IsEnabled && Fill(stepper.MinusButton.Background) == DividerColor && Fill(stepper.MinusButton.Foreground) == MutedColor &&
+                        stepper.PlusButton.IsEnabled, $"{size}: minus uses the shared disabled stepper style at the minimum");
+                    Click(stepper.PlusButton); await Settle();
+                    Ensure(input.Value == input.Minimum + input.Increment && input.Text == (input.Minimum + input.Increment).ToString("0") && stepper.MinusButton.IsEnabled,
+                        $"{size}: plus adds one step ({input.Text})");
+                    Click(stepper.MinusButton); await Settle();
+                    Ensure(input.Value == input.Minimum, $"{size}: minus removes one step");
+                    stepper.Step(-1); await Settle();
+                    Ensure(input.Value == input.Minimum, $"{size}: the minimum holds");
+                    input.Value = input.Maximum; await Settle();
+                    Ensure(!stepper.PlusButton.IsEnabled && stepper.MinusButton.IsEnabled, $"{size}: plus is disabled at the maximum");
+                    stepper.Step(1); await Settle();
+                    Ensure(input.Value == input.Maximum, $"{size}: the maximum holds");
+                    input.Value = original; await Settle();
+                }
+                Ensure(view.StockInput.Minimum == 1 && view.PriceInput.Minimum == 0 && view.PriceInput.Increment == 1000 && view.StockInput.Increment == 1,
+                    $"{size}: limits and steps are unchanged");
+
+                var date = view.DateInput;
+                var shown = date.SelectedDate!.Value.Date;
+                Ensure(date.ValueText.Text == shown.ToString(Ui.DateFormat, Ui.Indonesian) && date.ValueText.Text?.Contains('—') == false &&
+                    date.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Path>().Any(p => p.Fill is null && Fill(p.Stroke) == MutedColor),
+                    $"{size}: the date reads \"{date.ValueText.Text}\" with a calendar icon");
+                date.Open(false); await Settle();
+                Ensure(date.Popup.IsOpen && date.Calendar.SelectedDate == shown && date.Face.Classes.Contains(Ui.OpenClass), $"{size}: the calendar opens on the pickup date");
+                await CalendarLook(date, size);
+                var pick = shown.AddDays(1);
+                date.Calendar.SelectedDate = pick; await Settle();
+                Ensure(date.SelectedDate?.Date == pick && date.ValueText.Text == pick.ToString(Ui.DateFormat, Ui.Indonesian), $"{size}: picking a day updates the field");
+                date.Close(false); await Settle();
+                Ensure(!date.Popup.IsOpen, $"{size}: the calendar closes");
+                date.SelectedDate = new DateTimeOffset(shown); await Settle();
+
+                var card = view.FormCard;
+                Rect InCard(Control c) => new(c.TranslatePoint(default, card)!.Value, c.Bounds.Size);
+                var inner = card.Padding.Right + card.BorderThickness.Right;
+                foreach (var time in new[] { view.StartInput, view.EndInput })
+                {
+                    var label = Avalonia.Automation.AutomationProperties.GetName(time.Hour);
+                    var (hour, minute, colon) = (InCard(time.HourFrame), InCard(time.MinuteFrame), InCard(time.Separator));
+                    Ensure(time.Value is { } value && time.Hour.SelectedItem as string == value.Hour.ToString("00") && time.Minute.SelectedItem as string == value.Minute.ToString("00"),
+                        $"{size} {label}: hour and minute use the 00 format");
+                    Ensure(hour.Width >= 96 && hour.Width <= 112 && Math.Abs(hour.Width - minute.Width) < .5 && Math.Abs(hour.Y - minute.Y) < .5 &&
+                        colon.X >= hour.Right - .5 && minute.X >= colon.Right - .5 && minute.Right <= card.Bounds.Width - inner + .5,
+                        $"{size} {label}: hour, \":\" and minute sit side by side inside the card ({hour}, {colon}, {minute})");
+                    foreach (var part in new[] { time.HourFrame, time.MinuteFrame })
+                    {
+                        var text = part.GetVisualDescendants().OfType<TextBlock>().FirstOrDefault(t => t.IsEffectivelyVisible && !string.IsNullOrEmpty(t.Text) && t.Text != "--");
+                        var mark = part.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Path>().FirstOrDefault();
+                        Ensure(text is not null && text.TextLayout.TextLines.All(l => !l.HasCollapsed) && mark is { Fill: null } &&
+                            text.TranslatePoint(new Point(text.Bounds.Width, 0), part)!.Value.X <= mark.TranslatePoint(default, part)!.Value.X + .5,
+                            $"{size} {label}: \"{text?.Text}\" is shown in full before the chevron");
+                    }
+                    time.Minute.IsDropDownOpen = true; await Settle();
+                    var popup = time.Minute.GetVisualDescendants().OfType<Popup>().First();
+                    Ensure(popup.IsOpen && popup.Child is Avalonia.Controls.Border { BorderThickness.Left: 1 } sheet && sheet.CornerRadius == new CornerRadius(Ui.FieldRadius),
+                        $"{size} {label}: the minute list opens in the shared sheet");
+                    time.Minute.IsDropDownOpen = false; await Settle();
+                }
+                Ensure(view.TimeRow.Columns == 2 && view.NumberRow.Columns == 2 && Math.Abs(InCard(view.EndInput).Y - InCard(view.StartInput).Y) < .5 &&
+                    Math.Abs(InCard(view.StockStepper).Y - InCard(view.PriceStepper).Y) < .5 &&
+                    Math.Abs(InCard(view.StockStepper).Width - InCard(view.PriceStepper).Width) < .5, $"{size}: Harga beside Stok and Mulai beside Selesai in equal columns");
+                view.NumberRow.Fit(FieldGrid.NarrowWidth); await Settle();
+                Ensure(view.NumberRow.Columns == 1 && InCard(view.StockStepper).Y > InCard(view.PriceStepper).Bottom, $"{size}: narrow widths stack Harga and Stok");
+                view.NumberRow.Fit(window.ClientSize.Width); await Settle();
+                var full = card.Bounds.Width - 2 * inner;
+                Ensure(Math.Abs(frames["menu"].Bounds.Width - full) < .5, $"{size}: Menu spans the card");
+                foreach (var stack in card.GetVisualDescendants().OfType<StackPanel>().Where(s => s.Children.Count == 2 && s.Children[0] is TextBlock && s.Spacing == Ui.FieldGap))
+                {
+                    var label = (TextBlock)stack.Children[0];
+                    var gap = stack.Children[1].Bounds.Top - label.Bounds.Bottom;
+                    Ensure(label.FontSize == 14 && label.FontWeight == FontWeight.SemiBold && Math.Abs(gap - Ui.FieldGap) < .5, $"{size} {label.Text}: semibold 14 label 8 above the field");
+                }
+                Ensure(Fill(card.Background) == Colors.White && Fill(card.BorderBrush) == DividerColor && card.BorderThickness == new Thickness(1) &&
+                    card.CornerRadius == new CornerRadius(Ui.FormCardRadius) && card.Padding == new Thickness(Ui.Spacing.Section) &&
+                    card.Bounds.Width <= ListingEditorView.FormWidth + .5 && card.FindAncestorOfType<FormArea>()?.HorizontalAlignment == Avalonia.Layout.HorizontalAlignment.Left,
+                    $"{size}: the form is one white card, radius 16, padding 24, at most 720 wide and left-aligned");
+
+                var note = view.Note;
+                var (noteBox, timeBox, actions) = (InCard(note), InCard(view.TimeRow), InCard(view.Actions));
+                Ensure(note.Text == ListingEditorView.NoteText && note.FontSize == ListingEditorView.NoteSize && Fill(note.Foreground) == MutedColor &&
+                    note.Text?.Contains('—') == false && Math.Abs(noteBox.Y - timeBox.Bottom - Ui.Spacing.Related) < .5 && Math.Abs(actions.Y - noteBox.Bottom - Ui.Spacing.Section) < .5,
+                    $"{size}: the 13 muted note sits 16 under Mulai and Selesai, and the actions 24 under it");
+                var save = view.SaveButton;
+                var link = view.CancelLink;
+                var corner = save.TranslatePoint(new Point(save.Bounds.Width, save.Bounds.Height), card)!.Value;
+                Ensure(save.Content as string == "Simpan penawaran" && save.Classes.Contains(Ui.PrimaryClass) && save.Classes.Contains(Ui.CompactClass) &&
+                    link.Classes.Contains(CollectionView.TextLinkClass) && InCard(link).Right <= InCard(save).X + .5 &&
+                    Math.Abs(corner.X - (card.Bounds.Width - inner)) < .5 && Math.Abs(corner.Y - (card.Bounds.Height - inner)) < .5,
+                    $"{size}: Batal then Simpan penawaran in the bottom right of the card ({corner})");
+                var scroll = view.GetVisualDescendants().OfType<ScrollViewer>().First(s => s.Content is StackPanel);
+                await TextLink(window, link, () => Fits(scroll), $"{size} Batal", "Batal");
+                await PrimaryButton(save, true, scroll, scroll, $"{size} Simpan penawaran");
+                Ensure(Fits(scroll), $"{size}: no horizontal scrolling");
+                foreach (var text in card.GetVisualDescendants().OfType<TextBlock>().Where(t => t.IsEffectivelyVisible && !string.IsNullOrEmpty(t.Text)))
+                {
+                    var x = text.TranslatePoint(default, card)!.Value.X;
+                    Ensure(text.TextLayout.TextLines.All(l => !l.HasCollapsed) && x >= -.5 && x + text.Bounds.Width <= card.Bounds.Width + .5 && text.Text?.Contains('—') == false,
+                        $"{size}: \"{text.Text}\" is shown in full inside the card");
+                }
+                await LabelFits(window, view, size);
+                Capture(window, Path.Combine(output, $"listing-editor-{(edit ? "edit" : "add")}-{w:0}x{h:0}.png"));
+                Click(link); await Settle();
+                Ensure(window.CurrentPage is ListingsView, $"{size}: Batal still opens Penawaran surplus");
+            }
+        }
+        Ensure(window.Session.Listings.Count == count && listings.Select(l => (l.RescuePrice, l.Quantity, l.PickupStart, l.PickupEnd, l.Status)).SequenceEqual(saved),
+            "Listing form checks leave every listing unchanged");
+        window.Width = width; window.Height = height;
+    }
+
+    // Restaurant profile fields
+    private static async Task RestaurantProfileFields(MainWindow window, string output)
+    {
+        var (width, height) = (window.Width, window.Height);
+        void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        foreach (var (w, h) in new[] { (1040d, 720d), (1920d, 1080d) })
+        {
+            window.Width = w; window.Height = h;
+            var size = $"{w:0}x{h:0}";
+            window.ShowRestaurantProfile(); await Settle();
+            var view = (RestaurantProfileView)window.CurrentPage!;
+            var restaurant = window.Session.Restaurant;
+            var (savedName, savedOpening, savedClosing) = (restaurant.Name, restaurant.OpeningTime, restaurant.ClosingTime);
+            var frames = view.Frames;
+            Ensure(frames.Keys.SequenceEqual(new[] { "name", "phone", "address", "description", "openingHour", "openingMinute", "closingHour", "closingMinute" }),
+                $"{size}: every Profil restoran field uses the shared field");
+            Ensure(!view.GetVisualDescendants().OfType<TimeField>().Any() && view.GetVisualDescendants().OfType<TextBox>().Where(t => t.IsEffectivelyVisible)
+                .All(t => t.Classes.Contains(Ui.BareClass) || t.FindAncestorOfType<FieldFrame>() is not null), $"{size}: no native text box or time pill is left");
+
+            Avalonia.Input.InputElement Target(FieldFrame frame) => frame.Input;
+            foreach (var (key, frame) in frames)
+            {
+                var face = frame.Face;
+                var tall = key == "description" ? RestaurantProfileView.DescriptionHeight : Ui.FieldHeight;
+                Ensure(Fill(face.Background) == Colors.White && Fill(face.BorderBrush) == DividerColor && Fill(face.BorderBrush) != Colors.Black &&
+                    face.BorderThickness == new Thickness(1) && face.CornerRadius == new CornerRadius(Ui.FieldRadius) && Math.Abs(face.Bounds.Height - tall) < .5,
+                    $"{size} {key}: white field, thin divider border (not black), radius 12, {tall:0} high ({Fill(face.BorderBrush)}, {face.Bounds.Height:0.#})");
+                if (frame.Input is TextBox text)
+                    Ensure(Fill(text.BorderBrush) == Colors.Transparent && text.BorderThickness == default && Math.Abs(text.Padding.Left - Ui.FieldInset) < .5,
+                        $"{size} {key}: the text box draws no border of its own and is inset 16");
+                await Hold(face, ":pointerover", true);
+                Ensure(Fill(face.BorderBrush) == Primary500, $"{size} {key}: hover turns the border Primary 500 ({Fill(face.BorderBrush)})");
+                await Hold(face, ":pointerover", false);
+                Ensure(Fill(face.BorderBrush) == DividerColor, $"{size} {key}: leaving restores the divider border");
+
+                view.BackLink.Focus(); await Settle();
+                Target(frame).Focus(Avalonia.Input.NavigationMethod.Tab); await Settle();
+                var ring = frame.Ring;
+                Ensure(frame.KeyboardFocus && ring.IsVisible && Fill(ring.BorderBrush) == Primary && ring.BorderThickness == new Thickness(Ui.FocusRingWidth) &&
+                    ring.Margin == new Thickness(-(Ui.FocusRingWidth + Ui.FocusRingOffset)) && Fill(face.BorderBrush) == Primary,
+                    $"{size} {key}: keyboard focus shows the Primary 700 border and the shared ring");
+                Ensure(Target(frame) is Control focused && (focused.FocusAdorner is null || focused.FocusAdorner == Ui.NoFocusAdorner),
+                    $"{size} {key}: no native black focus box");
+                view.BackLink.Focus(); await Settle();
+                Ensure(!ring.IsVisible && Fill(face.BorderBrush) == DividerColor, $"{size} {key}: leaving the field hides the ring");
+                Target(frame).Focus(Avalonia.Input.NavigationMethod.Pointer); await Settle();
+                Ensure(!ring.IsVisible && Fill(face.BorderBrush) == Primary, $"{size} {key}: a click focus shows the Primary 700 border without the ring");
+                view.BackLink.Focus(); await Settle();
+            }
+            Ensure(view.NameInput.Text == restaurant.Name && view.AddressInput.Text == restaurant.Address && view.PhoneInput.Text == restaurant.Phone &&
+                view.DescriptionInput.Text == restaurant.Description && view.DescriptionInput.AcceptsReturn && view.DescriptionInput.TextWrapping == TextWrapping.Wrap,
+                $"{size}: the fields load the saved profile and Deskripsi wraps");
+
+            var card = view.FormCard;
+            Rect InCard(Control c) => new(c.TranslatePoint(default, card)!.Value, c.Bounds.Size);
+            var inner = card.Padding.Right + card.BorderThickness.Right;
+            foreach (var (time, saved) in new[] { (view.OpeningInput, restaurant.OpeningTime), (view.ClosingInput, restaurant.ClosingTime) })
+            {
+                var label = Avalonia.Automation.AutomationProperties.GetName(time.Hour);
+                var (hour, minute, colon) = (InCard(time.HourFrame), InCard(time.MinuteFrame), InCard(time.Separator));
+                Ensure(time.Value == saved && time.Hour.SelectedItem as string == saved.Hour.ToString("00") && time.Minute.SelectedItem as string == saved.Minute.ToString("00"),
+                    $"{size} {label}: hour and minute keep the saved value in the 00 format");
+                Ensure(Math.Abs(hour.Width - ProfileTimeField.PartWidth) < .5 && Math.Abs(minute.Width - ProfileTimeField.PartWidth) < .5 &&
+                    hour.Width >= 96 && hour.Width <= 112 && Math.Abs(hour.Y - minute.Y) < .5 && colon.X >= hour.Right - .5 && minute.X >= colon.Right - .5 &&
+                    Math.Abs(colon.Center.Y - hour.Center.Y) < 2 && minute.Right <= card.Bounds.Width - inner + .5 && hour.X >= inner - .5,
+                    $"{size} {label}: hour, \":\" and minute sit side by side at a fixed width inside the card ({hour}, {colon}, {minute})");
+                foreach (var part in new[] { time.HourFrame, time.MinuteFrame })
+                {
+                    var shown = part.GetVisualDescendants().OfType<TextBlock>().FirstOrDefault(t => t.IsEffectivelyVisible && !string.IsNullOrEmpty(t.Text) && t.Text != "--");
+                    var chevron = part.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Path>().FirstOrDefault();
+                    Ensure(shown is not null && shown.TextLayout.TextLines.All(l => !l.HasCollapsed) && chevron is { Fill: null } &&
+                        shown.TranslatePoint(new Point(shown.Bounds.Width, 0), part)!.Value.X <= chevron.TranslatePoint(default, part)!.Value.X + .5,
+                        $"{size} {label}: \"{shown?.Text}\" is shown in full before the chevron");
+                }
+                time.Hour.IsDropDownOpen = true; await Settle();
+                var popup = time.Hour.GetVisualDescendants().OfType<Popup>().First();
+                Ensure(popup.IsOpen && popup.Child is Avalonia.Controls.Border { BorderThickness.Left: 1 } sheet && Fill(sheet.BorderBrush) == DividerColor &&
+                    sheet.CornerRadius == new CornerRadius(Ui.FieldRadius) && time.HourFrame.Face.Classes.Contains(Ui.OpenClass),
+                    $"{size} {label}: the hour list opens in the shared sheet");
+                var other = Enumerable.Range(0, time.Hour.ItemCount).Where(i => i != time.Hour.SelectedIndex)
+                    .Select(i => time.Hour.ContainerFromIndex(i) as ComboBoxItem).FirstOrDefault(i => i is not null);
+                Ensure(other is not null && other.Theme == Ui.OptionTheme && (other.FocusAdorner is null || other.FocusAdorner == Ui.NoFocusAdorner),
+                    $"{size} {label}: hour options use the shared option without a black focus box");
+                await Hold(other!, ":pointerover", true);
+                Ensure(Fill(other!.Background) == Selection && Fill(other.Foreground) == Primary, $"{size} {label}: a hovered hour uses the Primary 100 fill");
+                await Hold(other, ":pointerover", false);
+                time.Hour.IsDropDownOpen = false; await Settle();
+                Ensure(!time.HourFrame.Face.Classes.Contains(Ui.OpenClass), $"{size} {label}: closing the list clears the open border");
+            }
+
+            Ensure(view.NameRow.Columns == 2 && view.TimeRow.Columns == 2 && Math.Abs(InCard(view.PhoneInput).Y - InCard(view.NameInput).Y) < .5 &&
+                Math.Abs(InCard(view.ClosingInput).Y - InCard(view.OpeningInput).Y) < .5,
+                $"{size}: Nama restoran beside Telepon and Jam buka beside Jam tutup");
+            var full = card.Bounds.Width - 2 * inner;
+            Ensure(Math.Abs(frames["address"].Bounds.Width - full) < .5 && Math.Abs(frames["description"].Bounds.Width - full) < .5,
+                $"{size}: Alamat and Deskripsi span the card");
+            foreach (var stack in card.GetVisualDescendants().OfType<StackPanel>().Where(s => s.Children.Count == 2 && s.Children[0] is TextBlock && s.Spacing == Ui.FieldGap))
+            {
+                var label = (TextBlock)stack.Children[0];
+                var gap = stack.Children[1].Bounds.Top - label.Bounds.Bottom;
+                Ensure(label.FontSize == 14 && label.FontWeight == FontWeight.SemiBold && Math.Abs(gap - Ui.FieldGap) < .5, $"{size} {label.Text}: semibold 14 label 8 above the field");
+            }
+            view.NameRow.Fit(FieldGrid.NarrowWidth); view.TimeRow.Fit(FieldGrid.NarrowWidth); await Settle();
+            Ensure(view.NameRow.Columns == 1 && view.TimeRow.Columns == 1 && InCard(view.PhoneInput).Y > InCard(view.NameInput).Bottom &&
+                InCard(view.ClosingInput).Y > InCard(view.OpeningInput).Bottom, $"{size}: narrow widths stack the fields in one column");
+            view.NameRow.Fit(window.ClientSize.Width); view.TimeRow.Fit(window.ClientSize.Width); await Settle();
+
+            Ensure(Fill(card.Background) == Colors.White && Fill(card.BorderBrush) == DividerColor && card.BorderThickness == new Thickness(1) &&
+                card.CornerRadius == new CornerRadius(Ui.FormCardRadius) && card.Padding == new Thickness(Ui.Spacing.Section) &&
+                card.Bounds.Width <= RestaurantProfileView.FormWidth + .5 && card.FindAncestorOfType<FormArea>()?.HorizontalAlignment == Avalonia.Layout.HorizontalAlignment.Left,
+                $"{size}: the form is one white card, radius 16, padding 24, at most 720 wide and left-aligned");
+            var heading = view.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == "Profil restoran");
+            var subtitle = view.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == RestaurantProfileView.Subtitle);
+            var headingBlock = heading.FindAncestorOfType<Grid>()!;
+            var rhythm = card.TranslatePoint(default, view)!.Value.Y - headingBlock.TranslatePoint(new Point(0, headingBlock.Bounds.Height), view)!.Value.Y;
+            Ensure(Fill(subtitle.Foreground) == MutedColor && subtitle.Text?.Contains('—') == false && Math.Abs(rhythm - Ui.Spacing.Section) < .5,
+                $"{size}: a muted subtitle and 24 between the heading and the card ({rhythm:0.#})");
+
+            var save = view.SaveButton;
+            var link = view.BackLink;
+            var corner = save.TranslatePoint(new Point(save.Bounds.Width, save.Bounds.Height), card)!.Value;
+            var lastField = InCard(view.TimeRow);
+            var actions = InCard(view.Actions);
+            Ensure(save.Content as string == "Simpan profil" && save.Classes.Contains(Ui.PrimaryClass) && save.Classes.Contains(Ui.CompactClass) &&
+                Math.Abs(corner.X - (card.Bounds.Width - inner)) < .5 && Math.Abs(corner.Y - (card.Bounds.Height - inner)) < .5 &&
+                InCard(link).Right <= InCard(save).X + .5 && Math.Abs(actions.Y - lastField.Bottom - Ui.Spacing.Section) < .5,
+                $"{size}: Kembali then Simpan profil in the bottom right, 24 under the last field ({corner})");
+            var scroll = view.GetVisualDescendants().OfType<ScrollViewer>().First(s => s.Content is StackPanel);
+            await TextLink(window, link, () => Fits(scroll), $"{size} Profil restoran Kembali", "Kembali");
+            await PrimaryButton(save, true, scroll, scroll, $"{size} Simpan profil");
+            Ensure(Fits(scroll), $"{size}: no horizontal scrolling on Profil restoran");
+            foreach (var text in card.GetVisualDescendants().OfType<TextBlock>().Where(t => t.IsEffectivelyVisible && !string.IsNullOrEmpty(t.Text)))
+            {
+                var x = text.TranslatePoint(default, card)!.Value.X;
+                Ensure(text.TextLayout.TextLines.All(l => !l.HasCollapsed) && x >= -.5 && x + text.Bounds.Width <= card.Bounds.Width + .5 && text.Text?.Contains('—') == false,
+                    $"{size}: \"{text.Text}\" is shown in full inside the card");
+            }
+            Capture(window, Path.Combine(output, $"restaurant-profile-{size}.png"));
+
+            Click(link); await Settle();
+            Ensure(window.CurrentPage is DashboardView, $"{size}: Kembali still opens the dashboard");
+            window.ShowRestaurantProfile(); await Settle();
+            view = (RestaurantProfileView)window.CurrentPage!;
+            Click(view.SaveButton); await Settle();
+            Ensure(window.CurrentPage is DashboardView && window.SuccessMessage == "Profil restoran tersimpan." && window.Session.Restaurant.Name == savedName &&
+                window.Session.Restaurant.OpeningTime == savedOpening && window.Session.Restaurant.ClosingTime == savedClosing,
+                $"{size}: Simpan profil still saves the profile and opens the dashboard");
+        }
+        window.Width = width; window.Height = height; window.ShowDashboard(); await Settle();
+        await Task.Delay(4200);
+    }
+
+    // Dashboard period
+    private static async Task DashboardPeriod(MainWindow window, string output)
+    {
+        var (width, height) = (window.Width, window.Height);
+        var ink = Color.Parse("#202522");
+        foreach (var (w, h) in new[] { (1040d, 720d), (1920d, 1080d) })
+        {
+            window.Width = w; window.Height = h;
+            var size = $"{w:0}x{h:0}";
+            window.ShowDashboard(); await Settle();
+            var view = (DashboardView)window.CurrentPage!;
+            var combo = view.PeriodPicker;
+            var frame = view.PeriodFrame;
+            var face = frame.Face;
+            Ensure(frame.Input == combo && combo.Theme == Ui.SelectTheme && combo.ItemContainerTheme == Ui.OptionTheme && combo.Padding == Ui.FieldPadding &&
+                Fill(combo.Foreground) == ink, $"{size}: the period dropdown uses the shared select field with Text Primary text");
+            Ensure(Fill(face.Background) == Colors.White && Fill(face.BorderBrush) == DividerColor && Fill(face.BorderBrush) != Colors.Black &&
+                face.BorderThickness == new Thickness(1) && face.CornerRadius == new CornerRadius(Ui.FieldRadius) && Math.Abs(face.Bounds.Height - Ui.CompactFieldHeight) < .5,
+                $"{size}: the period dropdown is white with a thin divider border, radius 12, 44 high ({Fill(face.BorderBrush)}, {face.Bounds.Height:0.#})");
+            var chevron = combo.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Path>().FirstOrDefault();
+            Ensure(chevron is { Fill: null } && chevron.StrokeThickness > 0 && chevron.StrokeThickness <= 2 && Fill(chevron.Stroke) == MutedColor,
+                $"{size}: the period dropdown shows a thin outline chevron on the right");
+
+            await Hold(face, ":pointerover", true);
+            Ensure(Fill(face.BorderBrush) == Primary500, $"{size}: period hover turns the border Primary 500 ({Fill(face.BorderBrush)})");
+            await Hold(face, ":pointerover", false);
+            Ensure(Fill(face.BorderBrush) == DividerColor, $"{size}: leaving the period dropdown restores the divider border");
+
+            ProfileButton(view).Focus(); await Settle();
+            combo.Focus(Avalonia.Input.NavigationMethod.Tab); await Settle();
+            var ring = frame.Ring;
+            Ensure(frame.KeyboardFocus && ring.IsVisible && Fill(ring.BorderBrush) == Primary && ring.BorderThickness == new Thickness(Ui.FocusRingWidth) &&
+                Fill(face.BorderBrush) == Primary, $"{size}: keyboard focus on the period shows the Primary 700 border and the shared ring");
+            Ensure(combo.FocusAdorner is null || combo.FocusAdorner == Ui.NoFocusAdorner, $"{size}: the period dropdown has no native black focus box");
+            ProfileButton(view).Focus(); await Settle();
+            Ensure(!ring.IsVisible && Fill(face.BorderBrush) == DividerColor, $"{size}: leaving the period dropdown hides the ring");
+            combo.Focus(Avalonia.Input.NavigationMethod.Pointer); await Settle();
+            Ensure(!ring.IsVisible && Fill(face.BorderBrush) == Primary, $"{size}: a click focus on the period shows the Primary 700 border without the ring");
+            ProfileButton(view).Focus(); await Settle();
+
+            combo.IsDropDownOpen = true; await Settle();
+            var popup = combo.GetVisualDescendants().OfType<Popup>().First();
+            Ensure(popup.IsOpen && popup.Child is Avalonia.Controls.Border { BorderThickness.Left: 1 } sheet && Fill(sheet.BorderBrush) == DividerColor &&
+                sheet.CornerRadius == new CornerRadius(Ui.FieldRadius) && Fill(face.BorderBrush) == Primary,
+                $"{size}: the period list opens as a rounded sheet with a thin border");
+            var items = Enumerable.Range(0, combo.ItemCount).Select(i => combo.ContainerFromIndex(i) as ComboBoxItem).ToList();
+            Ensure(items.All(i => i is not null && (i.FocusAdorner is null || i.FocusAdorner == Ui.NoFocusAdorner) &&
+                    i.GetVisualDescendants().OfType<ContentPresenter>().All(p => p.BorderThickness == default)),
+                $"{size}: period options have no outline and no native focus box");
+            Ensure(items[combo.SelectedIndex]!.FontWeight == FontWeight.SemiBold, $"{size}: the selected period is semibold");
+            var other = items.Where((_, i) => i != combo.SelectedIndex).First()!;
+            Ensure(other.FontWeight == FontWeight.Normal && Fill(other.Background) == Colors.Transparent, $"{size}: other periods rest normal and transparent");
+            foreach (var pseudo in new[] { ":pointerover", ":focus-visible" })
+            {
+                await Hold(other, pseudo, true);
+                Ensure(Fill(other.Background) == Selection && Fill(other.Foreground) == Primary &&
+                    other.GetVisualDescendants().OfType<ContentPresenter>().All(p => p.BorderThickness == default),
+                    $"{size}: {pseudo} on a period uses the Primary 100 fill with Primary 700 text and no outline");
+                await Hold(other, pseudo, false);
+            }
+            combo.IsDropDownOpen = false; await Settle();
+            Ensure(!face.Classes.Contains(Ui.OpenClass), $"{size}: closing the period list clears the open border");
+
+            for (var index = 0; index < DashboardView.PeriodOptions.Length; index++)
+            {
+                ((DashboardView)window.CurrentPage!).PeriodPicker.SelectedIndex = index; await Settle();
+                view = (DashboardView)window.CurrentPage!;
+                var option = DashboardView.PeriodOptions[index];
+                var shown = view.PeriodPicker.GetVisualDescendants().OfType<TextBlock>().FirstOrDefault(t => t.IsEffectivelyVisible && t.Text == option);
+                var arrow = view.PeriodPicker.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Path>().First();
+                Ensure(shown is not null && shown.TextLayout.TextLines.All(l => !l.HasCollapsed) &&
+                    shown.TranslatePoint(new Point(shown.Bounds.Width, 0), arrow)!.Value.X <= .5 && view.PeriodFrame.Bounds.Width >= Ui.CompactSelectMinWidth - .5,
+                    $"{size}: \"{option}\" is shown in full before the chevron");
+            }
+            view.PeriodPicker.SelectedIndex = 1; await Settle();
+            view = (DashboardView)window.CurrentPage!;
+            var message = view.Banner.Message;
+            var gap = view.PeriodFrame.TranslatePoint(default, message)!.Value.Y - message.Bounds.Height;
+            Ensure(Math.Abs(gap - 8) < .5, $"{size}: the period dropdown sits 8 under the subtitle ({gap:0.#})");
+
+            var profile = view.ProfileButton;
+            var presenter = Presenter(profile);
+            Ensure(profile.Classes.Contains(DashboardView.ActionClass) && Fill(presenter.Background) == Colors.White && Fill(presenter.BorderBrush) == DividerColor &&
+                (profile.FocusAdorner is null || profile.FocusAdorner == Ui.NoFocusAdorner), $"{size}: Ubah profil uses the shared solid pill without a native border or focus box");
+            await Hold(profile, ":pointerover", true);
+            Ensure(Fill(presenter.Background) == Selection && Fill(presenter.Foreground) == Primary, $"{size}: Ubah profil hover uses the Primary 100 fill");
+            await Hold(profile, ":pointerover", false);
+
+            var scroll = view.GetVisualDescendants().OfType<ScrollViewer>().First();
+            Ensure(Fits(scroll), $"{size}: no horizontal scrolling on the dashboard");
+            Capture(window, Path.Combine(output, $"dashboard-period-{size}.png"));
+        }
+        window.Width = width; window.Height = height; window.ShowDashboard(); await Settle();
     }
 
     // Button label widths

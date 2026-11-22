@@ -177,7 +177,38 @@ internal static class StateVerification
         remoteSession.ApplySharedListings([remoteListing]);
         Ensure(remoteSession.FindRestaurant(remoteRestaurant.Id) is { Location: null } updated && updated.Address == remoteRestaurant.Address,
             "Shared listing with a new address drops the old restaurant coordinates");
+        CheckReopenListing(Path.Combine(directory, "reopen-state.json"));
         Console.WriteLine("All Replate desktop state checks passed.");
+    }
+
+    // Reopen listing
+    private static void CheckReopenListing(string path)
+    {
+        var session = new DemoSession(path).AsOwner();
+        var now = DateTime.UtcNow;
+        var listing = session.RestaurantListings.First(l => l.IsAvailable(now) && l.Menu.IsActive);
+        var (id, quantity, price, start, end) = (listing.Id, listing.Quantity, listing.RescuePrice, listing.PickupStart, listing.PickupEnd);
+        ExpectFailure(() => session.ReopenListing(listing));
+        session.CancelListing(listing);
+        Ensure(!listing.IsAvailable(now) && DemoSession.ReopenBlocker(listing, now) is null, "Closed valid listing can be reopened");
+        session.ReopenListing(listing);
+        Ensure(listing.Status == ListingStatus.Active && listing.IsAvailable(DateTime.UtcNow), "Reopened listing is available again");
+        session = new DemoSession(path).AsCustomer();
+        listing = session.Listings.Single(l => l.Id == id);
+        Ensure(listing.Status == ListingStatus.Active && listing.Quantity == quantity && listing.RescuePrice == price &&
+            listing.PickupStart == start && listing.PickupEnd == end && session.Search("", "Semua").Any(l => l.Id == id),
+            "Reopened listing survives restart unchanged and shows in the marketplace");
+        session.AsOwner();
+        session.CancelListing(listing);
+        listing.PickupEnd = DateTime.UtcNow.AddSeconds(-1);
+        Ensure(DemoSession.ReopenBlocker(listing, DateTime.UtcNow) == "Jendela pengambilan sudah berakhir", "Ended pickup window blocks reopening");
+        ExpectFailure(() => session.ReopenListing(listing));
+        Ensure(listing.Status == ListingStatus.Cancelled, "Ended listing stays closed");
+        listing.PickupEnd = end;
+        listing.UpdateStock(0);
+        Ensure(DemoSession.ReopenBlocker(listing, DateTime.UtcNow) == "Stok habis", "Empty stock blocks reopening");
+        ExpectFailure(() => session.ReopenListing(listing));
+        Ensure(listing.Status == ListingStatus.Cancelled, "Sold out listing stays closed");
     }
 
     // Legacy category
