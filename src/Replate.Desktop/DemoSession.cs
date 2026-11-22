@@ -682,6 +682,17 @@ public sealed class DemoSession
         }
         if (order.Status is OrderStatus.Completed or OrderStatus.Cancelled)
             throw new InvalidOperationException("Pesanan sudah selesai atau dibatalkan.");
+        if (!automatic && supabaseSession is { } session)
+        {
+            var quantities = SupabaseOrderWriter.CancelOrderAsync(session, order.Id).GetAwaiter().GetResult();
+            order.Cancel();
+            foreach (var item in order.Items)
+                if (quantities.TryGetValue(item.ListingId, out var quantity))
+                    item.Listing.UpdateStock(quantity);
+            Persist();
+            return;
+        }
+
         var restoreStock = true;
         if (UsesSharedStock)
         {
