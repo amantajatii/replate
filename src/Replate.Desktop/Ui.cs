@@ -535,6 +535,27 @@ internal static class Ui
         input.DropDownClosed += (_, _) => frame.Face.Classes.Set(OpenClass, false);
         return frame;
     }
+    public const double CompactFieldHeight = 44;
+    public const double CompactSelectMinWidth = 180;
+    public static FieldFrame CompactSelectField(ComboBox input)
+    {
+        var frame = SelectField(input);
+        frame.Face.Height = CompactFieldHeight;
+        frame.HorizontalAlignment = HorizontalAlignment.Left;
+        void Fit()
+        {
+            var longest = input.Items.Select(item =>
+            {
+                var text = new TextBlock { Text = item?.ToString(), FontSize = input.FontSize, FontFamily = input.FontFamily, FontWeight = FontWeight.SemiBold };
+                text.Measure(Size.Infinity);
+                return text.DesiredSize.Width;
+            }).DefaultIfEmpty(0).Max();
+            frame.MinWidth = Math.Max(CompactSelectMinWidth, Math.Ceiling(longest + 2 * FieldInset + FieldGap + FieldIconSize + 2));
+        }
+        frame.AttachedToVisualTree += (_, _) => Fit();
+        Fit();
+        return frame;
+    }
     private static Styles FieldStyles()
     {
         Style Set(Func<Selector?, Selector> selector, params Setter[] setters)

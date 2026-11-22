@@ -187,6 +187,7 @@ internal static class UiVerification
             window.ShowListingEditor(); await Shot("listing-editor");
             window.ShowProduction(); await Shot("production");
             await ProductionFields(window, output);
+            await DashboardPeriod(window, output);
             window.ShowRestaurantOrders(); await Shot("restaurant-orders");
             await RestaurantStatusPills(window);
             await LabelWidths(window);
@@ -706,6 +707,101 @@ internal static class UiVerification
             Capture(window, Path.Combine(output, $"production-fields-{size}.png"));
         }
         window.Width = width; window.Height = height; window.ShowProduction(); await Settle();
+    }
+
+    // Dashboard period
+    private static async Task DashboardPeriod(MainWindow window, string output)
+    {
+        var (width, height) = (window.Width, window.Height);
+        var ink = Color.Parse("#202522");
+        foreach (var (w, h) in new[] { (1040d, 720d), (1920d, 1080d) })
+        {
+            window.Width = w; window.Height = h;
+            var size = $"{w:0}x{h:0}";
+            window.ShowDashboard(); await Settle();
+            var view = (DashboardView)window.CurrentPage!;
+            var combo = view.PeriodPicker;
+            var frame = view.PeriodFrame;
+            var face = frame.Face;
+            Ensure(frame.Input == combo && combo.Theme == Ui.SelectTheme && combo.ItemContainerTheme == Ui.OptionTheme && combo.Padding == Ui.FieldPadding &&
+                Fill(combo.Foreground) == ink, $"{size}: the period dropdown uses the shared select field with Text Primary text");
+            Ensure(Fill(face.Background) == Colors.White && Fill(face.BorderBrush) == DividerColor && Fill(face.BorderBrush) != Colors.Black &&
+                face.BorderThickness == new Thickness(1) && face.CornerRadius == new CornerRadius(Ui.FieldRadius) && Math.Abs(face.Bounds.Height - Ui.CompactFieldHeight) < .5,
+                $"{size}: the period dropdown is white with a thin divider border, radius 12, 44 high ({Fill(face.BorderBrush)}, {face.Bounds.Height:0.#})");
+            var chevron = combo.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Path>().FirstOrDefault();
+            Ensure(chevron is { Fill: null } && chevron.StrokeThickness > 0 && chevron.StrokeThickness <= 2 && Fill(chevron.Stroke) == MutedColor,
+                $"{size}: the period dropdown shows a thin outline chevron on the right");
+
+            await Hold(face, ":pointerover", true);
+            Ensure(Fill(face.BorderBrush) == Primary500, $"{size}: period hover turns the border Primary 500 ({Fill(face.BorderBrush)})");
+            await Hold(face, ":pointerover", false);
+            Ensure(Fill(face.BorderBrush) == DividerColor, $"{size}: leaving the period dropdown restores the divider border");
+
+            window.Focus(); await Settle();
+            combo.Focus(Avalonia.Input.NavigationMethod.Tab); await Settle();
+            var ring = frame.Ring;
+            Ensure(frame.KeyboardFocus && ring.IsVisible && Fill(ring.BorderBrush) == Primary && ring.BorderThickness == new Thickness(Ui.FocusRingWidth) &&
+                Fill(face.BorderBrush) == Primary, $"{size}: keyboard focus on the period shows the Primary 700 border and the shared ring");
+            Ensure(combo.FocusAdorner is null || combo.FocusAdorner == Ui.NoFocusAdorner, $"{size}: the period dropdown has no native black focus box");
+            window.Focus(); await Settle();
+            Ensure(!ring.IsVisible && Fill(face.BorderBrush) == DividerColor, $"{size}: leaving the period dropdown hides the ring");
+            combo.Focus(Avalonia.Input.NavigationMethod.Pointer); await Settle();
+            Ensure(!ring.IsVisible && Fill(face.BorderBrush) == Primary, $"{size}: a click focus on the period shows the Primary 700 border without the ring");
+            window.Focus(); await Settle();
+
+            combo.IsDropDownOpen = true; await Settle();
+            var popup = combo.GetVisualDescendants().OfType<Popup>().First();
+            Ensure(popup.IsOpen && popup.Child is Avalonia.Controls.Border { BorderThickness.Left: 1 } sheet && Fill(sheet.BorderBrush) == DividerColor &&
+                sheet.CornerRadius == new CornerRadius(Ui.FieldRadius) && Fill(face.BorderBrush) == Primary,
+                $"{size}: the period list opens as a rounded sheet with a thin border");
+            var items = Enumerable.Range(0, combo.ItemCount).Select(i => combo.ContainerFromIndex(i) as ComboBoxItem).ToList();
+            Ensure(items.All(i => i is not null && (i.FocusAdorner is null || i.FocusAdorner == Ui.NoFocusAdorner) &&
+                    i.GetVisualDescendants().OfType<ContentPresenter>().All(p => p.BorderThickness == default)),
+                $"{size}: period options have no outline and no native focus box");
+            Ensure(items[combo.SelectedIndex]!.FontWeight == FontWeight.SemiBold, $"{size}: the selected period is semibold");
+            var other = items.Where((_, i) => i != combo.SelectedIndex).First()!;
+            Ensure(other.FontWeight == FontWeight.Normal && Fill(other.Background) == Colors.Transparent, $"{size}: other periods rest normal and transparent");
+            foreach (var pseudo in new[] { ":pointerover", ":focus-visible" })
+            {
+                await Hold(other, pseudo, true);
+                Ensure(Fill(other.Background) == Selection && Fill(other.Foreground) == Primary &&
+                    other.GetVisualDescendants().OfType<ContentPresenter>().All(p => p.BorderThickness == default),
+                    $"{size}: {pseudo} on a period uses the Primary 100 fill with Primary 700 text and no outline");
+                await Hold(other, pseudo, false);
+            }
+            combo.IsDropDownOpen = false; await Settle();
+            Ensure(!face.Classes.Contains(Ui.OpenClass), $"{size}: closing the period list clears the open border");
+
+            for (var index = 0; index < DashboardView.PeriodOptions.Length; index++)
+            {
+                ((DashboardView)window.CurrentPage!).PeriodPicker.SelectedIndex = index; await Settle();
+                view = (DashboardView)window.CurrentPage!;
+                var option = DashboardView.PeriodOptions[index];
+                var shown = view.PeriodPicker.GetVisualDescendants().OfType<TextBlock>().FirstOrDefault(t => t.IsEffectivelyVisible && t.Text == option);
+                var arrow = view.PeriodPicker.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Path>().First();
+                Ensure(shown is not null && shown.TextLayout.TextLines.All(l => !l.HasCollapsed) &&
+                    shown.TranslatePoint(new Point(shown.Bounds.Width, 0), arrow)!.Value.X <= .5 && view.PeriodFrame.Bounds.Width >= Ui.CompactSelectMinWidth - .5,
+                    $"{size}: \"{option}\" is shown in full before the chevron");
+            }
+            view.PeriodPicker.SelectedIndex = 1; await Settle();
+            view = (DashboardView)window.CurrentPage!;
+            var message = view.Banner.Message;
+            var gap = view.PeriodFrame.TranslatePoint(default, message)!.Value.Y - message.Bounds.Height;
+            Ensure(Math.Abs(gap - 8) < .5, $"{size}: the period dropdown sits 8 under the subtitle ({gap:0.#})");
+
+            var profile = view.ProfileButton;
+            var presenter = Presenter(profile);
+            Ensure(profile.Classes.Contains(DashboardView.ActionClass) && Fill(presenter.Background) == Colors.White && Fill(presenter.BorderBrush) == DividerColor &&
+                (profile.FocusAdorner is null || profile.FocusAdorner == Ui.NoFocusAdorner), $"{size}: Ubah profil uses the shared solid pill without a native border or focus box");
+            await Hold(profile, ":pointerover", true);
+            Ensure(Fill(presenter.Background) == Selection && Fill(presenter.Foreground) == Primary, $"{size}: Ubah profil hover uses the Primary 100 fill");
+            await Hold(profile, ":pointerover", false);
+
+            var scroll = view.GetVisualDescendants().OfType<ScrollViewer>().First();
+            Ensure(Fits(scroll), $"{size}: no horizontal scrolling on the dashboard");
+            Capture(window, Path.Combine(output, $"dashboard-period-{size}.png"));
+        }
+        window.Width = width; window.Height = height; window.ShowDashboard(); await Settle();
     }
 
     // Button label widths

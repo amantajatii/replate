@@ -17,20 +17,25 @@ public sealed class DashboardView : UserControl
     internal MarketplaceBanner Banner { get; private set; } = null!;
     internal Grid SummaryCards { get; private set; } = null!;
     internal ComboBox PeriodPicker { get; private set; } = null!;
-    internal DashboardView(MainWindow host, DemoSession session) => Render(host, session, 28);
+    internal FieldFrame PeriodFrame { get; private set; } = null!;
+    internal Button ProfileButton { get; private set; } = null!;
+    internal const string ActionClass = "dashboard-action";
+    internal static readonly string[] PeriodOptions = ["7 hari terakhir", "28 hari terakhir"];
+    internal DashboardView(MainWindow host, DemoSession session)
+    {
+        Styles.Add(Ui.PillStyles(ActionClass, Ui.SolidPills));
+        Styles.Add(Ui.FocusStyles());
+        Render(host, session, 28);
+    }
 
     private void Render(MainWindow host, DemoSession session, int days)
     {
         var firstDate = DateOnly.FromDateTime(DateTime.Today.AddDays(1 - days));
         var lastDate = DateOnly.FromDateTime(DateTime.Today);
-        var period = new ComboBox
-        {
-            ItemsSource = new[] { "7 hari terakhir", "28 hari terakhir" }, SelectedIndex = days == 7 ? 0 : 1,
-            MinWidth = 180, MinHeight = 38, HorizontalAlignment = HorizontalAlignment.Left,
-            CornerRadius = new CornerRadius(8), Background = Brushes.White, BorderBrush = Ui.Muted, Foreground = Ui.Ink
-        };
+        var period = new ComboBox { ItemsSource = PeriodOptions, SelectedIndex = days == 7 ? 0 : 1, FontSize = 14 };
         AutomationProperties.SetName(period, "Periode laporan");
         PeriodPicker = period;
+        PeriodFrame = Ui.CompactSelectField(period);
         period.SelectionChanged += (_, _) => Render(host, session, period.SelectedIndex == 0 ? 7 : 28);
         var records = session.Restaurant.Menus.SelectMany(m => m.ProductionRecords)
             .Where(r => session.IsDashboardProduction(r) && r.RecordDate >= firstDate && r.RecordDate <= lastDate).ToList();
@@ -38,7 +43,7 @@ public sealed class DashboardView : UserControl
         var finance = new FinancialDashboard();
         var recommendations = new ProductionRecommendationService();
         var range = $"{firstDate.ToString("dd MMM", Indonesian)}–{lastDate.ToString("dd MMM yyyy", Indonesian)}";
-        Banner = new MarketplaceBanner("Dashboard restoran", $"{session.Restaurant.Name} · {range}", period);
+        Banner = new MarketplaceBanner("Dashboard restoran", $"{session.Restaurant.Name} · {range}", PeriodFrame);
 
         var summary = new Grid { ColumnSpacing = 16, RowSpacing = 16 };
         summary.Children.Add(MetricCard("Total Produksi", $"{surplus.CalculateTotalProduced(records).ToString("N0", Indonesian)} porsi", "Porsi pada periode terpilih"));
@@ -113,7 +118,9 @@ public sealed class DashboardView : UserControl
         var details = session.Restaurant.Menus.Count == 0
             ? new[] { ReportPanel(empty) }
             : new[] { ReportPanel(analysis), ReportPanel(recommendationSection), ReportPanel(impact) };
-        var body = Ui.Stack(Ui.Spacing.Section, [Banner, Ui.Row(8, Ui.Button("Ubah profil", host.ShowRestaurantProfile)), summary, .. details,
+        ProfileButton = Ui.Pill("Ubah profil", ActionClass, 1, host.ShowRestaurantProfile);
+        ProfileButton.HorizontalAlignment = HorizontalAlignment.Left;
+        var body = Ui.Stack(Ui.Spacing.Section, [Banner, ProfileButton, summary, .. details,
             Ui.Text("Pendapatan dan porsi terselamatkan bertambah setelah pengambilan diverifikasi. Reservasi belum dihitung sebagai penjualan selesai.", 12, Ui.Muted)]);
         body.Margin = new Thickness(Ui.Spacing.Page);
         Background = Ui.WorkspaceFill;
