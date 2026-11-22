@@ -51,6 +51,7 @@ public static partial class AccountService
         if (string.IsNullOrWhiteSpace(profile.Name)) errors["restaurantName"] = "Nama restoran wajib diisi.";
         else if (profile.Name.Trim().Length > 80) errors["restaurantName"] = "Nama restoran maksimal 80 karakter.";
         if (string.IsNullOrWhiteSpace(profile.Address)) errors["address"] = "Alamat restoran wajib diisi.";
+        else if (profile.Address.Trim().Length > 500) errors["address"] = "Alamat restoran maksimal 500 karakter.";
         var phone = (profile.Phone ?? string.Empty).Trim();
         var digits = phone.Count(char.IsAsciiDigit);
         if (phone.Length == 0) errors["phone"] = "Nomor telepon wajib diisi.";
