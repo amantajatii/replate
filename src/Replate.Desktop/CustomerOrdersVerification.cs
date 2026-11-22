@@ -214,7 +214,7 @@ internal static class CustomerOrdersVerification
     {
         var order = card.Order;
         Ensure(card.Card.Background is ISolidColorBrush { Color: var white } && white == Colors.White && card.Card.CornerRadius == new CornerRadius(16) &&
-            card.Card.BoxShadow.ToString() == MarketplaceView.CardShadow.ToString() && card.Card.BorderThickness == default, $"{label}: white card, radius 16, soft shadow, no border");
+            card.Card.BoxShadow.ToString() == MarketplaceView.CardShadow.ToString() && card.Card.BorderThickness == Ui.CardBorderThickness, $"{label}: white card, radius 16, soft shadow, thin divider border");
         Ensure(card.NameText.Text == session.FindRestaurant(order.RestaurantId)!.Name && card.NameText.FontWeight == FontWeight.Bold &&
             card.Badge.Status == order.Status && ((TextBlock)card.Badge.Child!).Text == DemoSession.Status(order) &&
             Rect(card.Badge, window).X > Rect(card.NameText, window).X, $"{label}: restaurant name on the left, status badge on the right");

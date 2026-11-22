@@ -46,7 +46,7 @@ internal sealed class AuthSurface : Grid
     internal static readonly IBrush Selection = Brush.Parse("#E0E9DF");
     internal static readonly IBrush Sidebar = Brush.Parse("#F1F3EE");
     internal static readonly IBrush Leaf = Brush.Parse("#4FA37E");
-    internal static readonly IBrush CanvasFill = Brush.Parse("#FAFAF8");
+    internal static readonly IBrush CanvasFill = Ui.CanvasFill;
     private static readonly Lazy<Bitmap> HeroBitmap = new(() => { using var stream = AssetLoader.Open(HeroUri); return new Bitmap(stream); });
     private static readonly IBrush WarningText = Brush.Parse("#7A4E00");
     private static readonly ControlTheme PlainButton = Plain(typeof(Button));
@@ -98,7 +98,7 @@ internal sealed class AuthSurface : Grid
         Card = new Border
         {
             Child = cardContent, Background = Brushes.White, CornerRadius = new CornerRadius(16),
-            Padding = new Thickness(32), BoxShadow = BoxShadows.Parse("0 8 24 0 #1F23382C")
+            Padding = new Thickness(32), BoxShadow = BoxShadows.Parse("0 8 24 0 #1F23382C"), BorderBrush = Ui.CardBorder, BorderThickness = Ui.CardBorderThickness
         };
         column = Ui.Stack(16);
         column.VerticalAlignment = VerticalAlignment.Center; column.HorizontalAlignment = HorizontalAlignment.Left;

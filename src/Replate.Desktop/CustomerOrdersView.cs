@@ -277,7 +277,7 @@ public sealed partial class OrdersView
             Card = new Border
             {
                 Child = body, Background = Brushes.White, CornerRadius = new CornerRadius(16), BoxShadow = MarketplaceView.CardShadow,
-                Padding = new Thickness(CardPadding)
+                Padding = new Thickness(CardPadding), BorderBrush = Ui.CardBorder, BorderThickness = Ui.CardBorderThickness
             };
             AutomationProperties.SetName(Card, $"Pesanan dari {NameText.Text}");
         }
@@ -314,7 +314,7 @@ public sealed partial class OrderDetailView
     private static Border DetailCard(Control child) => new()
     {
         Child = child, Background = Brushes.White, CornerRadius = new CornerRadius(16), BoxShadow = MarketplaceView.CardShadow,
-        Padding = new Thickness(CardPadding), VerticalAlignment = VerticalAlignment.Top
+        Padding = new Thickness(CardPadding), VerticalAlignment = VerticalAlignment.Top, BorderBrush = Ui.CardBorder, BorderThickness = Ui.CardBorderThickness
     };
 
     internal string? CopyRequest { get; private set; }

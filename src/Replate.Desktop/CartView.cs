@@ -281,7 +281,7 @@ public sealed class CartView : UserControl
             {
                 Child = Ui.Columns("Auto,*,Auto,Auto,Auto", Photo, information, Stepper, SubtotalText, RemoveButton),
                 Background = Brushes.White, CornerRadius = new CornerRadius(16), BoxShadow = MarketplaceView.CardShadow,
-                Padding = new Thickness(CardPadding)
+                Padding = new Thickness(CardPadding), BorderBrush = Ui.CardBorder, BorderThickness = Ui.CardBorderThickness
             };
             AutomationProperties.SetName(Card, menu.Name);
         }

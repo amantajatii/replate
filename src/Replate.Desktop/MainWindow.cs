@@ -38,7 +38,7 @@ public sealed class MainWindow : Window
         this.startupError = startupError;
         Title = "Replate"; Width = 1360; Height = 940; MinWidth = 1040; MinHeight = 720;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
-        Background = Brush.Parse("#FAFAF8");
+        Background = Ui.CanvasFill;
         FontFamily = new FontFamily("Helvetica Neue, Segoe UI, sans-serif");
         successBanner = new Border
         {

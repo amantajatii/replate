@@ -25,6 +25,9 @@ internal static class Ui
     public static readonly IBrush OnPrimary = Brushes.White;
     public static readonly IBrush DividerFill = Brush.Parse("#DDE3DA");
     public static readonly IBrush Sidebar = Brush.Parse("#F1F3EE");
+    public static readonly IBrush CanvasFill = Brush.Parse("#FFFFFF");
+    public static readonly IBrush CardBorder = DividerFill;
+    public static readonly Thickness CardBorderThickness = new(1);
     public static readonly IBrush Danger = Brush.Parse("#B3261E");
     public static readonly IBrush DangerTint = Brush.Parse("#FBE4E1");
     public static readonly IBrush DangerPressed = Brush.Parse("#F6D3CE");

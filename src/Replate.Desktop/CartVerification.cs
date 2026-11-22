@@ -82,8 +82,8 @@ internal static class CartVerification
                 line.PickupText.Text!.StartsWith("Pengambilan ") && line.PriceText.Text == $"{DemoSession.Rupiah(item.UnitPrice)} / porsi" &&
                 line.Stepper.QuantityText.Text == item.Quantity.ToString() && line.SubtotalText.Text == DemoSession.Rupiah(item.CalculateSubtotal()) &&
                 line.SubtotalText.FontWeight >= FontWeight.Bold, $"{menu.Name}: name, restaurant and category, pickup, unit price, quantity and subtotal");
-            Ensure(line.Card.CornerRadius == new CornerRadius(16) && line.Card.BorderThickness == default && ColorOf(line.Card.Background) == Colors.White &&
-                line.Card.BoxShadow.ToString() == MarketplaceView.CardShadow.ToString(), $"{menu.Name}: white card with the card radius and shadow, no border");
+            Ensure(line.Card.CornerRadius == new CornerRadius(16) && line.Card.BorderThickness == Ui.CardBorderThickness && ColorOf(line.Card.Background) == Colors.White &&
+                line.Card.BoxShadow.ToString() == MarketplaceView.CardShadow.ToString(), $"{menu.Name}: white card with the card radius and shadow and the thin divider border");
             Ensure(AutomationProperties.GetName(line.RemoveButton) == $"Hapus {menu.Name}" && line.RemoveButton.Content == line.RemoveGlyph &&
                 line.RemoveGlyph.StrokeThickness == 1.75 && line.RemoveGlyph.Fill is null && ColorOf(line.RemoveButton.Background) == Colors.Transparent &&
                 line.RemoveButton.Classes.Contains(Ui.IconClass) && line.RemoveButton.IsEnabled, $"{menu.Name}: trash icon button named Hapus, no box");
@@ -230,9 +230,9 @@ internal static class CartVerification
         Ensure(dialog.TotalText.Text == DemoSession.Rupiah(other.RescuePrice * 2) && dialog.TotalText.FontWeight >= FontWeight.Bold && dialog.TotalText.FontSize >= 24 &&
             dialog.PickupText.Text!.StartsWith("Pengambilan ") && !Texts(dialog).Any(t => t.Contains("Ambil langsung di restoran") || t.Contains(PaymentNote)),
             "The confirmation shows the pickup window and the restaurant total without the pickup note");
-        Ensure(dialog.Card.Width == CheckoutDialog.CardWidth && dialog.Card.CornerRadius == new CornerRadius(16) && dialog.Card.BorderThickness == default &&
+        Ensure(dialog.Card.Width == CheckoutDialog.CardWidth && dialog.Card.CornerRadius == new CornerRadius(16) && dialog.Card.BorderThickness == Ui.CardBorderThickness &&
             ColorOf(dialog.Card.Background) == Colors.White && dialog.Card.BoxShadow.ToString() == MarketplaceView.CardShadow.ToString() &&
-            dialog.ScrimLayer.Background == ModalDialog.Scrim, "The confirmation card uses the dialog surface, radius and shadow without a border over the scrim");
+            dialog.ScrimLayer.Background == ModalDialog.Scrim, "The confirmation card uses the dialog surface, radius, shadow and thin divider border over the scrim");
         Ensure(dialog.CancelButton.Content as string == CheckoutDialog.CancelLabel && !dialog.CancelButton.Classes.Contains(Ui.PrimaryClass) &&
             dialog.ConfirmButton.Content as string == CheckoutDialog.ConfirmLabel && dialog.ConfirmButton.Classes.Contains(Ui.PrimaryClass) && dialog.ConfirmButton.IsEnabled &&
             Rect(dialog.CancelButton, window).Right <= Rect(dialog.ConfirmButton, window).X && !dialog.ErrorText.IsVisible,
