@@ -19,6 +19,7 @@ public sealed class DemoSession
     public User? CurrentUser { get; private set; }
     private SupabaseAuth.Session? supabaseSession;
     private readonly HashSet<Guid> customerApiOrderIds = [];
+    private readonly HashSet<Guid> restaurantApiOrderIds = [];
     public bool IsSignedIn => CurrentUser is not null;
     public static string Rupiah(decimal value) => "Rp" + value.ToString("N0", CultureInfo.GetCultureInfo("id-ID"));
 
@@ -30,6 +31,9 @@ public sealed class DemoSession
         ? AllOrders.Where(o => o.CustomerId == customer.Id &&
             (supabaseSession is null || customerApiOrderIds.Contains(o.Id))).OrderByDescending(o => o.OrderedAt) : [];
     public IEnumerable<SurplusListing> RestaurantListings => Listings.Where(l => l.Menu.RestaurantId == Restaurant.Id);
+    internal IEnumerable<Order> RestaurantOrders => Restaurant.Orders.Where(CanViewRestaurantOrder);
+    internal bool CanViewRestaurantOrder(Order order) =>
+        supabaseSession is null || restaurantApiOrderIds.Contains(order.Id);
     public Restaurant? FindRestaurant(Guid id) => Restaurants.FirstOrDefault(r => r.Id == id);
     public string RestaurantLine(Guid restaurantId) =>
         FindRestaurant(restaurantId) is { } restaurant ? $"{restaurant.Name} · {restaurant.Address}" : "Restoran tidak ditemukan";
@@ -155,6 +159,7 @@ public sealed class DemoSession
         if (CurrentUser != user) CurrentUser?.Logout();
         supabaseSession = session;
         customerApiOrderIds.Clear();
+        restaurantApiOrderIds.Clear();
         CurrentUser = user; LastOrder = null;
         return user;
     }
@@ -192,6 +197,7 @@ public sealed class DemoSession
         CurrentUser?.Logout();
         supabaseSession = null;
         customerApiOrderIds.Clear();
+        restaurantApiOrderIds.Clear();
         CurrentUser = null; Cart = new Cart(); LastOrder = null;
     }
 
@@ -228,11 +234,20 @@ public sealed class DemoSession
 
     internal void RefreshRestaurantOrders()
     {
+        restaurantApiOrderIds.Clear();
         if (!UsesSharedStock || checkingOut) return;
 
         var restaurant = RequireOwnedRestaurant(Restaurant.Id);
         RefreshSharedListings();
         var listings = RestaurantListings.ToDictionary(listing => listing.Id);
+        if (supabaseSession is { } session)
+        {
+            var orders = SupabaseOrderReader.LoadRestaurantOrdersAsync(session, restaurant.Id, listings).GetAwaiter().GetResult();
+            MergeSharedOrders(orders, preferRemote: true);
+            restaurantApiOrderIds.UnionWith(orders.Select(order => order.Id));
+            return;
+        }
+
         MergeSharedOrders(new DatabaseService().LoadOrders(restaurant.Id, listings));
     }
 

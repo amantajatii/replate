@@ -17,16 +17,25 @@ internal static class SupabaseOrderReader
     private const string Columns = "id,customer_id,restaurant_id,pickup_code,total_price,status,ordered_at," +
         "preparation_minutes,completed_at,order_items(id,listing_id,menu_name,quantity,unit_price)";
 
-    internal static async Task<List<Order>> LoadCustomerOrdersAsync(
-        SupabaseAuth.Session session, IReadOnlyDictionary<Guid, SurplusListing> listings)
+    internal static Task<List<Order>> LoadCustomerOrdersAsync(
+        SupabaseAuth.Session session, IReadOnlyDictionary<Guid, SurplusListing> listings) =>
+        LoadOrdersAsync(session, listings, restaurantId: null);
+
+    internal static Task<List<Order>> LoadRestaurantOrdersAsync(
+        SupabaseAuth.Session session, Guid restaurantId, IReadOnlyDictionary<Guid, SurplusListing> listings) =>
+        LoadOrdersAsync(session, listings, restaurantId);
+
+    private static async Task<List<Order>> LoadOrdersAsync(
+        SupabaseAuth.Session session, IReadOnlyDictionary<Guid, SurplusListing> listings, Guid? restaurantId)
     {
+        var filter = restaurantId is Guid id ? $"restaurant_id=eq.{id:D}" : $"customer_id=eq.{session.User.Id:D}";
         var orders = new List<Order>();
         try
         {
             for (var offset = 0; ; )
             {
                 var path = FormattableString.Invariant(
-                    $"/rest/v1/orders?select={Columns}&customer_id=eq.{session.User.Id:D}&order=ordered_at.desc,id.desc&limit=100&offset={offset}");
+                    $"/rest/v1/orders?select={Columns}&{filter}&order=ordered_at.desc,id.desc&limit=100&offset={offset}");
                 using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(session.Project, path));
                 request.Headers.Add("apikey", session.PublishableKey);
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", session.AccessToken);
@@ -42,8 +51,8 @@ internal static class SupabaseOrderReader
 
                 foreach (var row in rows)
                 {
-                    if (row.CustomerId != session.User.Id)
-                        throw new InvalidOperationException("Supabase mengembalikan pesanan milik akun lain.");
+                    if (restaurantId is Guid restaurant ? row.RestaurantId != restaurant : row.CustomerId != session.User.Id)
+                        throw new InvalidOperationException("Supabase mengembalikan pesanan di luar daftar yang diminta.");
                     if (row.OrderItems.Count == 0 || row.OrderItems.Any(item =>
                         !listings.TryGetValue(item.ListingId, out var listing) || listing.Menu.RestaurantId != row.RestaurantId))
                         continue;
