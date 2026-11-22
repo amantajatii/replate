@@ -33,6 +33,9 @@ internal static class Ui
     public static readonly IBrush DividerFill = Brush.Parse("#D7E4DF");
     public static readonly IBrush Sidebar = Brush.Parse("#EEF4F1");
     public static readonly IBrush Scrim = Brush.Parse("#66" + TextPrimaryHex);
+    public static readonly IBrush WorkspaceFill = Brush.Parse("#F7F8F4");
+    public static readonly IBrush CardBorder = DividerFill;
+    public static readonly Thickness CardBorderThickness = new(1);
     public static readonly IBrush Danger = Brush.Parse("#B3261E");
     public static readonly IBrush DangerTint = Brush.Parse("#FBE4E1");
     public static readonly IBrush DangerPressed = Brush.Parse("#F6D3CE");
@@ -336,8 +339,12 @@ internal static class Ui
         var body = Stack(24, children); body.Margin = new Thickness(32);
         return Scroll(body);
     }
-    public static Control Heading(string title, string subtitle, Control? action = null) =>
-        Columns("*,Auto", Stack(6, Text(title, 28, bold: true), Text(subtitle, 14, Muted)), action ?? new Border());
+    public static Control Heading(string title, string subtitle, Control? action = null)
+    {
+        var heading = Text(title, MarketplaceView.TitleSize);
+        heading.FontWeight = FontWeight.Bold;
+        return Columns("*,Auto", Stack(6, heading, Text(subtitle, 14, Muted)), action ?? new Border());
+    }
     public static StackPanel Field(string label, Control input)
     {
         Avalonia.Automation.AutomationProperties.SetName(input, label);

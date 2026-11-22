@@ -6,6 +6,28 @@ var customer = new Customer { Name = "Budi", Email = "budi@example.com" };
 
 Ensure(customer is User, "Customer must inherit User");
 Ensure(customer.Role == UserRole.Customer, "Customer role must be Customer");
+EnsureAccessDenied(() => customer.ViewOrders());
+customer.SetInitialPassword("sandi-pelanggan-untuk-pengujian");
+EnsureAccessDenied(() => customer.Login(customer.Email, "sandi-salah"));
+customer.Login(" BUDI@example.com ", "sandi-pelanggan-untuk-pengujian");
+customer.Orders.Add(new Order { CustomerId = customer.Id });
+customer.Orders.Add(new Order { CustomerId = Guid.NewGuid() });
+Ensure(customer.ViewOrders().Count == 1, "Customer must only see their own orders");
+customer.Logout();
+EnsureAccessDenied(() => customer.ViewOrders());
+
+{
+    var accessOwner = new RestaurantOwner { Email = "owner@example.com" };
+    accessOwner.SetInitialPassword("sandi-restoran-untuk-pengujian");
+    accessOwner.Login(accessOwner.Email, "sandi-restoran-untuk-pengujian");
+    var accessRestaurant = accessOwner.ManageRestaurant(new Restaurant());
+    var otherRestaurant = new Restaurant { OwnerId = Guid.NewGuid() };
+    accessOwner.ManageMenu(accessRestaurant, new Menu());
+    EnsureAccessDenied(() => accessOwner.ManageRestaurant(otherRestaurant));
+    EnsureAccessDenied(() => accessOwner.ManageOrders(otherRestaurant));
+    accessOwner.Logout();
+    EnsureAccessDenied(() => accessOwner.ManageOrders(accessRestaurant));
+}
 
 var record = new ProductionRecord
 {
@@ -192,4 +214,18 @@ static void Ensure(bool condition, string message)
     {
         throw new InvalidOperationException(message);
     }
+}
+
+static void EnsureAccessDenied(Action action)
+{
+    try
+    {
+        action();
+    }
+    catch (UnauthorizedAccessException)
+    {
+        return;
+    }
+
+    throw new InvalidOperationException("Unauthorized operation was allowed.");
 }

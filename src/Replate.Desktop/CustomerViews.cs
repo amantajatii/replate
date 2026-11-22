@@ -40,7 +40,7 @@ public sealed partial class OrdersView : UserControl
         void Refresh()
         {
             list.Children.Clear();
-            var allOrders = session.Restaurant.Orders.OrderByDescending(o => o.OrderedAt).ToList();
+            var allOrders = session.RestaurantOrders.OrderByDescending(o => o.OrderedAt).ToList();
             var orders = allOrders.Where(o => filter.SelectedIndex switch {
                 0 => o.Status is not (OrderStatus.Completed or OrderStatus.Cancelled),
                 2 => o.Status == OrderStatus.Completed, 3 => o.Status == OrderStatus.Cancelled, _ => true }).ToList();
@@ -90,27 +90,31 @@ public sealed partial class OrderDetailView : UserControl
                     Ui.Text($"Ambil {item.Listing.PickupStart.ToLocalTime():dd MMM, HH:mm}–{item.Listing.PickupEnd.ToLocalTime():HH:mm}", 13, Ui.Muted)),
                 Ui.Text(DemoSession.Rupiah(item.CalculateSubtotal()), 18, bold: true)));
         var actions = Ui.Stack(16);
+        var buttons = Ui.Row(12);
         if (order.Status == OrderStatus.Reserved)
         {
             var minutes = Ui.Number("Masukkan estimasi menit", 15, 240); minutes.Minimum = 1;
             actions.Children.Add(Ui.Field("Estimasi persiapan (menit)", minutes));
             ConfirmButton = Ui.Button("Konfirmasi pesanan", () => host.Run(() => session.ConfirmOrder(order, (int)(minutes.Value ?? 15)), () => host.ShowOrder(order, true)), true);
-            actions.Children.Add(ConfirmButton);
+            buttons.Children.Add(ConfirmButton);
         }
         if (order.Status == OrderStatus.Confirmed)
         {
             ReadyButton = Ui.Button("Tandai siap diambil", () => host.Run(() => session.ReadyOrder(order), () => host.ShowOrder(order, true)), true);
-            actions.Children.Add(ReadyButton);
+            buttons.Children.Add(ReadyButton);
         }
         if (order.Status == OrderStatus.ReadyForPickup)
         {
             PickupInput = Ui.Input("Masukkan kode pengambilan"); PickupInput.MaxLength = 6;
             actions.Children.Add(Ui.Field("Kode pengambilan dari pelanggan", PickupInput));
             VerifyButton = Ui.Button("Verifikasi dan selesaikan", () => host.Run(() => session.CompletePickup(order, PickupInput.Text ?? ""), () => host.ShowOrder(order, true)), true);
-            actions.Children.Add(VerifyButton);
+            buttons.Children.Add(VerifyButton);
         }
         if (order.Status is not (OrderStatus.Completed or OrderStatus.Cancelled))
-            actions.Children.Add(CancelButton(host, session, order, true));
+        {
+            buttons.Children.Add(CancelButton(host, session, order, true));
+            actions.Children.Add(buttons);
+        }
         var status = Ui.Stack(8, new OrderStatusBadge(order), Ui.Text(StatusNote(order), 14, Ui.Muted));
         Content = Ui.Page(Ui.Button("Kembali ke pesanan", host.ShowRestaurantOrders),
             Ui.Heading($"Pesanan #{order.Id.ToString("N")[..8].ToUpperInvariant()}", order.OrderedAt.ToLocalTime().ToString("dd MMM yyyy, HH:mm")),

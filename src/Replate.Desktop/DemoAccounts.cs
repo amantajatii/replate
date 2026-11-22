@@ -34,7 +34,9 @@ internal static class DemoAccounts
             for (var suffix = 2; AccountService.FindByEmail(users, email) is not null; suffix++)
                 email = $"{Slug(restaurant.Name)}-{suffix}@{Domain}";
             var owner = new RestaurantOwner { Name = "Pemilik " + restaurant.Name, Email = email, PasswordHash = PasswordHasher.Hash(Password) };
-            owner.ManageRestaurant(restaurant);
+            restaurant.Owner = owner;
+            restaurant.OwnerId = owner.Id;
+            owner.Restaurants.Add(restaurant);
             users.Add(owner);
         }
 

@@ -44,7 +44,12 @@ internal static class PhotoVerification
         var menu = session.Listings.First(l => l.Quantity > 0).Menu;
         window.ShowMenuEditor(menu); await Settle();
         var editor = (MenuEditorView)window.CurrentPage!;
-        Ensure(!editor.PhotoPreview.HasPhoto, "Menu without photo has placeholder");
+        Ensure(!editor.PhotoPreview.HasPhoto && !editor.RemovePhotoButton.IsEnabled,
+            "Menu without photo has a placeholder and no removal action");
+        await editor.SelectPhoto(new MemoryStream(new byte[] { 1, 2, 3 }), "invalid.png");
+        Ensure(editor.PhotoError.IsVisible && editor.RemovePhotoButton.IsEnabled, "An invalid selection can be cleared even with no saved photo");
+        Click(editor.RemovePhotoButton); await Settle();
+        Ensure(!editor.PhotoError.IsVisible && !editor.RemovePhotoButton.IsEnabled, "Clearing a failed selection restores the empty photo state");
         await editor.SelectPhoto(new MemoryStream(bytes), "food.png"); await Settle();
         Ensure(editor.PhotoPreview.HasPhoto && menu.ImageUrl == "", "Selection previews without changing stored menu");
         window.ShowMenus();

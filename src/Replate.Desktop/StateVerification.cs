@@ -40,6 +40,24 @@ internal static class StateVerification
         var cancelled = session.Checkout(listing.Menu.RestaurantId); session.CancelOrder(cancelled);
         ExpectFailure(() => session.CancelOrder(cancelled));
         Ensure(listing.Quantity == 4, "Cancellation restores stock exactly once");
+        today = listing.Menu.ProductionRecords.Single(r => r.RecordDate == DateOnly.FromDateTime(listing.PickupStart.ToLocalTime()));
+        session.AddToCart(listing, 1);
+        var overdue = session.Checkout(listing.Menu.RestaurantId);
+        session.AsOwner();
+        session.ConfirmOrder(overdue, 15);
+        session.ReadyOrder(overdue);
+        session.ExpireOverdueOrders(listing.PickupEnd);
+        Ensure(overdue.Status == OrderStatus.ReadyForPickup, "Pickup is allowed through the stated deadline");
+        var afterDeadline = listing.PickupEnd.AddTicks(1);
+        session.ExpireOverdueOrders(afterDeadline);
+        session.ExpireOverdueOrders(afterDeadline);
+        Ensure(overdue.Status == OrderStatus.Cancelled && listing.Quantity == 4,
+            "Expiration cancels an active order and restores stock only once");
+        Ensure(!listing.IsAvailable(afterDeadline), "Restored stock cannot be reserved after the pickup deadline");
+        Ensure(today.RescuedQuantity == rescuedBefore + 2, "Expired orders do not change rescued quantities");
+        session = new DemoSession(path).AsCustomer();
+        Ensure(session.CustomerOrders.Single(o => o.Id == overdue.Id).Status == OrderStatus.Cancelled &&
+            session.Listings.Single(l => l.Id == listingId).Quantity == 4, "Expiration survives restart");
         session.AsOwner();
         var menu = session.SaveMenu(null, "Menu pengujian", "Menu lokal", "Makanan utama", 20000, .25m);
         var date = DateOnly.FromDateTime(DateTime.Today);
@@ -131,6 +149,27 @@ internal static class StateVerification
         var allErrors = allocationSession.ValidateProduction(null, DateOnly.FromDateTime(DateTime.Today.AddDays(1)), -1, -2);
         Ensure(allErrors.Count == 4, "Production validation reports all fields together");
         CheckLegacyCategory();
+        var remotePath = Path.Combine(directory, "remote-state.json");
+        var remoteSession = new DemoSession(remotePath).AsCustomer();
+        var remoteRestaurant = new Replate.Domain.Entities.Restaurant { Name = "Restoran dari Supabase", Address = "Alamat pengambilan" };
+        var remoteMenu = new Replate.Domain.Entities.Menu
+        {
+            Restaurant = remoteRestaurant, RestaurantId = remoteRestaurant.Id, Name = "Menu bersama",
+            NormalPrice = 20000m, WeightPerPortion = .25m
+        };
+        var remoteListing = new Replate.Domain.Entities.SurplusListing
+        {
+            Menu = remoteMenu, MenuId = remoteMenu.Id, RescuePrice = 10000m, Quantity = 2,
+            PickupStart = DateTime.UtcNow.AddMinutes(-1), PickupEnd = DateTime.UtcNow.AddHours(1)
+        };
+        remoteSession.ApplySharedListings([remoteListing]);
+        remoteSession.ApplySharedListings([remoteListing]);
+        remoteSession.AddToCart(remoteListing, 1);
+        remoteSession = new DemoSession(remotePath).AsCustomer();
+        Ensure(remoteSession.Cart.GroupByRestaurant().Single().RestaurantId == remoteRestaurant.Id &&
+            remoteSession.RestaurantLine(remoteRestaurant.Id).Contains(remoteRestaurant.Address) &&
+            remoteSession.FindRestaurant(remoteRestaurant.Id)?.Owner is null,
+            "Imported restaurant and cart survive restart without creating a local owner");
         Console.WriteLine("All Replate desktop state checks passed.");
     }
 
