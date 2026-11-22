@@ -1,9 +1,13 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Shapes;
+using Avalonia.Controls.Templates;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Styling;
 using Replate.Domain.Entities;
 using Menu = Replate.Domain.Entities.Menu;
 
@@ -271,13 +275,6 @@ public sealed class MainWindow : Window
         alert = Ui.Text(Session.StorageError ?? "", 14, Brush.Parse("#963E28"));
         alert.IsVisible = Session.StorageError is not null; alert.Margin = new Thickness(32, 16, 32, 0);
         var area = new DockPanel(); DockPanel.SetDock(alert, Dock.Top); area.Children.Add(alert); area.Children.Add(page);
-        Button Nav(string label, Action route)
-        {
-            var button = Ui.Button(label, route);
-            button.Background = label == active ? Brush.Parse("#E0E9DF") : Brushes.Transparent;
-            button.Foreground = label == active ? Ui.Green : Ui.Muted;
-            return button;
-        }
         if (!restaurant)
         {
             TopBar.Show(Session.CurrentUser, Session.Cart.Items.Sum(i => i.Quantity), active == "Keranjang");
@@ -287,16 +284,65 @@ public sealed class MainWindow : Window
         }
         else
         {
-            RailLogo = Ui.Logo(Ui.LogoGreen, RailLogoHeight);
-            RailLogo.Margin = new Thickness(12, 0, 0, 32);
-            var nav = Ui.Stack(8, RailLogo, Nav("Dashboard", ShowDashboard), Nav("Menu", ShowMenus),
-                Nav("Penawaran surplus", ShowListings), Nav("Produksi", ShowProduction), Nav("Pesanan", ShowRestaurantOrders));
-            foreach (var button in nav.Children.OfType<Button>()) button.HorizontalAlignment = HorizontalAlignment.Stretch;
-            var footer = Ui.Stack(12, Ui.Text(Session.Restaurant.Name, 14, bold: true), Ui.Button("Keluar", SignOut));
+            Button Nav(string label, string glyph, Action route)
+            {
+                var button = Ui.Button(label, route);
+                button.ContentTemplate = new FuncDataTemplate<string>((text, _) =>
+                {
+                    var icon = Ui.OutlineIcon(glyph, 18, .085, null);
+                    icon.Bind(Shape.StrokeProperty, button.GetObservable(Button.ForegroundProperty));
+                    return Ui.Row(10, icon, new TextBlock { Text = text, VerticalAlignment = VerticalAlignment.Center });
+                });
+                AutomationProperties.SetName(button, label);
+                button.ClearValue(Button.BackgroundProperty);
+                button.ClearValue(Button.ForegroundProperty);
+                button.BorderThickness = default;
+                button.CornerRadius = new CornerRadius(8);
+                button.MinHeight = 44;
+                button.Padding = new Thickness(12, 8);
+                button.HorizontalAlignment = HorizontalAlignment.Stretch;
+                button.HorizontalContentAlignment = HorizontalAlignment.Left;
+                button.Classes.Add(Ui.OnPrimaryClass);
+                button.Classes.Set("active", label == active);
+                return button;
+            }
+            RailLogo = Ui.Logo(Ui.LogoWhite, RailLogoHeight);
+            RailLogo.Margin = new Thickness(12, 0, 0, 28);
+            var nav = Ui.Stack(6, RailLogo,
+                Nav("Dashboard", "M3 3H10V10H3Z M14 3H21V10H14Z M3 14H10V21H3Z M14 14H21V21H14Z", ShowDashboard),
+                Nav("Menu", "M4 4H10Q12 4 12 6Q12 4 14 4H20V19H14Q12 19 12 21Q12 19 10 19H4Z M12 6V20", ShowMenus),
+                Nav("Penawaran surplus", "M3 12V4H11L21 14L14 21Z M7.5 7.5H8", ShowListings),
+                Nav("Produksi", "M4 11H20L18 20H6Z M3 11H21 M8 7C6 5 10 4 8 2 M14 7C12 5 16 4 14 2", ShowProduction),
+                Nav("Pesanan", Ui.ReceiptOutline, ShowRestaurantOrders));
+            var restaurantName = Ui.Text(Session.Restaurant.Name, 14, Ui.OnPrimary, bold: true);
+            restaurantName.MaxLines = 2;
+            restaurantName.TextTrimming = TextTrimming.CharacterEllipsis;
+            ToolTip.SetTip(restaurantName, Session.Restaurant.Name);
+            var shopIcon = Ui.OutlineIcon("M3 10L5 4H19L21 10 M3 10H21 M5 10V20H19V10 M10 20V14H14V20", 18, .085, Ui.Green);
+            AutomationProperties.SetAccessibilityView(shopIcon, AccessibilityView.Raw);
+            var shop = new Border
+            {
+                Width = 34, Height = 34, CornerRadius = new CornerRadius(8), Background = Ui.Selection, Child = shopIcon
+            };
+            var identity = Ui.Columns("Auto,*", shop, restaurantName);
+            identity.ColumnSpacing = 10;
+            var logout = Nav("Keluar", "M11 4H4V20H11 M9 12H21 M17 8L21 12L17 16", SignOut);
+            logout.MinHeight = 38;
+            logout.Padding = new Thickness(8, 6);
+            var footer = new Border
+            {
+                Background = Brush.Parse("#1AFFFFFF"), BorderBrush = Brush.Parse("#26FFFFFF"), BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(12), Padding = new Thickness(8), Child = Ui.Stack(6, identity, logout)
+            };
             var dock = new DockPanel { Margin = new Thickness(20, 28, 20, 24) };
+            dock.Styles.Add(Ui.FocusStyles());
+            dock.Styles.Add(new Style(x => x.OfType<Button>().Class(Ui.OnPrimaryClass))
+            { Setters = { new Setter(Button.BackgroundProperty, Brushes.Transparent), new Setter(Button.ForegroundProperty, Ui.OnPrimary) } });
+            foreach (var state in new[] { "active", ":pointerover", ":pressed" })
+                dock.Styles.Add(new Style(x => x.OfType<Button>().Class(Ui.OnPrimaryClass).Class(state))
+                { Setters = { new Setter(Button.BackgroundProperty, Ui.Selection), new Setter(Button.ForegroundProperty, Ui.Green) } });
             DockPanel.SetDock(footer, Dock.Bottom); dock.Children.Add(footer); dock.Children.Add(nav);
-            pageHost.Content = Ui.Columns("208,*", new Border { Child = dock, Background = Brush.Parse("#F1F3EE"),
-                BorderBrush = Brush.Parse("#DDE3DA"), BorderThickness = new Thickness(0, 0, 1, 0) }, area);
+            pageHost.Content = Ui.Columns("224,*", new Border { Child = dock, Background = Ui.Green }, area);
         }
     }
 }

@@ -128,9 +128,9 @@ internal static class UiVerification
             Ensure(window.Session.CurrentUser is Replate.Domain.Entities.RestaurantOwner && window.Session.Restaurant.Name == "Dapur Bumi" &&
                 window.CurrentPage is DashboardView, "Owner sign-in opens Dapur Bumi dashboard");
             await Settle();
-            Ensure(window.RailLogo is { Source: var railSource, IsEffectivelyVisible: true } rail && railSource == Ui.LogoGreen &&
+            Ensure(window.RailLogo is { Source: var railSource, IsEffectivelyVisible: true } rail && railSource == Ui.LogoWhite &&
                 Math.Abs(rail.Bounds.Height - MainWindow.RailLogoHeight) < .5 && !window.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == "replate."),
-                "Green logo replaces the text wordmark on the light restaurant rail");
+                "White logo is visible on the restaurant rail");
             TopBarVerification.CheckRatio(window.RailLogo!, "restaurant rail logo");
             await Shot("dashboard");
             window.ShowMenus(); await Shot("menus");
