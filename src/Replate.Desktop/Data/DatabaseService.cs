@@ -351,6 +351,23 @@ internal sealed class DatabaseService : IOrderStore
         }
     }
 
+    internal void ReopenListing(Guid listingId)
+    {
+        try
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+            using var command = new NpgsqlCommand(
+                "UPDATE public.surplus_listings SET closed = false WHERE id = @id", connection);
+            command.Parameters.AddWithValue("id", listingId);
+            command.ExecuteNonQuery();
+        }
+        catch (NpgsqlException e)
+        {
+            throw new InvalidOperationException("Penawaran gagal dibuka kembali di PostgreSQL.", e);
+        }
+    }
+
     internal bool CancelOrder(Guid orderId, bool allowAlreadyCancelled)
     {
         try

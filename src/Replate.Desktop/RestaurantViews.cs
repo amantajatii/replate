@@ -103,7 +103,18 @@ internal sealed class RestaurantListCard : Border
         button.Foreground = foreground ?? Ui.Ink;
         button.BorderBrush = Ui.CardBorder;
         button.BorderThickness = Ui.CardBorderThickness;
+        button.Classes.AddRange([Ui.CardActionClass, Ui.CompactClass,
+            foreground == Ui.Danger ? Ui.CardActionDangerClass : background == Ui.Selection ? Ui.CardActionTonalClass : Ui.CardActionNeutralClass]);
         AutomationProperties.SetName(button, $"{label} {item}");
+        return button;
+    }
+
+    internal static Button PrimaryAction(string label, string item, Action action)
+    {
+        var button = Action(label, item, action, Ui.Green, Ui.OnPrimary);
+        button.BorderBrush = Brushes.Transparent;
+        button.Classes.Remove(Ui.CardActionNeutralClass);
+        button.Classes.Add(Ui.PrimaryClass);
         return button;
     }
 }
@@ -351,6 +362,18 @@ public sealed class ListingsView : UserControl
             {
                 buttons.Children.Add(RestaurantListCard.Action("Ubah", name, () => host.ShowListingEditor(listing), Ui.Selection, Ui.Green));
                 buttons.Children.Add(RestaurantListCard.Action("Tutup", name, () => host.Run(() => session.CancelListing(listing), host.ShowListings)));
+            }
+            else if (listing.Status == ListingStatus.Cancelled)
+            {
+                if (DemoSession.ReopenBlocker(listing, now) is { } blocker)
+                {
+                    var note = Ui.Text(blocker, 12, Ui.Muted);
+                    note.MaxWidth = 150;
+                    buttons.Children.Add(note);
+                }
+                else
+                    buttons.Children.Add(RestaurantListCard.PrimaryAction("Buka kembali", name,
+                        () => host.Run(() => session.ReopenListing(listing), host.ShowListings)));
             }
             var start = listing.PickupStart.ToLocalTime();
             var end = listing.PickupEnd.ToLocalTime();

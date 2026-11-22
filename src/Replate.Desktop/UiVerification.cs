@@ -134,6 +134,7 @@ internal static class UiVerification
             TopBarVerification.CheckRatio(window.RailLogo!, "restaurant rail logo");
             await Shot("dashboard");
             window.ShowMenus(); await Shot("menus");
+            await CardActions(window, "Menu restoran");
             var menusScroll = window.CurrentPage!.GetVisualDescendants().OfType<ScrollViewer>().First();
             await PrimaryButton(window.CurrentPage.GetVisualDescendants().OfType<Button>().First(b => b.Content as string == "Tambah menu"), true, menusScroll, menusScroll, "Restoran Tambah menu");
             CollectionVerification.NoLegacyCategory(window, "Menu list");
@@ -184,6 +185,8 @@ internal static class UiVerification
             Ensure(window.SuccessMessage is null, "Persistence failure has no success notification");
             Ensure(window.Session.Restaurant.Menus.Count == 5, "Menu form saves");
             window.ShowListings(); await Shot("listings");
+            await CardActions(window, "Penawaran surplus");
+            await ReopenAction(window);
             window.ShowListingEditor(); await Shot("listing-editor");
             window.ShowProduction(); await Shot("production");
             await ProductionFields(window, output);
@@ -466,6 +469,86 @@ internal static class UiVerification
         Ensure(!Near(shaded(bx, by), surface(bx, by)), $"{label}: the hover shadow shows below the button ({shaded(bx, by)} on {surface(bx, by)})");
         Ensure(button.GetVisualAncestors().OfType<Visual>().Where(v => v.ClipToBounds).All(v => v.TransformToVisual(window) is { } m && new Rect(v.Bounds.Size).TransformToAABB(m).Contains(reach)),
             $"{label}: no container clips the hover shadow ({reach})");
+    }
+    // Card actions
+    private static async Task CardActions(MainWindow window, string page)
+    {
+        var buttons = window.CurrentPage!.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains(Ui.CardActionClass)).ToList();
+        Ensure(buttons.Count > 0, $"{page}: card action buttons exist");
+        foreach (var button in buttons)
+        {
+            var label = $"{page} {button.Content}";
+            var (hover, pressed, text) =
+                button.Classes.Contains(Ui.PrimaryClass) ? (Selection, DividerColor, Primary) :
+                button.Classes.Contains(Ui.CardActionDangerClass) ? (DangerTint, DangerPressed, Danger) :
+                button.Classes.Contains(Ui.CardActionTonalClass) ? (Primary, Primary, Colors.White) :
+                button.Classes.Contains(Ui.CardActionNeutralClass) ? (Selection, DividerColor, Primary) :
+                throw new InvalidOperationException($"{label}: card action has a role class");
+            var presenter = Presenter(button);
+            button.BringIntoView(); await Settle();
+            var (restFill, restText, restBorder) = (Fill(presenter.Background), Fill(presenter.Foreground), Fill(presenter.BorderBrush));
+            var (bounds, thickness, radius) = (button.Bounds, presenter.BorderThickness, presenter.CornerRadius);
+            Ensure(!button.ClipToBounds && radius == button.CornerRadius && button.Classes.Contains(Ui.CompactClass) &&
+                presenter.BoxShadow.Count == 0 && Math.Abs(Scale(button) - 1) <= .005,
+                $"{label}: at rest the face uses the button radius, is not clipped, and is flat at scale 1");
+            foreach (var (state, fill) in new[] { (":pointerover", hover), (":pressed", pressed) })
+            {
+                await Hold(button, state, true);
+                var (shownFill, ink, edge) = (Fill(presenter.Background), Fill(presenter.Foreground), Fill(presenter.BorderBrush));
+                var contrast = TopBarVerification.Contrast(ink, shownFill);
+                Ensure(shownFill == fill && shownFill != restFill && ink == text && contrast >= 4.5,
+                    $"{label} {state}: {shownFill} fill with {ink} text, expected {fill} and {text}, unlike rest {restFill} ({contrast:0.0}:1)");
+                Ensure(edge == restBorder && presenter.BorderThickness == thickness && presenter.CornerRadius == radius,
+                    $"{label} {state}: border stays {restBorder} at {thickness} ({edge}, {presenter.BorderThickness})");
+                Ensure(button.Bounds == bounds, $"{label} {state}: layout bounds stay {bounds} ({button.Bounds})");
+                if (state == ":pointerover")
+                    Ensure(Math.Abs(Scale(button) - Ui.PrimaryHoverScale) <= .005 && presenter.BoxShadow.Count > 0,
+                        $"{label} hover: the shared compact scale and soft shadow ({Scale(button):0.###})");
+                await Hold(button, state, false);
+            }
+            Ensure(Fill(presenter.Background) == restFill && Fill(presenter.Foreground) == restText && Fill(presenter.BorderBrush) == restBorder &&
+                button.Bounds == bounds, $"{label}: returns to its normal colors and size");
+            await HoverShape(window, button, label);
+        }
+    }
+    // Reopen action
+    private static async Task ReopenAction(MainWindow window)
+    {
+        var now = DateTime.UtcNow;
+        var listing = window.Session.RestaurantListings.FirstOrDefault(l => l.IsAvailable(now) && l.Menu.IsActive)
+            ?? throw new InvalidOperationException("Penawaran surplus: an open listing exists to close for Buka kembali");
+        listing.Cancel();
+        try
+        {
+            Ensure(DemoSession.ReopenBlocker(listing, now) is null, "Penawaran surplus: the closed listing can be reopened");
+            window.ShowListings(); await Settle();
+            var page = window.CurrentPage!;
+            var cardButtons = page.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains(Ui.CardActionClass)).ToList();
+            var reopen = cardButtons.Single(b => b.Content as string == "Buka kembali");
+            var edit = cardButtons.FirstOrDefault(b => b.Content as string == "Ubah");
+            const string label = "Penawaran surplus Buka kembali";
+            Ensure(reopen.Classes.Contains(Ui.PrimaryClass) && reopen.Classes.Contains(Ui.CompactClass) &&
+                !reopen.Classes.Contains(Ui.CardActionTonalClass) && !reopen.Classes.Contains(Ui.CardActionNeutralClass),
+                $"{label}: uses the shared primary button");
+            Ensure(edit is null || (reopen.Bounds.Height == edit.Bounds.Height && reopen.CornerRadius == edit.CornerRadius &&
+                reopen.Padding == edit.Padding && reopen.FontSize == edit.FontSize),
+                $"{label}: same compact height and radius as Ubah ({reopen.Bounds.Height} vs {edit?.Bounds.Height})");
+            reopen.BringIntoView(); await Settle();
+            var presenter = Presenter(reopen);
+            Ensure(Fill(presenter.Background) == Primary, $"{label}: rest fill is the primary token ({Fill(presenter.Background)})");
+            var restFill = Fill(presenter.Background);
+            await Hold(reopen, ":pointerover", true);
+            Ensure(Fill(presenter.Background) != restFill, $"{label}: hover changes the fill ({Fill(presenter.Background)})");
+            await Hold(reopen, ":pointerover", false);
+            var scroll = reopen.GetVisualAncestors().OfType<ScrollViewer>().First();
+            await PrimaryButton(reopen, true, scroll, scroll, label);
+            await DisabledPrimary(reopen, label);
+        }
+        finally
+        {
+            listing.Reopen();
+            window.ShowListings(); await Settle();
+        }
     }
     // Restaurant status pills
     private static async Task RestaurantStatusPills(MainWindow window)

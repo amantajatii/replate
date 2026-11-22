@@ -122,7 +122,7 @@ internal static class Ui
     public static Panel FocusFrame(Control face, CornerRadius radius) => new() { Children = { face, FocusRing(radius) } };
     private static ContentPresenter PrimaryFill(Button button, ContentPresenter presenter)
     {
-        if (button.Classes.Contains(PrimaryClass) || button.Classes.Contains(DangerClass))
+        if (button.Classes.Contains(PrimaryClass) || button.Classes.Contains(DangerClass) || button.Classes.Contains(CardActionClass))
             presenter.Bind(ContentPresenter.BackgroundProperty, button.GetObservable(TemplatedControl.BackgroundProperty), Avalonia.Data.BindingPriority.Template);
         else presenter[!ContentPresenter.BackgroundProperty] = button[!TemplatedControl.BackgroundProperty];
         return presenter;
@@ -307,7 +307,7 @@ internal static class Ui
     private static Styles PrimaryStyles()
     {
         var ease = new CubicEaseOut();
-        Style Face(string kind, Func<Selector, Selector> state, IBrush background, IBrush foreground, BoxShadows shadow) =>
+        Style Face(string kind, Func<Selector, Selector> state, object background, object foreground, BoxShadows shadow) =>
             new(x => state(x.OfType<Button>().Class(kind).Not(y => y.Class(":disabled"))).Template().OfType<ContentPresenter>().Name("PART_ContentPresenter"))
             {
                 Setters =
@@ -352,9 +352,9 @@ internal static class Ui
                 }
             }
         ];
-        Style[] States(string kind, IBrush rest, IBrush hover, IBrush pressed, IBrush text, BoxShadows shadow) =>
+        Style[] States(string kind, object rest, object restText, IBrush hover, IBrush pressed, IBrush text, BoxShadows shadow) =>
         [
-            Face(kind, x => x, rest, OnPrimary, default),
+            Face(kind, x => x, rest, restText, default),
             Face(kind, x => x.Class(":pointerover"), hover, text, shadow),
             Face(kind, x => x.Class(":pressed"), pressed, text, shadow),
             Face(kind, x => x.Class(":pressed").Not(y => y.Class(":pointerover")), pressed, text, default)
@@ -371,16 +371,35 @@ internal static class Ui
         var styles = new Styles();
         // Primary
         styles.AddRange(Motion(PrimaryClass));
-        styles.AddRange(States(PrimaryClass, Green, Selection, DividerFill, Green, PrimaryButtonHoverShadow));
+        styles.AddRange(States(PrimaryClass, Green, OnPrimary, Selection, DividerFill, Green, PrimaryButtonHoverShadow));
         styles.Add(Face(PrimaryClass, x => x.Class(RoundClass).Class(":pointerover"), Selection, Green, default));
         styles.Add(Face(PrimaryClass, x => x.Class(RoundClass).Class(":pressed"), DividerFill, Green, default));
         styles.AddRange(Rest(PrimaryClass));
         // Danger
         styles.AddRange(Motion(DangerClass));
-        styles.AddRange(States(DangerClass, Danger, DangerTint, DangerPressed, Danger, DangerButtonHoverShadow));
+        styles.AddRange(States(DangerClass, Danger, OnPrimary, DangerTint, DangerPressed, Danger, DangerButtonHoverShadow));
         styles.AddRange(Rest(DangerClass));
+        // Card action
+        foreach (var (kind, hover, pressed, text, shadow) in new[]
+        {
+            (CardActionTonalClass, Green, Green, OnPrimary, PrimaryButtonHoverShadow),
+            (CardActionNeutralClass, Selection, DividerFill, Green, PrimaryButtonHoverShadow),
+            (CardActionDangerClass, DangerTint, DangerPressed, Danger, DangerButtonHoverShadow)
+        })
+        {
+            styles.AddRange(Motion(kind));
+            styles.AddRange(States(kind, new Avalonia.Data.TemplateBinding(TemplatedControl.BackgroundProperty),
+                new Avalonia.Data.TemplateBinding(TemplatedControl.ForegroundProperty), hover, pressed, text, shadow));
+            styles.AddRange(Rest(kind));
+        }
         return styles;
     }
+
+    // Card action
+    public const string CardActionClass = "card-action";
+    public const string CardActionTonalClass = "card-action-tonal";
+    public const string CardActionNeutralClass = "card-action-neutral";
+    public const string CardActionDangerClass = "card-action-danger";
 
     // Icon button
     private static Styles IconStyles()
