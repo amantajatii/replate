@@ -845,7 +845,7 @@ public sealed class DemoSession
 
     internal void ExpireOverdueOrders(DateTime now)
     {
-        if (checkingOut || StorageError is not null) return;
+        if (UsesSupabaseAuth || checkingOut || StorageError is not null) return;
         if (expirationNeedsSave)
         {
             Persist();
