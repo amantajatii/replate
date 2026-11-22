@@ -404,8 +404,46 @@ opened by `MainWindow.ShowRestaurantOrders`):
   option in order, Aktif selected first, at least 36 high and fully rounded, selected and
   rest colors, 8 between label and pills, every pill filters the list to the mapping with
   one selected pill, no horizontal scroll at 1040x720 and 1920x1080. Other restaurant
-  screens (Dashboard period, Menu category, Penawaran surplus menu, Produksi menu) keep
-  their ComboBox.
+  screens (Dashboard period, Menu category, Penawaran surplus menu) keep their native
+  ComboBox; the Produksi menu is a ComboBox restyled as a Replate field (CATATAN PRODUKSI).
+
+CATATAN PRODUKSI (restaurant only, `ProductionView` in `RestaurantViews.cs`):
+- Heading, subtitle, the "Ringkasan tanggal terpilih" table, saving, validation, the
+  default menu and date, and every number are unchanged; only the editor changes.
+- One form card under the heading (24): white, 1 px divider border, radius 16, padding
+  24, no shadow, in the form area (at most 860, left-aligned with the heading). Inside,
+  24 apart: the fields, a divider rule, and the footer.
+- Fields use the shared Replate field (`FieldFrame` in `Ui.cs`, class `field`): white,
+  1 px divider border, radius 12, height 48, text inset 16, ink text, muted placeholder.
+  Hover: primary-500 border. Focus (keyboard or click): primary border; keyboard focus
+  also shows the shared 2 px primary ring 2 outside. No native black focus box. An
+  invalid field keeps a danger border with its inline error under it.
+- `FieldGrid`: Menu and Tanggal produksi on row one, Diproduksi (porsi) and Terjual
+  reguler (porsi) on row two; two equal columns 16 apart, rows 16 apart; one column when
+  the window is 900 wide or less. Labels 14 semibold, 8 above the field.
+- Menu (`Ui.SelectField`): own ComboBox theme with a thin outline chevron (muted, stroke
+  1.75 on a 24 grid); the list is a white sheet with a 1 px divider border, radius 12,
+  padding 4, at most 280 high; options hover and keyboard focus selection fill with
+  primary text, selected option semibold.
+- Tanggal produksi (`DateField`): one field reading "22 November 2026" (`d MMMM yyyy`,
+  id-ID) with an outline calendar icon on the right; click, Enter, Space, F4 or Alt+Down
+  opens the native Calendar in the same sheet style (36 round days, selected day primary
+  with white text, today primary outline, hover selection). Picking a day closes it;
+  Enter or Esc closes it. Latest selectable day: 31 December of the current year (the
+  old DatePicker year limit). Default today.
+- Diproduksi and Terjual reguler (`NumberStepper`): round 36 stepper buttons
+  (`QuantityStepper.StepButton`) 12 left and right of a centered number field; native
+  spinner hidden; minus disabled at the minimum and plus at the maximum. Typed text and
+  the existing validation (including sold not above produced) are unchanged.
+- Footer: left "Terselamatkan" (12 muted), the number (28 bold primary) and " porsi"
+  (14 muted), and "Bertambah setelah kode pengambilan diverifikasi." (14 muted); right,
+  bottom-aligned with the card content edge, the compact primary "Simpan catatan".
+- Verified by `--verify-ui` (`UiVerification.ProductionFields`) at 1040x720 and 1920x1080:
+  field border, radius and height, hover border, focus border and keyboard-only ring, no
+  native focus box, select chevron, sheet, option states, Indonesian date text, calendar
+  open and pick, stepper changes and limits, inline sold error with danger border, equal
+  columns and gaps, one column at 900, form card, summary, button position, 24 under the
+  heading, no horizontal scroll, no cut text.
 
 DANGER BUTTON (whole app, registered with the primary style in `Ui.cs`):
 - `Ui.DangerButton(text, action)` adds the `danger` and `compact` classes, with the
