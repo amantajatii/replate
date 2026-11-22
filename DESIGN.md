@@ -6,7 +6,7 @@ colors:
   primary-hover: "#357F5D"
   ink: "#23382C"
   muted: "#59675D"
-  canvas: "#FFFFFF"
+  canvas: "#FAFAF8"
   surface: "#FFFFFF"
   sidebar: "#F1F3EE"
   selection: "#E0E9DF"
@@ -404,20 +404,20 @@ This records the implemented Avalonia desktop system, currently verified on macO
 
 ## Colors
 
-Forest green is a functional accent within a clean white workspace. Frontmatter values are normative; names below explain their use.
+Forest green is a functional accent within a pale, warm-neutral workspace. Frontmatter values are normative; names below explain their use.
 
 ### Primary
 - **Forest Green** (`primary`): primary actions, selected routes and filters, rescue prices, and meaningful operational emphasis.
-- **Bright Forest** (`primary-hover`): the text and icon color of the shared text link on hover only. About 4.8:1 on `canvas`. Never a fill.
+- **Bright Forest** (`primary-hover`): the text and icon color of the shared text link on hover only. About 4.6:1 on `canvas`. Never a fill.
 
 ### Neutral
 - **Deep Leaf Ink** (`ink`): default readable content and secondary button text; also the hover fill of the selected role-button, where white text reaches about 12.5:1.
 - **Muted Leaf** (`muted`): metadata, subtitles, supporting explanations, and inactive navigation.
-- **White Canvas** (`canvas`): the main window background, the same white as `surface`; cards on it are set apart by a 1 px `divider` border.
+- **Warm Canvas** (`canvas`): the main window background.
 - **White Surface** (`surface`): secondary buttons, the search input, the profile menu, and, on the green top bar, the white logo, icons, cart badge, profile circle, and focus ring.
 - **Pale Sage Sidebar** (`sidebar`): restaurant navigation rail.
 - **Soft Sage Selection** (`selection`): selected navigation, profile menu items on hover and keyboard focus, the profile circle on hover, the cart icon on hover (about 6.4:1 on `primary`), and the Jelajah collection cards and every primary button on hover, where `primary` icon and label reach about 6.4:1.
-- **Sage Divider** (`divider`): row rules, shell separators, and the 1 px card border; also the pressed fill of the Jelajah collection cards and primary buttons, one step under the `selection` hover (`primary` text about 6.1:1).
+- **Sage Divider** (`divider`): row rules and shell separators; also the pressed fill of the Jelajah collection cards and primary buttons, one step under the `selection` hover (`primary` text about 6.1:1).
 - **Light Leaf** (`leaf`): the hover color of the password-toggle icon only. About 3.1:1 on white, enough for an icon, not for body text.
 - **Ink Scrim** (`scrim`): `ink` at 40% alpha (Avalonia `#6623382C`), the flat dimmed layer behind the food dialog and the checkout confirmation only. No blur.
 
@@ -654,7 +654,7 @@ No animation other than the shared primary and danger button hover; no blur, glo
 Shared operational rows use minimum heights (40 header / 64 body), while compact dashboard tables use (36 / 48). All use the divider token. Avoid wrapping each datum in a separate card.
 
 ### Cards
-Implemented on the auth surface, the profile menu, Jelajah (collection cards and listing cards), collection and search result pages (listing cards), Keranjang (item cards), Pesanan saya (order cards), the order detail page (items, pickup code, and restaurant cards), and the food dialog and checkout confirmation cards. A card is a white surface (`surface`) with `rounded.card` corners (the Jelajah collection cards are the one exception: a `primary` fill and the `elevation.card-primary` shadow, see Collection Card) the `elevation.card` shadow, and a 1 px `divider` border (`Ui.CardBorder`, `Ui.CardBorderThickness`). No colored border and no accent stripe. Since `canvas` and `surface` are both white, separation comes from the thin border and the shadow. Use a card to hold one coherent unit of work, not to wrap each datum. Table and list row dividers are unchanged and stay as described under Lists and Tables.
+Implemented on the auth surface, the profile menu, Jelajah (collection cards and listing cards), collection and search result pages (listing cards), Keranjang (item cards), Pesanan saya (order cards), the order detail page (items, pickup code, and restaurant cards), and the food dialog and checkout confirmation cards. A card is a white surface (`surface`) with `rounded.card` corners (the Jelajah collection cards are the one exception: a `primary` fill and the `elevation.card-primary` shadow, see Collection Card) and the `elevation.card` shadow. It has no border of any kind: no colored border, no accent stripe, and no thin outline. Separation comes from the shadow and the canvas around it. Use a card to hold one coherent unit of work, not to wrap each datum. Table and list row dividers are unchanged and stay as described under Lists and Tables.
 
 ### Auth Card
 The auth-card is the card used on the auth surface. It holds the sign-in or registration form: the bold auth title, visible field labels, inputs, inline errors, the primary action, and the link to switch between Masuk and Daftar. It uses the card treatment with padding (32) and a width of (440), narrowing to no less than (360) to keep its gap from the plate. It is the only card on the auth surface.

@@ -123,7 +123,7 @@ internal static class TopBarVerification
         Ensure(bar.MenuCard.GetVisualDescendants().OfType<Button>().Select(b => b.Content as string).SequenceEqual(["Pesanan saya", "Keluar"]),
             "Menu holds Pesanan saya and Keluar");
         Ensure(bar.MenuCard.CornerRadius == new CornerRadius(16) && bar.MenuCard.BoxShadow.ToString() == BoxShadows.Parse("0 8 24 0 #1F23382C").ToString() &&
-            bar.MenuCard.BorderThickness == Ui.CardBorderThickness && ColorOf(bar.MenuCard.Background) == Colors.White, "Menu is a white card with the card shadow and the thin divider border");
+            bar.MenuCard.BorderThickness == default && ColorOf(bar.MenuCard.Background) == Colors.White, "Menu is a white card with the card shadow and no border");
         Ensure(bar.OrdersItem.IsFocused && !FocusVisible(bar.OrdersItem) && ColorOf(bar.OrdersItem.Background) == Colors.Transparent,
             "Opening the menu with the mouse focuses Pesanan saya without a visible focus");
         foreach (var item in new[] { bar.OrdersItem, bar.SignOutItem })

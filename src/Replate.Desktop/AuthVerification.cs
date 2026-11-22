@@ -53,7 +53,7 @@ internal static class AuthVerification
         Check(Math.Abs(onCanvas - .5) <= .02, $"{where}: panel edge sits at the plate center, half on canvas and half on the panel ({onCanvas:0.###})");
         var card = surface.Card;
         Check(ColorOf(card.Background) == Colors.White && card.CornerRadius == new CornerRadius(16) &&
-            card.Padding == new Thickness(32) && card.BorderThickness == Ui.CardBorderThickness && card.BoxShadow == BoxShadows.Parse("0 8 24 0 #1F23382C"),
+            card.Padding == new Thickness(32) && card.BorderThickness == default && card.BoxShadow == BoxShadows.Parse("0 8 24 0 #1F23382C"),
             $"{where}: card is white, rounded, shadowed, padded and borderless");
         var cardBox = RectIn(card, surface);
         Check(card.Bounds.Width >= AuthSurface.MinCardWidth - .5 && card.Bounds.Width <= AuthSurface.CardWidth + .5,
@@ -89,7 +89,7 @@ internal static class AuthVerification
             !surface.FormScroll.GetVisualDescendants().Contains(surface.Logo), $"{where}: logo stays fully visible above the scroll area");
         Check(Math.Abs(mark.X - cardBox.X) < 1, $"{where}: logo aligns with the card left edge ({mark.X:0.#}, card {cardBox.X:0.#})");
         var header = RectIn(surface.Header, surface); var clip = RectIn(surface.FormClip, surface);
-        Check(ColorOf(surface.Header.Background) == ColorOf(Ui.CanvasFill) && header.Contains(mark) && header.Bottom <= clip.Y + .5 &&
+        Check(ColorOf(surface.Header.Background) == Color.Parse("#FAFAF8") && header.Contains(mark) && header.Bottom <= clip.Y + .5 &&
             surface.FormClip.ClipToBounds && surface.Header.GetVisualParent() is Panel host && host.Children.IndexOf(surface.Header) > host.Children.IndexOf(surface.FormClip),
             $"{where}: logo sits on a clean canvas band above a clipped scroll area (band bottom {header.Bottom:0.#}, scroll top {clip.Y:0.#})");
         Check(cardBox.X >= scrollBox.X - .5 && cardBox.Right <= scrollBox.Right + .5 && scrollBox.Right <= plate.X + 1,
@@ -206,7 +206,7 @@ internal static class AuthVerification
             foreach (var (name, make, surfaceOf) in screens)
             {
                 var view = make();
-                var canvas = new Border { Child = view, Width = size.Width, Height = size.Height, Background = Ui.CanvasFill };
+                var canvas = new Border { Child = view, Width = size.Width, Height = size.Height, Background = Brush.Parse("#FAFAF8") };
                 var frame = new Window
                 {
                     Width = 1040, Height = 720, FontFamily = new FontFamily("Helvetica Neue, Segoe UI, sans-serif"),

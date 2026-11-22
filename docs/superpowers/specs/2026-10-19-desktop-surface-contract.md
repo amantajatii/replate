@@ -96,8 +96,8 @@ CUSTOMER TOP BAR (every customer route, implemented in `CustomerTopBar.cs`):
   Automation names and tooltips "Keranjang" and "Akun". Contrast on the green: white
   about 7.9:1, `selection` about 6.4:1.
 - Profile menu: Popup anchored to the circle (BottomEdgeAlignedRight, overlay layer,
-  light dismiss). White card, `rounded.card`, `elevation.card`, padding 8, width 260, 1 px
-  `divider` border: muted name and email (not clickable), divider, Pesanan saya, Keluar. Click,
+  light dismiss). White card, `rounded.card`, `elevation.card`, padding 8, width 260, no
+  border: muted name and email (not clickable), divider, Pesanan saya, Keluar. Click,
   Enter or Space on the circle opens it and focuses Pesanan saya; Up/Down move between
   items; Esc or a click outside closes it. Pesanan saya opens the orders page; Keluar
   signs out. Opened with the mouse, Pesanan saya takes focus without looking focused;
@@ -164,7 +164,7 @@ PRIMARY BUTTONS (whole app, shared style `Ui.UsePrimaryButtons` in `Ui.cs`):
   every "Kembali ke Jelajah" (collection, search results, Keranjang, Pesanan saya), "Kembali
   ke Pesanan saya", and, without the arrow, "Lihat detail" on order cards. Transparent fill and
   border in every state, set on the Button and on PART_ContentPresenter so Fluent adds no
-  fill; rest and pressed `primary`, hover `primary-hover` #357F5D (about 4.8:1 on the
+  fill; rest and pressed `primary`, hover `primary-hover` #357F5D (about 4.6:1 on the
   canvas); no shadow, scale (Fluent's pressed scale is reset), or underline; at least 32
   high; the shared focus ring. `UiVerification.TextLinks` checks it at 1040x720 and
   1920x1080 (CustomerOrdersVerification for the order links): the pixels around the arrow and text match the canvas (rendered with the
@@ -231,7 +231,7 @@ JELAJAH (customer marketplace, `MarketplaceView.cs` and `MarketplaceBanner.cs`):
 FOOD DIALOG (customer only, `FoodDialog.cs`, opened by `MainWindow.ShowFoodDialog`):
 - An overlay inside the main window (no OS window), one at a time, above the top bar:
   a flat scrim (`scrim`, ink at 40%, no blur) and a centered white card (760 wide,
-  radius 16, card shadow, 1 px `divider` border, at least 32 from every edge, internal vertical
+  radius 16, card shadow, no border, at least 32 from every edge, internal vertical
   scroll when short, the bar always visible).
 - Content: photo 300 by 300 or the large "Foto belum tersedia" box; name, "Restoran ·
   Kategori", description, "Pengambilan HH:mm–HH:mm", "N porsi tersisa", rescue price
@@ -281,7 +281,7 @@ customer role guard):
 - One column: the groups use the full content width (edges aligned with Jelajah),
   vertical scroll only, 24 inner inset so shadows are not cut; the list ends 32 under
   the last group (`Ui.Spacing.Page`). No summary card; no horizontal scroll at 1040x720.
-- Item card (white, radius 16, card shadow, 1 px `divider` border, padding 20, 16 apart): photo or
+- Item card (white, radius 16, card shadow, no border, padding 20, 16 apart): photo or
   placeholder (72), name (18 semibold), "Restoran · Kategori", "Pengambilan
   HH:mm–HH:mm", "Rp… / porsi"; the shared `QuantityStepper` (same component as the food
   dialog; minimum 1, maximum the listing's remaining stock, plus disabled at the limit);
@@ -294,7 +294,7 @@ customer role guard):
   line reads "Penawaran tidak tersedia. Hapus untuk melanjutkan.", the stepper is
   disabled, Hapus stays active.
 - Checkout confirmation (`CheckoutDialog.cs`, on the shared `ModalDialog` overlay with
-  the food dialog: scrim, centered white card radius 16, card shadow, 1 px `divider` border, width
+  the food dialog: scrim, centered white card radius 16, card shadow, no border, width
   520, at least 32 from every window edge; Esc, a click on the scrim, the X, or "Batal"
   closes it; Tab cycles inside the card; closing returns focus to the Pesan that opened
   it). Content, 16 apart: "Konfirmasi pesanan" (22 bold) with the X; "Pesan dari
@@ -346,7 +346,7 @@ restaurant order pages keep their table, dropdown and detail layout):
   primary text. Fills are painted on the pill only: no box outside it, no shadow, scale or
   transition; shared focus ring. Mapping of `OrderStatus`: Aktif = Reserved, Confirmed,
   ReadyForPickup; Selesai = Completed; Dibatalkan = Cancelled. Hidden with no orders.
-- Order card (white, radius 16, card shadow, 1 px `divider` border, padding 20, 16 apart), one per
+- Order card (white, radius 16, card shadow, no border, padding 20, 16 apart), one per
   order from `DemoSession.CustomerOrders` (newest first): restaurant name (18 bold) left
   and `OrderStatusBadge` right; "Dipesan dd MMM yyyy, HH:mm · Pengambilan dd MMM,
   HH:mm–HH:mm" (13 muted); up to three rows "menu" with "{jumlah} x" right, then
@@ -367,7 +367,7 @@ restaurant order pages keep their table, dropdown and detail layout):
   "Kembali ke Pesanan saya" (opens Pesanan saya); "Detail pesanan" (32 bold) with the
   status badge 16 beside it and the status sentence 8 under it; two columns 24 apart
   (`3*,2*`, about 60/40, never stacked: 1040 already fits). Cards: white, radius 16, card
-  shadow, 1 px `divider` border, padding 24, 16 apart. Left "Item pesanan": per item the name,
+  shadow, no border, padding 24, 16 apart. Left "Item pesanan": per item the name,
   "{jumlah} x {harga satuan}" and the subtotal right, a divider, then "Total" above the
   total (28 bold primary, left, as in Keranjang). Right top "Kode ambil": the code (36
   bold, fixed-width font, primary), the existing copy button beside it (now the shared 44
@@ -416,7 +416,7 @@ COLLECTION AND SEARCH PAGES (customer only, `CollectionView.cs`):
 - Same top bar; in the Jelajah content column (at most 1200, inset 32), no banner:
   "Kembali ke Jelajah" link (16 left arrow, stroke 1.75, 8 from the 14 text, centered,
   at least 32 high, primary, transparent in every state; hover only turns the arrow and
-  text primary-hover #357F5D, about 4.8:1 on the canvas, pressed returns to primary; no
+  text primary-hover #357F5D, about 4.6:1 on the canvas, pressed returns to primary; no
   fill, border, shadow, scale or underline; primary focus ring), then the title
   (32 bold ink, one line), then on collection pages with listings an intro sentence 8
   under it (16, muted, wrapping; exact copy in DESIGN.md), then listing cards 16 below.
@@ -471,7 +471,7 @@ AUTH SURFACE (Masuk and Daftar, implemented in `AuthViews.cs` as `AuthSurface`):
   right, then D shrinks (minimum 320). The scroll area ends at plate left. The logo, the warning and the demo-account
   line share L, and the warning and demo line share the card width.
 - Card: white surface, `rounded.card` (16), `elevation.card` shadow
-  (`0 8 24 0 #1F23382C`), padding 32, fields 20 apart, 1 px `divider` border. Hard rule: the
+  (`0 8 24 0 #1F23382C`), padding 32, fields 20 apart, no border. Hard rule: the
   plate box never intersects the card box and the gap is at least 24. At 1360x940
   the plate is 526, the card 440 at 163, the gap about 113 and the panel 28%; at
   1283x780 the plate is 437, the card 440 at 154 and the gap about 111; at 1920x1080
