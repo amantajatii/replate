@@ -25,7 +25,8 @@ public sealed class DashboardView : UserControl
             SelectedIndex = days == 7 ? 0 : 1, MinWidth = 180 };
         PeriodPicker = period;
         period.SelectionChanged += (_, _) => Render(host, session, period.SelectedIndex == 0 ? 7 : 28);
-        var records = session.Restaurant.Menus.SelectMany(m => m.ProductionRecords).Where(r => r.RecordDate >= firstDate && r.RecordDate <= lastDate).ToList();
+        var records = session.Restaurant.Menus.SelectMany(m => m.ProductionRecords)
+            .Where(r => session.IsDashboardProduction(r) && r.RecordDate >= firstDate && r.RecordDate <= lastDate).ToList();
         var surplus = new SurplusDashboard();
         var finance = new FinancialDashboard();
         var recommendations = new ProductionRecommendationService();
@@ -41,7 +42,7 @@ public sealed class DashboardView : UserControl
             surplus.CalculateTotalSurplus(records) == 0 ? "Belum ada surplus pada periode ini"
                 : $"{surplus.CalculateRescueRate(records).ToString("0.0", Indonesian)}% dari surplus"));
         summary.Children.Add(MetricCard("Pendapatan Dipulihkan",
-            DemoSession.Rupiah(finance.CalculateRecoveredRevenue(session.Restaurant.Orders.Where(o =>
+            DemoSession.Rupiah(finance.CalculateRecoveredRevenue(session.RestaurantOrders.Where(o =>
                 DateOnly.FromDateTime(o.OrderedAt.ToLocalTime()) >= firstDate && DateOnly.FromDateTime(o.OrderedAt.ToLocalTime()) <= lastDate))),
             "Dari pesanan selesai"));
         var columns = 0;

@@ -681,12 +681,15 @@ public sealed class DemoSession
         if (price <= 0 || price > menu.NormalPrice) throw new InvalidOperationException("Harga penawaran harus lebih dari nol dan tidak melebihi harga normal.");
         if (quantity < 1) throw new InvalidOperationException("Stok tersedia harus minimal satu porsi.");
         if (end <= start || end <= DateTime.Now || start.Date != end.Date) throw new InvalidOperationException("Jadwal pengambilan harus dalam satu hari, waktu selesai sesudah mulai dan belum lewat.");
-        var date = DateOnly.FromDateTime(start);
-        var record = menu.ProductionRecords.SingleOrDefault(r => r.RecordDate == date)
-            ?? throw new InvalidOperationException("Catat produksi menu untuk tanggal pengambilan terlebih dahulu.");
-        var allocated = Allocated(menu, date, existing);
-        if (quantity + allocated > record.CalculateSurplus() - record.RescuedQuantity)
-            throw new InvalidOperationException("Stok melebihi surplus yang belum dialokasikan. Periksa catatan produksi dan penawaran lain.");
+        if (supabaseSession is null)
+        {
+            var date = DateOnly.FromDateTime(start);
+            var record = menu.ProductionRecords.SingleOrDefault(r => r.RecordDate == date)
+                ?? throw new InvalidOperationException("Catat produksi menu untuk tanggal pengambilan terlebih dahulu.");
+            var allocated = Allocated(menu, date, existing);
+            if (quantity + allocated > record.CalculateSurplus() - record.RescuedQuantity)
+                throw new InvalidOperationException("Stok melebihi surplus yang belum dialokasikan. Periksa catatan produksi dan penawaran lain.");
+        }
         if (existing is not null && existing.Status is ListingStatus.Cancelled or ListingStatus.Expired)
             throw new InvalidOperationException("Penawaran yang berakhir tidak dapat diubah. Buat penawaran baru.");
         if (existing is not null && AllOrders.Any(o => o.Status is not (OrderStatus.Completed or OrderStatus.Cancelled) && o.Items.Any(i => i.ListingId == existing.Id)) &&
@@ -738,7 +741,7 @@ public sealed class DemoSession
         else if (regularSold < 0) errors["sold"] = "Penjualan reguler tidak boleh negatif.";
         else if (produced is not null && produced >= 0 && regularSold > produced)
             errors["sold"] = "Penjualan reguler tidak boleh melebihi produksi.";
-        if (menu is not null && date is not null && produced >= 0 && regularSold >= 0)
+        if (supabaseSession is null && menu is not null && date is not null && produced >= 0 && regularSold >= 0)
         {
             var rescued = menu.ProductionRecords.SingleOrDefault(r => r.RecordDate == date)?.RescuedQuantity ?? 0;
             var allocated = Allocated(menu, date.Value);
@@ -755,11 +758,56 @@ public sealed class DemoSession
         RequireOwnedRestaurant(menu.RestaurantId);
         var errors = ValidateProduction(menu, date, produced, regularSold);
         if (errors.Count > 0) throw new InvalidOperationException(errors.First().Value);
+        if (supabaseSession is { } session)
+        {
+            if (!sharedCatalogMenuIds.Contains(menu.Id))
+            {
+                SupabaseCatalog.SaveMenuAsync(session, menu, menu.IsActive).GetAwaiter().GetResult();
+                sharedCatalogMenuIds.Add(menu.Id);
+            }
+            var row = SupabaseCatalog.SaveProductionAsync(session, menu.Id, date, produced, regularSold)
+                .GetAwaiter().GetResult();
+            ApplyProductionRow(menu, row);
+            Persist();
+            return;
+        }
+
         var record = menu.ProductionRecords.SingleOrDefault(r => r.RecordDate == date)
             ?? new ProductionRecord { MenuId = menu.Id, Menu = menu, RecordDate = date };
         record.ProducedQuantity = produced; record.RegularSoldQuantity = regularSold;
         if (!menu.ProductionRecords.Contains(record)) menu.ProductionRecords.Add(record);
         Persist();
+    }
+
+    private readonly HashSet<(Guid MenuId, DateOnly Date)> sharedProductionDates = [];
+
+    internal bool IsDashboardProduction(ProductionRecord record) =>
+        supabaseSession is null || sharedProductionDates.Contains((record.MenuId, record.RecordDate));
+
+    internal void RefreshRestaurantProduction()
+    {
+        if (supabaseSession is not { } session) return;
+        RefreshRestaurantMenus();
+        var restaurant = RequireOwnedRestaurant(Restaurant.Id);
+        var rows = SupabaseCatalog.LoadProductionAsync(session, restaurant.Id).GetAwaiter().GetResult();
+        var menus = restaurant.Menus.ToDictionary(menu => menu.Id);
+        sharedProductionDates.RemoveWhere(record => menus.ContainsKey(record.MenuId));
+        foreach (var row in rows)
+            if (menus.TryGetValue(row.MenuId, out var menu)) ApplyProductionRow(menu, row);
+    }
+
+    private void ApplyProductionRow(Menu menu, SupabaseCatalog.ProductionRow row)
+    {
+        var record = menu.ProductionRecords.Find(candidate => candidate.RecordDate == row.RecordDate);
+        if (record is null)
+        {
+            record = new ProductionRecord { MenuId = menu.Id, Menu = menu, RecordDate = row.RecordDate };
+            menu.ProductionRecords.Add(record);
+        }
+        record.ProducedQuantity = row.ProducedQuantity;
+        record.RegularSoldQuantity = row.RegularSoldQuantity;
+        record.UpdateRescuedQuantity(row.RescuedQuantity);
+        sharedProductionDates.Add((menu.Id, row.RecordDate));
     }
     public void ConfirmOrder(Order order, int preparationMinutes)
     {
@@ -870,25 +918,24 @@ public sealed class DemoSession
         if (supabaseSession is null) EnsurePickupWindowOpen(order);
         if (order.Status != OrderStatus.ReadyForPickup) throw new InvalidOperationException("Pesanan belum siap diambil atau sudah selesai.");
         var verification = new PickupVerification { Order = order, OrderId = order.Id, EnteredCode = code.Trim().ToUpperInvariant() };
-        if (supabaseSession is null && !verification.VerifyCode())
+        if (supabaseSession is { } session)
+        {
+            var completedAt = SupabaseOrderWriter.UpdateStatusAsync(session, order.Id, OrderStatus.Completed,
+                pickupCode: verification.EnteredCode).GetAwaiter().GetResult();
+            order.Complete(completedAt);
+            Persist();
+            return;
+        }
+        if (!verification.VerifyCode())
             throw new InvalidOperationException("Kode pengambilan tidak cocok. Periksa kode dari pelanggan.");
         var changes = order.Items.GroupBy(i => (i.Listing.Menu, DateOnly.FromDateTime(i.Listing.PickupStart.ToLocalTime())))
             .Select(g => (Record: g.Key.Menu.ProductionRecords.SingleOrDefault(r => r.RecordDate == g.Key.Item2)
                 ?? throw new InvalidOperationException("Catatan produksi untuk pesanan ini tidak ditemukan."), Quantity: g.Sum(i => i.Quantity))).ToList();
         if (changes.Any(c => c.Record.RescuedQuantity + c.Quantity > c.Record.CalculateSurplus()))
             throw new InvalidOperationException("Porsi terselamatkan melebihi catatan surplus. Periksa catatan produksi.");
-        if (supabaseSession is { } session)
-        {
-            var completedAt = SupabaseOrderWriter.UpdateStatusAsync(session, order.Id, OrderStatus.Completed,
-                pickupCode: verification.EnteredCode).GetAwaiter().GetResult();
-            order.Complete(completedAt);
-        }
-        else
-        {
-            if (UsesSharedStock && order.Items.Any(item => sharedListingIds.Contains(item.ListingId)))
-                new DatabaseService().UpdateOrderStatus(order, OrderStatus.Completed, verification.VerifiedAt);
-            verification.CompletePickup();
-        }
+        if (UsesSharedStock && order.Items.Any(item => sharedListingIds.Contains(item.ListingId)))
+            new DatabaseService().UpdateOrderStatus(order, OrderStatus.Completed, verification.VerifiedAt);
+        verification.CompletePickup();
         foreach (var change in changes) change.Record.UpdateRescuedQuantity(change.Record.RescuedQuantity + change.Quantity);
         Persist();
     }

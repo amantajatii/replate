@@ -35,4 +35,19 @@ internal static class SupabaseCatalog
 
     internal sealed record MenuRow(Guid Id, string Name, string? Description, string? Category,
         decimal? NormalPrice, decimal? WeightPerPortion, bool IsActive, DateTimeOffset? DeletedAt);
+
+    internal static async Task<List<ProductionRow>> LoadProductionAsync(SupabaseAuth.Session session, Guid restaurantId) =>
+        await SupabaseRpc.PostAsync<List<ProductionRow>>(session, "replate_owner_production",
+            new { p_restaurant_id = restaurantId }).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("Supabase tidak mengembalikan daftar produksi.");
+
+    internal static async Task<ProductionRow> SaveProductionAsync(SupabaseAuth.Session session, Guid menuId,
+        DateOnly date, int produced, int regularSold) =>
+        await SupabaseRpc.PostAsync<ProductionRow>(session, "replate_save_production", new
+        {
+            p_menu_id = menuId, p_record_date = date, p_produced = produced, p_regular_sold = regularSold
+        }).ConfigureAwait(false) ?? throw new InvalidOperationException("Supabase tidak mengembalikan catatan produksi.");
+
+    internal sealed record ProductionRow(Guid MenuId, DateOnly RecordDate,
+        int ProducedQuantity, int RegularSoldQuantity, int RescuedQuantity);
 }

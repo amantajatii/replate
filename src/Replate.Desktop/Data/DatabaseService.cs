@@ -238,6 +238,24 @@ internal sealed class DatabaseService : IOrderStore
             if (saveMenu.ExecuteNonQuery() != 1)
                 throw new InvalidOperationException("Menu sudah berubah atau tidak tersedia. Buka kembali daftar menu.");
 
+            if (preserveCatalog)
+            {
+                using var checkProduction = new NpgsqlCommand("""
+                    SELECT (p.produced_quantity::bigint - p.regular_sold_quantity - p.rescued_quantity
+                        - public.replate_allocated_portions(p.menu_id, p.record_date, @listing_id))
+                    FROM public.production_records AS p
+                    WHERE p.menu_id = @menu_id AND p.record_date = (@pickup_start AT TIME ZONE 'Asia/Jakarta')::date
+                    FOR UPDATE OF p
+                    """, connection, transaction);
+                checkProduction.Parameters.AddWithValue("listing_id", listing.Id);
+                checkProduction.Parameters.AddWithValue("menu_id", listing.MenuId);
+                checkProduction.Parameters.AddWithValue("pickup_start", listing.PickupStart);
+                if (checkProduction.ExecuteScalar() is not long available)
+                    throw new InvalidOperationException("Simpan catatan produksi di Supabase untuk tanggal pengambilan terlebih dahulu.");
+                if (available < listing.Quantity)
+                    throw new InvalidOperationException("Stok melebihi surplus yang belum dialokasikan.");
+            }
+
             var sql = expectedQuantity.HasValue
                 ? """
                     UPDATE public.surplus_listings
@@ -246,6 +264,11 @@ internal sealed class DatabaseService : IOrderStore
                         rescue_price = @price, quantity = @quantity,
                         pickup_start = @start, pickup_end = @end
                     WHERE id = @id AND menu_id = @menu_id AND NOT closed AND quantity = @expected
+                        AND ((pickup_start = @start AND pickup_end = @end) OR NOT EXISTS (
+                            SELECT 1 FROM public.order_items AS item
+                            JOIN public.orders AS o ON o.id = item.order_id
+                            WHERE item.listing_id = @id AND o.status IN ('Reserved', 'Confirmed', 'ReadyForPickup', 'Completed')
+                        ))
                     """
                 : """
                     INSERT INTO public.surplus_listings
@@ -268,7 +291,7 @@ internal sealed class DatabaseService : IOrderStore
             command.Parameters.AddWithValue("end", listing.PickupEnd);
             if (expectedQuantity is int previous) command.Parameters.AddWithValue("expected", previous);
             if (command.ExecuteNonQuery() == 0)
-                throw new InvalidOperationException("Stok penawaran sudah berubah. Buka ulang daftar penawaran sebelum mengedit.");
+                throw new InvalidOperationException("Stok atau jadwal tidak bisa diubah. Buka ulang daftar penawaran dan periksa pesanan terkait.");
             transaction.Commit();
         }
         catch (NpgsqlException e)

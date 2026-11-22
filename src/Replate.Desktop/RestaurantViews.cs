@@ -375,6 +375,8 @@ public sealed class ProductionView : UserControl
                 var record = selected.ProductionRecords.SingleOrDefault(r => r.RecordDate == selectedDate);
                 ProducedInput.Value = record?.ProducedQuantity ?? 0; SoldInput.Value = record?.RegularSoldQuantity ?? 0;
                 rescued.Text = $"Terselamatkan: {record?.RescuedQuantity ?? 0} porsi. Bertambah setelah kode pengambilan diverifikasi.";
+                if (record is not null && !session.IsDashboardProduction(record))
+                    rescued.Text += " Catatan ini masih di komputer. Simpan catatan untuk mengirimnya ke Supabase.";
             }
             table.Children.Clear();
             table.Children.Add(Ui.TableRow("1.6*,*,*,*,*", true, Ui.Text("Menu", 13, Ui.Muted), Ui.Text("Produksi", 13, Ui.Muted),
