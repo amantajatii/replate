@@ -32,6 +32,8 @@ internal sealed class AuthSurface : Grid
     internal const double GapShare = 0.08;
     internal const double MinMargin = 48;
     internal const double Inset = 32;
+    internal const double CardMargin = 32;
+    internal const double LogoGap = 24;
     internal const double LogoHeight = 44;
     internal const double ScrollBarWidth = 6;
     internal const double ScrollGap = 16;
@@ -89,10 +91,10 @@ internal sealed class AuthSurface : Grid
     internal Border FormClip { get; }
     internal Border Header { get; }
     internal Border? Warning { get; }
-    internal Control? Below { get; }
     private readonly StackPanel column;
+    private readonly CenterBox centered;
 
-    internal AuthSurface(Control cardContent, string? databaseError = null, Control? below = null)
+    internal AuthSurface(Control cardContent, string? databaseError = null)
     {
         ColumnDefinitions = ColumnDefinitions.Parse("3*,2*");
         Card = new Border
@@ -101,7 +103,7 @@ internal sealed class AuthSurface : Grid
             Padding = new Thickness(32), BoxShadow = Ui.CardShadow
         };
         column = Ui.Stack(16);
-        column.VerticalAlignment = VerticalAlignment.Center; column.HorizontalAlignment = HorizontalAlignment.Left;
+        column.HorizontalAlignment = HorizontalAlignment.Left; column.Margin = new Thickness(ShadowPad, 0, 0, 0);
         if (databaseError is not null)
         {
             var detail = Ui.Text(databaseError, 12, WarningText);
@@ -116,15 +118,13 @@ internal sealed class AuthSurface : Grid
             column.Children.Add(Warning);
         }
         column.Children.Add(Card);
-        Below = below;
-        if (below is not null) column.Children.Add(below);
         Logo = Ui.Logo(Ui.LogoGreen, LogoHeight);
         Logo.Margin = new Thickness(Inset, Inset, Inset, 0);
-        var content = new Border { Child = column, Padding = new Thickness(ShadowPad, 24, 0, Inset) };
-        FormScroll = Ui.Scroll(content);
+        centered = new CenterBox(column, Card) { Above = Inset + LogoHeight };
+        FormScroll = Ui.Scroll(centered);
         FormScroll.HorizontalAlignment = HorizontalAlignment.Left;
         ThinScroll(FormScroll);
-        FormScroll.SizeChanged += (_, e) => content.MinHeight = e.NewSize.Height;
+        FormScroll.SizeChanged += (_, e) => { centered.Viewport = e.NewSize.Height; centered.InvalidateMeasure(); };
         FormClip = new Border { Child = FormScroll, ClipToBounds = true, Background = Brushes.Transparent, HorizontalAlignment = HorizontalAlignment.Left };
         FormClip.PointerWheelChanged += (_, e) =>
         {
@@ -221,11 +221,46 @@ internal sealed class AuthSurface : Grid
         if (ColumnDefinitions[0].Width != new GridLength(boundary)) ColumnDefinitions[0].Width = new GridLength(boundary);
         FormClip.Width = Math.Max(0, plateX);
         FormScroll.Width = ShadowPad + cardWidth + ScrollGap + ScrollBarWidth;
-        FormScroll.Margin = new Thickness(left - ShadowPad, 0, 0, 0);
+        var cardLeft = CardLeft(plateX, cardWidth);
+        FormScroll.Margin = new Thickness(cardLeft - ShadowPad, 0, 0, 0);
         column.Width = cardWidth;
         Logo.Margin = new Thickness(left, Inset, 0, 0);
         Hero.Width = plate; Hero.Height = plate;
         Canvas.SetLeft(Hero, plateX); Canvas.SetTop(Hero, (size.Height - plate) / 2);
+    }
+
+    internal static double CardLeft(double plateX, double cardWidth) => Math.Max(CardMargin, (plateX - cardWidth) / 2);
+
+    private sealed class CenterBox : Decorator
+    {
+        private readonly Control anchor;
+        internal double Above;
+        internal double Viewport;
+
+        internal CenterBox(Control child, Control anchor) { Child = child; this.anchor = anchor; }
+
+        private double Top(Size child)
+        {
+            var anchorTop = child.Height - anchor.DesiredSize.Height;
+            var window = Above + Viewport;
+            return Math.Max(LogoGap, (window - anchor.DesiredSize.Height) / 2 - Above - anchorTop);
+        }
+
+        protected override Size MeasureOverride(Size availableSize)
+        {
+            if (Child is null) return default;
+            Child.Measure(new Size(availableSize.Width, double.PositiveInfinity));
+            var size = Child.DesiredSize;
+            return new Size(size.Width, Math.Max(Viewport, Top(size) + size.Height + Inset));
+        }
+
+        protected override Size ArrangeOverride(Size finalSize)
+        {
+            if (Child is null) return finalSize;
+            var size = Child.DesiredSize;
+            Child.Arrange(new Rect(0, Top(size), finalSize.Width, size.Height));
+            return finalSize;
+        }
     }
 
     // States
@@ -453,8 +488,7 @@ public sealed class SignInView : UserControl
         var card = Ui.Stack(20, TitleText, ErrorText,
             Ui.Field("Email", EmailInput), Ui.Field("Kata sandi", PasswordInput),
             Ui.Stack(12, SignInButton, RegisterButton));
-        var demo = Ui.Text("Akun demo: pelanggan@replate.demo atau dapur-bumi@replate.demo, kata sandi replate123.", 12, Ui.Muted);
-        Surface = new AuthSurface(card, startupError, demo);
+        Surface = new AuthSurface(card, startupError);
         Content = Surface;
         Loaded += (_, _) => EmailInput.Focus();
     }

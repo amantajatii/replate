@@ -47,8 +47,8 @@ rules, action outcomes, local data visibility and realistic persistence boundari
 
 ROUTES AND ROLES:
 - Masuk (start screen): Auth surface (below). Card holds the title Masuk, Email,
-  Kata sandi, primary Masuk and secondary Daftar akun baru; one demo-account hint
-  line sits below the card. Enter in Kata sandi submits; focus starts in Email.
+  Kata sandi, primary Masuk and secondary Daftar akun baru; nothing sits below the
+  card. Enter in Kata sandi submits; focus starts in Email.
   Failed sign-in shows the generic AccountService message inline under the card
   title, clears Kata sandi and returns it to hidden mode. No shell navigation is shown.
 - Daftar: Auth surface (below). Card holds the title Daftar akun (no subtitle),
@@ -503,7 +503,7 @@ AUTH SURFACE (Masuk and Daftar, implemented in `AuthViews.cs` as `AuthSurface`):
   (#1F6B4F) panel, full height. The first column width is set in pixels from the
   plate position (`AuthSurface.Layout`); the panel is about 28% of the width.
 - Left column: canvas background. The green logo `Assets/logo-green.webp` (44 high, Uniform
-  stretch, width from the bitmap ratio) sits at the top (inset 32), left-aligned with the card, on a `canvas` band drawn above the scroll area. Below it
+  stretch, width from the bitmap ratio) sits at the top left (inset 32 from the top, at the left margin L), on a `canvas` band drawn above the scroll area; it does not affect the card position. Below it
   a clip Border (ClipToBounds, from x 0 to plate left) holds the ScrollViewer, which
   scrolls vertically only (the owner registration form is taller than 720), so no
   scrolled content shows under the logo. The ScrollViewer starts 24 left of the
@@ -524,15 +524,20 @@ AUTH SURFACE (Masuk and Daftar, implemented in `AuthViews.cs` as `AuthSurface`):
   gap takes whatever the 440 card leaves (wide on large windows). If the card would
   be under 360, G shrinks first (minimum 46 = scrollbar gap 16 + scrollbar 6 + 24;
   reached only on narrow tall windows such as 1040x1080), then L (minimum 48), then B moves
-  right, then D shrinks (minimum 320). The scroll area ends at plate left. The logo, the warning and the demo-account
-  line share L, and the warning and demo line share the card width.
+  right, then D shrinks (minimum 320). The scroll area ends at plate left. The logo starts
+  at L. The card (with the warning, which shares its width and left edge) is then centered
+  horizontally between x 0 and plate left (at least 32 from both), and vertically on the
+  window height: its center is the window center while its top block stays at least 24
+  below the logo band; otherwise it sits 24 below the band and the form scrolls.
+  UiVerification checks both centers within 2 px at 1920x1080 and 1283x780 and that the
+  card never overlaps the logo at 1040x720.
 - Card: white surface, `rounded.card` (16), `elevation.card` shadow
   (`0 8 24 0 #1F202522`), padding 32, fields 20 apart, no border. Hard rule: the
   plate box never intersects the card box and the gap is at least 24. At 1360x940
-  the plate is 526, the card 440 at 163, the gap about 113 and the panel 28%; at
-  1283x780 the plate is 437, the card 440 at 154 and the gap about 111; at 1920x1080
-  the plate is 605, the card 440 at 230 and the gap about 410; at 1040x720 the plate
-  is 403, the card 360 at 125, the gap about 62 and the panel 28%. The primary
+  the plate is 526, the card 440 at 138, the gap about 138 and the panel 28%; at
+  1283x780 the plate is 437, the card 440 at 133 and the gap about 133; at 1920x1080
+  the plate is 605, the card 440 at 320 and the gap about 320; at 1040x720 the plate
+  is 403, the card 360 at 94, the gap about 94 and the panel 28%. The primary
   action spans the card; the secondary action (Daftar akun baru / Kembali ke masuk)
   spans it below. No Google sign-in, Ingat saya, or Lupa kata sandi.
 - Titles Masuk and Daftar akun: 28, bold (`auth-title`).
