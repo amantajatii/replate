@@ -118,14 +118,22 @@ internal sealed class DatabaseService : IOrderStore
             using var connection = CreateConnection();
             connection.Open();
             using var command = new NpgsqlCommand("""
-                SELECT id, name, address FROM public.restaurants WHERE owner_id = @owner_id
+                SELECT id, name, address, phone, description, opening_time, closing_time
+                FROM public.restaurants WHERE owner_id = @owner_id
                 ORDER BY name, id
                 """, connection);
             command.Parameters.AddWithValue("owner_id", ownerId);
             using var reader = command.ExecuteReader();
             var restaurants = new List<Restaurant>();
             while (reader.Read())
-                restaurants.Add(new Restaurant { Id = reader.GetGuid(0), Name = reader.GetString(1), Address = reader.GetString(2) });
+                restaurants.Add(new Restaurant
+                {
+                    Id = reader.GetGuid(0), Name = reader.GetString(1), Address = reader.GetString(2),
+                    Phone = reader.IsDBNull(3) ? "" : reader.GetString(3),
+                    Description = reader.IsDBNull(4) ? "" : reader.GetString(4),
+                    OpeningTime = reader.IsDBNull(5) ? default : reader.GetFieldValue<TimeOnly>(5),
+                    ClosingTime = reader.IsDBNull(6) ? default : reader.GetFieldValue<TimeOnly>(6)
+                });
             return restaurants;
         }
         catch (NpgsqlException e)

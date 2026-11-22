@@ -559,11 +559,14 @@ public sealed class RegisterView : UserControl
             var password = PasswordInput.Text ?? "";
             var profile = owner ? Profile() : null;
             AuthSurface.ClearPassword(PasswordInput); AuthSurface.ClearPassword(ConfirmPasswordInput);
-            host.Run(() =>
+            var signedIn = false;
+            host.Run(() => signedIn = session.RegisterAndSignIn(owner ? UserRole.RestaurantOwner : UserRole.Customer,
+                NameInput.Text ?? "", email, password, profile), () =>
             {
-                session.Register(owner ? UserRole.RestaurantOwner : UserRole.Customer, NameInput.Text ?? "", email, password, profile);
-                session.SignIn(email, password);
-            }, host.ShowHome, "Akun berhasil dibuat.", message => { ErrorText.Text = message; ErrorText.IsVisible = true; ErrorText.BringIntoView(); });
+                if (signedIn) host.ShowHome();
+                else host.ShowSignIn();
+                host.ShowSuccess(signedIn ? "Akun berhasil dibuat." : "Cek email untuk konfirmasi, lalu masuk ke Replate.");
+            }, onError: message => { ErrorText.Text = message; ErrorText.IsVisible = true; ErrorText.BringIntoView(); });
         }
         AuthSurface.SubmitOnEnter(Submit, NameInput, EmailInput, PasswordInput, ConfirmPasswordInput, RestaurantNameInput, AddressInput, PhoneInput);
         RegisterButton = AuthSurface.Action("Daftar", Submit, true);

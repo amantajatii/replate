@@ -109,14 +109,40 @@ public sealed class DemoSession
     // Accounts
     internal Dictionary<string, string> ValidateRegistration(UserRole role, string name, string email, string password, RestaurantProfile? restaurant = null) =>
         role == UserRole.RestaurantOwner
-            ? AccountService.ValidateOwnerRegistration(Users, name, email, password, restaurant)
-            : AccountService.ValidateAccount(Users, name, email, password);
+            ? AccountService.ValidateOwnerRegistration(UsesSupabaseAuth ? [] : Users, name, email, password, restaurant)
+            : AccountService.ValidateAccount(UsesSupabaseAuth ? [] : Users, name, email, password);
+
+    private bool UsesSupabaseAuth => UsesSharedStock && SupabaseAuth.IsConfigured;
+
+    internal bool RegisterAndSignIn(UserRole role, string name, string email, string password, RestaurantProfile? restaurant)
+    {
+        if (!UsesSupabaseAuth)
+        {
+            Register(role, name, email, password, restaurant);
+            SignIn(email, password);
+            return true;
+        }
+
+        EnsureWritable();
+        var errors = ValidateRegistration(role, name, email, password, restaurant);
+        if (errors.Count > 0) throw new InvalidOperationException(errors.First().Value);
+
+        var session = SupabaseAuth.SignUpAsync(name, email, password, role == UserRole.RestaurantOwner ? restaurant : null)
+            .GetAwaiter().GetResult();
+        if (session is null) return false;
+
+        var user = SignInWithSupabase(session.User);
+        if (user.Role != role)
+            throw new InvalidOperationException("Akun dibuat, tetapi profil restoran belum tersedia. Periksa migrasi pendaftaran di Supabase.");
+        StartAccountSession(user, session);
+        return true;
+    }
 
     public User Register(UserRole role, string name, string email, string password, RestaurantProfile? restaurant = null)
     {
         EnsureWritable();
-        if (UsesSharedStock && SupabaseAuth.IsConfigured)
-            throw new InvalidOperationException("Buat akun melalui administrator Supabase, lalu masuk di sini.");
+        if (UsesSupabaseAuth)
+            throw new InvalidOperationException("Gunakan alur pendaftaran Supabase.");
         var errors = ValidateRegistration(role, name, email, password, restaurant);
         if (errors.Count > 0) throw new InvalidOperationException(errors.First().Value);
         User user = role == UserRole.RestaurantOwner
@@ -137,13 +163,18 @@ public sealed class DemoSession
 
     public User SignIn(string email, string password)
     {
-        var session = UsesSharedStock && SupabaseAuth.IsConfigured
+        var session = UsesSupabaseAuth
             ? SupabaseAuth.SignInAsync(email, password).GetAwaiter().GetResult()
             : null;
         var user = session is not null
             ? SignInWithSupabase(session.User)
             : AccountService.Authenticate(Users, email, password)
                 ?? throw new InvalidOperationException(AccountService.SignInFailedMessage);
+        return StartAccountSession(user, session);
+    }
+
+    private User StartAccountSession(User user, SupabaseAuth.Session? session)
+    {
         if (user is RestaurantOwner owner)
         {
             Restaurant = owner.Restaurants.FirstOrDefault(Restaurants.Contains)
@@ -167,10 +198,12 @@ public sealed class DemoSession
     private User SignInWithSupabase(SupabaseAuth.Identity identity)
     {
         var owned = new DatabaseService().LoadOwnedRestaurants(identity.Id);
+        var displayName = identity.Metadata?.DisplayName?.Trim();
+        if (string.IsNullOrWhiteSpace(displayName) || displayName.Length > 80) displayName = identity.Email;
         if (owned.Count == 0)
-            return new Customer { Id = identity.Id, Name = identity.Email, Email = identity.Email };
+            return new Customer { Id = identity.Id, Name = displayName, Email = identity.Email };
 
-        var owner = new RestaurantOwner { Id = identity.Id, Name = identity.Email, Email = identity.Email };
+        var owner = new RestaurantOwner { Id = identity.Id, Name = displayName, Email = identity.Email };
         foreach (var remote in owned)
         {
             var restaurant = FindRestaurant(remote.Id);
@@ -182,6 +215,9 @@ public sealed class DemoSession
 
             restaurant.Name = remote.Name;
             restaurant.Address = remote.Address;
+            if (!string.IsNullOrEmpty(remote.Phone))
+                restaurant.UpdateProfile(remote.Name, remote.Description, remote.Address, remote.Phone,
+                    remote.OpeningTime, remote.ClosingTime);
             restaurant.Owner?.Restaurants.Remove(restaurant);
             restaurant.Owner = owner;
             restaurant.OwnerId = owner.Id;
