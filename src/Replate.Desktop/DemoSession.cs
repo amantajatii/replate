@@ -344,28 +344,37 @@ public sealed class DemoSession
 
     public Order Checkout(Guid restaurantId)
     {
+        var cart = Cart;
         var order = PrepareCheckout(restaurantId);
         try
         {
+            if (supabaseSession is { } session)
+                return CommitSupabaseCheckout(cart, SupabaseOrderWriter.CheckoutAsync(session, order).GetAwaiter().GetResult());
             OrderStoreForCheckout()?.SaveOrderAsync(order).GetAwaiter().GetResult();
-            return CommitCheckout(order);
+            new CheckoutService(new StockService()).CommitOrder(cart, order);
+            return CommitCheckout(cart, order);
         }
         finally { checkingOut = false; }
     }
 
     public async Task<Order> CheckoutAsync(Guid restaurantId)
     {
+        var cart = Cart;
         var order = PrepareCheckout(restaurantId);
         try
         {
+            if (supabaseSession is { } session)
+                return CommitSupabaseCheckout(cart, await SupabaseOrderWriter.CheckoutAsync(session, order));
             if (OrderStoreForCheckout() is { } store) await store.SaveOrderAsync(order);
-            return CommitCheckout(order);
+            new CheckoutService(new StockService()).CommitOrder(cart, order);
+            return CommitCheckout(cart, order);
         }
         finally { checkingOut = false; }
     }
 
     private bool checkingOut;
     private bool expirationNeedsSave;
+    private readonly Dictionary<(Guid CustomerId, Guid RestaurantId), Order> pendingCheckouts = [];
 
     private IOrderStore? OrderStoreForCheckout() => OrderStore ?? (StorePath == DefaultStorePath ? new DatabaseService() : null);
 
@@ -380,21 +389,48 @@ public sealed class DemoSession
         RequireCustomer();
         EnsureNotCheckingOut();
         var group = Cart.FindGroup(restaurantId) ?? throw new InvalidOperationException("Restoran ini tidak ada di keranjang.");
+        var checkoutKey = (Cart.CustomerId, restaurantId);
+        if (supabaseSession is not null && pendingCheckouts.TryGetValue(checkoutKey, out var pending) &&
+            pending.Items.Select(item => (item.ListingId, item.Quantity, item.UnitPrice)).OrderBy(item => item.ListingId)
+                .SequenceEqual(group.Items.Select(item => (item.ListingId, item.Quantity, item.UnitPrice)).OrderBy(item => item.ListingId)))
+        {
+            checkingOut = true;
+            return pending;
+        }
+
         if (group.Items.Any(i => !i.Listing.Menu.IsActive)) throw new InvalidOperationException("Ada menu yang sudah tidak aktif. Hapus menu tersebut dari keranjang.");
         if (FindRestaurant(restaurantId) is null)
             throw new InvalidOperationException("Restoran untuk keranjang ini tidak ditemukan. Kosongkan keranjang lalu pilih makanan lagi.");
         var order = new CheckoutService(new StockService()).PrepareOrder(Cart, restaurantId);
         if (UsesSharedStock && OrderStore is null && group.Items.Any(item => !sharedListingIds.Contains(item.ListingId)))
             throw new InvalidOperationException("Ada penawaran lokal di keranjang. Hapus item tersebut lalu pilih kembali dari Jelajah.");
+        if (supabaseSession is not null) pendingCheckouts[checkoutKey] = order;
         checkingOut = true;
         return order;
     }
 
-    private Order CommitCheckout(Order order)
+    private Order CommitSupabaseCheckout(Cart cart, (Order Order, Dictionary<Guid, int> Stock) checkout)
     {
-        new CheckoutService(new StockService()).CommitOrder(Cart, order);
-        FindRestaurant(order.RestaurantId)!.Orders.Add(order);
-        LastOrder = order;
+        var order = checkout.Order;
+        foreach (var item in order.Items)
+        {
+            if (checkout.Stock.TryGetValue(item.ListingId, out var quantity))
+                item.Listing.UpdateStock(quantity);
+            cart.RemoveItem(item.ListingId);
+        }
+
+        pendingCheckouts.Remove((order.CustomerId, order.RestaurantId));
+        if (ReferenceEquals(Cart, cart)) customerApiOrderIds.Add(order.Id);
+        return CommitCheckout(cart, order);
+    }
+
+    private Order CommitCheckout(Cart cart, Order order)
+    {
+        var orders = FindRestaurant(order.RestaurantId)!.Orders;
+        var existing = orders.FindIndex(candidate => candidate.Id == order.Id);
+        if (existing < 0) orders.Add(order);
+        else orders[existing] = order;
+        if (ReferenceEquals(Cart, cart)) LastOrder = order;
         Persist();
         return order;
     }
