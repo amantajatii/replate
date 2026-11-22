@@ -6,7 +6,6 @@ using Replate.Desktop.Data;
 
 namespace Replate.Desktop;
 
-// All data is local demonstration data; no database or payment service is used.
 public sealed class DemoSession
 {
     public List<Restaurant> Restaurants { get; private set; } = [];
@@ -170,27 +169,74 @@ public sealed class DemoSession
 
     public IEnumerable<SurplusListing> Search(string query, string category) =>
         new MarketplaceService(Listings).GetActiveListings().Where(l =>
-            l.Menu.IsActive && (category == "Semua" || l.Menu.Category == category) &&
+            (!UsesSharedStock || sharedListingIds.Contains(l.Id)) && l.Menu.IsActive && (category == "Semua" || l.Menu.Category == category) &&
             (l.Menu.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
              l.Menu.Restaurant?.Name.Contains(query, StringComparison.OrdinalIgnoreCase) == true));
+
+    private readonly HashSet<Guid> sharedListingIds = [];
+    private bool UsesSharedStock => StorePath == DefaultStorePath;
+
+    internal void RefreshSharedListings()
+    {
+        if (!UsesSharedStock || checkingOut) return;
+
+        var sharedListings = new DatabaseService().LoadListings();
+        sharedListingIds.Clear();
+        foreach (var shared in sharedListings)
+        {
+            sharedListingIds.Add(shared.Id);
+            var listing = Listings.Find(candidate => candidate.Id == shared.Id);
+            if (listing is null)
+            {
+                var menu = Restaurants.SelectMany(restaurant => restaurant.Menus)
+                    .FirstOrDefault(candidate => candidate.Id == shared.MenuId);
+                if (menu is null)
+                {
+                    if (Restaurants.Count != 1) continue;
+                    menu = shared.Menu;
+                    menu.Restaurant = Restaurant;
+                    menu.RestaurantId = Restaurant.Id;
+                    Restaurant.Menus.Add(menu);
+                }
+
+                shared.Menu = menu;
+                menu.SurplusListings.Add(shared);
+                Listings.Add(shared);
+                continue;
+            }
+
+            listing.RescuePrice = shared.RescuePrice;
+            listing.PickupStart = shared.PickupStart;
+            listing.PickupEnd = shared.PickupEnd;
+            listing.UpdateStock(shared.Quantity);
+            if (shared.Status == ListingStatus.Cancelled) listing.Cancel();
+        }
+    }
 
     public Order Checkout(Guid restaurantId)
     {
         var order = PrepareCheckout(restaurantId);
-        try { OrderStoreForCheckout()?.SaveOrderAsync(order).GetAwaiter().GetResult(); }
+        try
+        {
+            OrderStoreForCheckout()?.SaveOrderAsync(order).GetAwaiter().GetResult();
+            return CommitCheckout(order);
+        }
         finally { checkingOut = false; }
-        return CommitCheckout(order);
     }
 
     public async Task<Order> CheckoutAsync(Guid restaurantId)
     {
         var order = PrepareCheckout(restaurantId);
-        try { if (OrderStoreForCheckout() is { } store) await store.SaveOrderAsync(order); }
+        try
+        {
+            if (OrderStoreForCheckout() is { } store) await store.SaveOrderAsync(order);
+            return CommitCheckout(order);
+        }
         finally { checkingOut = false; }
-        return CommitCheckout(order);
     }
 
     private bool checkingOut;
+    private bool expirationNeedsSave;
 
     private IOrderStore? OrderStoreForCheckout() => OrderStore ?? (StorePath == DefaultStorePath ? new DatabaseService() : null);
 
@@ -209,6 +255,8 @@ public sealed class DemoSession
         if (FindRestaurant(restaurantId) is null)
             throw new InvalidOperationException("Restoran untuk keranjang ini tidak ditemukan. Kosongkan keranjang lalu pilih makanan lagi.");
         var order = new CheckoutService(new StockService()).PrepareOrder(Cart, restaurantId);
+        if (UsesSharedStock && OrderStore is null && group.Items.Any(item => !sharedListingIds.Contains(item.ListingId)))
+            throw new InvalidOperationException("Ada penawaran lokal di keranjang. Hapus item tersebut lalu pilih kembali dari Jelajah.");
         checkingOut = true;
         return order;
     }
@@ -368,6 +416,16 @@ public sealed class DemoSession
             (ToMinute(existing.PickupStart.ToLocalTime()) != ToMinute(start) || ToMinute(existing.PickupEnd.ToLocalTime()) != ToMinute(end)))
             throw new InvalidOperationException("Jadwal tidak dapat diubah saat masih ada pesanan aktif.");
         var listing = existing ?? new SurplusListing { Menu = menu, MenuId = menu.Id };
+        if (UsesSharedStock)
+        {
+            var proposed = new SurplusListing
+            {
+                Id = listing.Id, Menu = menu, MenuId = menu.Id, RescuePrice = price,
+                Quantity = quantity, PickupStart = start.ToUniversalTime(), PickupEnd = end.ToUniversalTime()
+            };
+            new DatabaseService().SaveListing(proposed, sharedListingIds.Contains(listing.Id) ? listing.Quantity : null);
+            sharedListingIds.Add(listing.Id);
+        }
         listing.RescuePrice = price; listing.PickupStart = start.ToUniversalTime(); listing.PickupEnd = end.ToUniversalTime(); listing.UpdateStock(quantity);
         if (existing is null) { Listings.Add(listing); menu.SurplusListings.Add(listing); }
         Persist(); return listing;
@@ -382,7 +440,13 @@ public sealed class DemoSession
             .SelectMany(o => o.Items).Where(i => i.Listing.MenuId == menu.Id && DateOnly.FromDateTime(i.Listing.PickupStart.ToLocalTime()) == date).Sum(i => i.Quantity);
 
     public void CancelListing(SurplusListing listing)
-    { EnsureWritable(); RequireOwnedRestaurant(listing.Menu.RestaurantId); listing.Cancel(); Persist(); }
+    {
+        EnsureWritable();
+        RequireOwnedRestaurant(listing.Menu.RestaurantId);
+        if (UsesSharedStock && sharedListingIds.Contains(listing.Id)) new DatabaseService().CloseListing(listing.Id);
+        listing.Cancel();
+        Persist();
+    }
 
     internal Dictionary<string, string> ValidateProduction(Menu? menu, DateOnly? date, int? produced, int? regularSold)
     {
@@ -419,8 +483,6 @@ public sealed class DemoSession
         if (!menu.ProductionRecords.Contains(record)) menu.ProductionRecords.Add(record);
         Persist();
     }
-    private bool expirationNeedsSave;
-
     public void ConfirmOrder(Order order, int preparationMinutes)
     {
         EnsureWritable();
@@ -469,9 +531,22 @@ public sealed class DemoSession
         }
         if (order.Status is OrderStatus.Completed or OrderStatus.Cancelled)
             throw new InvalidOperationException("Pesanan sudah selesai atau dibatalkan.");
+        var restoreStock = true;
+        if (UsesSharedStock)
+        {
+            RefreshSharedListings();
+            if (order.Items.Any(item => sharedListingIds.Contains(item.ListingId)))
+            {
+                restoreStock = new DatabaseService().CancelOrder(order.Id, allowAlreadyCancelled: automatic);
+                if (!restoreStock) RefreshSharedListings();
+            }
+        }
         order.Cancel();
-        var stock = new StockService();
-        foreach (var item in order.Items) stock.RestoreStock(item.Listing, item.Quantity);
+        if (restoreStock)
+        {
+            var stock = new StockService();
+            foreach (var item in order.Items) stock.RestoreStock(item.Listing, item.Quantity);
+        }
 
         if (automatic) expirationNeedsSave = true;
         Persist();

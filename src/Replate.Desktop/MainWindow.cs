@@ -112,7 +112,7 @@ public sealed class MainWindow : Window
         if (!Allowed(false)) return;
         Marketplace = new MarketplaceView(this, Session);
         Render(false, Marketplace, "Jelajah");
-        Marketplace.Refresh();
+        Run(Session.RefreshSharedListings, Marketplace.Refresh);
     }
     internal void ShowCollection(string name)
     {
@@ -164,7 +164,9 @@ public sealed class MainWindow : Window
     }
     internal void ShowListings()
     {
-        if (Allowed(true)) Render(true, new ListingsView(this, Session), "Penawaran surplus");
+        if (!Allowed(true)) return;
+        Render(true, new ListingsView(this, Session), "Penawaran surplus");
+        Run(Session.RefreshSharedListings, () => Render(true, new ListingsView(this, Session), "Penawaran surplus"));
     }
     internal void ShowListingEditor(SurplusListing? listing = null)
     {
