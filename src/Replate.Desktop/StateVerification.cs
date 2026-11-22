@@ -39,6 +39,23 @@ internal static class StateVerification
         var cancelled = session.Checkout(); session.CancelOrder(cancelled);
         ExpectFailure(() => session.CancelOrder(cancelled));
         Ensure(listing.Quantity == 4, "Cancellation restores stock exactly once");
+        today = listing.Menu.ProductionRecords.Single(r => r.RecordDate == DateOnly.FromDateTime(listing.PickupStart.ToLocalTime()));
+        session.AddToCart(listing, 1);
+        var overdue = session.Checkout();
+        session.ConfirmOrder(overdue, 15);
+        session.ReadyOrder(overdue);
+        session.ExpireOverdueOrders(listing.PickupEnd);
+        Ensure(overdue.Status == OrderStatus.ReadyForPickup, "Pickup is allowed through the stated deadline");
+        var afterDeadline = listing.PickupEnd.AddTicks(1);
+        session.ExpireOverdueOrders(afterDeadline);
+        session.ExpireOverdueOrders(afterDeadline);
+        Ensure(overdue.Status == OrderStatus.Cancelled && listing.Quantity == 4,
+            "Expiration cancels an active order and restores stock only once");
+        Ensure(!listing.IsAvailable(afterDeadline), "Restored stock cannot be reserved after the pickup deadline");
+        Ensure(today.RescuedQuantity == rescuedBefore + 2, "Expired orders do not change rescued quantities");
+        session = new DemoSession(path);
+        Ensure(session.CustomerOrders.Single(o => o.Id == overdue.Id).Status == OrderStatus.Cancelled &&
+            session.Listings.Single(l => l.Id == listingId).Quantity == 4, "Expiration survives restart");
         var menu = session.SaveMenu(null, "Menu pengujian", "Menu lokal", "Makanan utama", 20000, .25m);
         var date = DateOnly.FromDateTime(DateTime.Today);
         session.SaveProduction(menu, date, 10, 6);

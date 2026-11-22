@@ -284,26 +284,59 @@ public sealed class DemoSession
         if (!menu.ProductionRecords.Contains(record)) menu.ProductionRecords.Add(record);
         Persist();
     }
+    private bool expirationNeedsSave;
+
     public void ConfirmOrder(Order order, int preparationMinutes)
     {
         EnsureWritable();
+        EnsurePickupWindowOpen(order);
         if (preparationMinutes is < 1 or > 240) throw new InvalidOperationException("Waktu persiapan harus antara 1 dan 240 menit.");
         order.Confirm(); order.SetPreparationTime(TimeSpan.FromMinutes(preparationMinutes)); Persist();
     }
 
     public void ReadyOrder(Order order)
-    { EnsureWritable(); order.MarkReady(); Persist(); }
+    { EnsureWritable(); EnsurePickupWindowOpen(order); order.MarkReady(); Persist(); }
 
-    public void CancelOrder(Order order)
+    public void CancelOrder(Order order) => CancelOrder(order, automatic: false);
+
+    internal void ExpireOverdueOrders(DateTime now)
     {
-        EnsureWritable(); order.Cancel();
-        foreach (var item in order.Items) new StockService().RestoreStock(item.Listing, item.Quantity);
+        if (StorageError is not null) return;
+        if (expirationNeedsSave)
+        {
+            Persist();
+            expirationNeedsSave = false;
+        }
+
+        foreach (var order in Restaurant.Orders.Where(order => order.IsPastPickupWindow(now)))
+            CancelOrder(order, automatic: true);
+    }
+
+    private void EnsurePickupWindowOpen(Order order)
+    {
+        if (!order.IsPastPickupWindow(DateTime.UtcNow)) return;
+        CancelOrder(order, automatic: true);
+        throw new InvalidOperationException("Jadwal pengambilan sudah berakhir. Pesanan dibatalkan.");
+    }
+
+    private void CancelOrder(Order order, bool automatic)
+    {
+        EnsureWritable();
+        if (order.Status is OrderStatus.Completed or OrderStatus.Cancelled)
+            throw new InvalidOperationException("Pesanan sudah selesai atau dibatalkan.");
+        order.Cancel();
+        var stock = new StockService();
+        foreach (var item in order.Items) stock.RestoreStock(item.Listing, item.Quantity);
+
+        if (automatic) expirationNeedsSave = true;
         Persist();
+        expirationNeedsSave = false;
     }
 
     public void CompletePickup(Order order, string code)
     {
         EnsureWritable();
+        EnsurePickupWindowOpen(order);
         if (order.Status != OrderStatus.ReadyForPickup) throw new InvalidOperationException("Pesanan belum siap diambil atau sudah selesai.");
         var verification = new PickupVerification { Order = order, OrderId = order.Id, EnteredCode = code.Trim().ToUpperInvariant() };
         if (!verification.VerifyCode()) throw new InvalidOperationException("Kode pengambilan tidak cocok. Periksa kode dari pelanggan.");

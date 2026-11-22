@@ -48,6 +48,22 @@ public sealed class App : Application
             var args = desktop.Args ?? [];
             var window = new MainWindow(args.Contains("--verify-ui") ? new DemoSession(Path.Combine(Path.GetTempPath(), "replate-ui-" + Guid.NewGuid().ToString("N"), "state.json")) : null, DatabaseError);
             desktop.MainWindow = window;
+            var expirationTimer = new Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromMinutes(1) };
+            expirationTimer.Tick += (_, _) => ExpireOrders();
+            window.Opened += (_, _) =>
+            {
+                ExpireOrders();
+                expirationTimer.Start();
+            };
+            window.Closed += (_, _) => expirationTimer.Stop();
+
+            void ExpireOrders()
+            {
+                try { window.Session.ExpireOverdueOrders(DateTime.UtcNow); }
+                catch (Exception e) when (e is InvalidOperationException or IOException or UnauthorizedAccessException)
+                { System.Diagnostics.Trace.TraceError("Gagal menutup pesanan yang lewat jadwal: {0}", e); }
+            }
+
             if (args.Contains("--verify-ui"))
                 window.Opened += async (_, _) => await UiVerification.Run(window, desktop);
         }

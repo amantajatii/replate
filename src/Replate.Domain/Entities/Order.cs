@@ -20,6 +20,10 @@ public sealed class Order
     public DateTime? CompletedAt { get; private set; }
     public List<OrderItem> Items { get; } = [];
 
+    public bool IsPastPickupWindow(DateTime now) =>
+        Status is (OrderStatus.Reserved or OrderStatus.Confirmed or OrderStatus.ReadyForPickup) &&
+        Items.Any(item => item.Listing.PickupEnd < now);
+
     public void Confirm() => Transition(OrderStatus.Reserved, OrderStatus.Confirmed);
 
     public void SetPreparationTime(TimeSpan duration)
