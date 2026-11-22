@@ -6,7 +6,13 @@ Replate adalah aplikasi marketplace yang membantu restoran menjual makanan surpl
 
 ![Class Diagram Replate](./class-diagram-replate.png)
 
-## Implementasi Class Diagram
+## Database PostgreSQL
+
+Implementasi 11 tabel berdasarkan [ERD Replate](./erd-replate.mmd) tersedia di
+[`database/schema.sql`](./database/schema.sql). Ikuti [panduan database Modul 5](./database/README.md)
+untuk membuat database dan menampilkan bukti struktur tabel.
+
+## Implementasi C#
 
 Class diagram di atas diimplementasikan sebagai C# class library dengan .NET 10.
 
