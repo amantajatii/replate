@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text.Json.Serialization;
 using Replate.Domain.Enums;
+using Replate.Domain.Services;
 
 namespace Replate.Domain.Entities;
 
@@ -14,8 +15,8 @@ public abstract class User
     public Guid Id { get; init; } = Guid.NewGuid();
     public string Name { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
-    [JsonInclude]
-    public string PasswordHash { get; private set; } = string.Empty;
+    private string passwordHash = string.Empty;
+    public string PasswordHash { get => passwordHash; init => passwordHash = value; }
     [JsonIgnore]
     public bool IsAuthenticated { get; private set; }
     public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
@@ -28,23 +29,25 @@ public abstract class User
             throw new InvalidOperationException("A password is already configured.");
         }
 
-        var salt = RandomNumberGenerator.GetBytes(SaltSize);
-        var hash = HashPassword(password, salt);
-        PasswordHash = $"pbkdf2-sha256-v1:{Convert.ToBase64String(salt)}:{Convert.ToBase64String(hash)}";
+        passwordHash = PasswordHasher.Hash(password);
         UpdatedAt = DateTime.UtcNow;
     }
 
     public virtual void Login(string email, string password)
     {
-        IsAuthenticated = false;
-        if (string.IsNullOrWhiteSpace(Email) ||
-            !string.Equals(Email.Trim(), email?.Trim(), StringComparison.OrdinalIgnoreCase) ||
-            string.IsNullOrEmpty(password) || !VerifyPassword(password))
+        if (!TryLogin(email, password))
         {
             throw new UnauthorizedAccessException("Email atau kata sandi salah.");
         }
 
-        IsAuthenticated = true;
+    }
+
+    internal bool TryLogin(string? email, string? password)
+    {
+        IsAuthenticated = !string.IsNullOrWhiteSpace(Email) &&
+            string.Equals(Email.Trim(), email?.Trim(), StringComparison.OrdinalIgnoreCase) &&
+            !string.IsNullOrEmpty(password) && VerifyPassword(password);
+        return IsAuthenticated;
     }
 
     public virtual void Logout()
@@ -65,7 +68,7 @@ public abstract class User
         var parts = PasswordHash.Split(':');
         if (parts.Length != 3 || parts[0] != "pbkdf2-sha256-v1")
         {
-            return false;
+            return PasswordHasher.Verify(password, PasswordHash);
         }
 
         Span<byte> salt = stackalloc byte[SaltSize];

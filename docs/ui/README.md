@@ -11,7 +11,6 @@ Kedua gambar berasal dari halaman terpisah, bukan satu layar gabungan.
 
 | Screenshot | Tampilan |
 | --- | --- |
-| [Pilih area](entry.png) | Masuk ke konteks pelanggan atau restoran |
 | [Detail makanan](food-detail.png) | Informasi makanan dan jumlah porsi |
 | [Keranjang](cart.png) | Rincian pilihan dan total reservasi |
 | [Pesanan saya](customer-orders.png) | Daftar pesanan pelanggan |

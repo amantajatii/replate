@@ -27,21 +27,30 @@ dotnet run --project tests/Replate.Domain.Checks/Replate.Domain.Checks.csproj
 ## User Interface Avalonia
 
 Aplikasi desktop tersedia di [`src/Replate.Desktop`](./src/Replate.Desktop), dengan
-area pelanggan dan restoran terpisah. Marketplace memakai navigasi pelanggan;
+area pelanggan dan restoran terpisah. Halaman pelanggan memakai bar atas
+(logo, kolom cari, keranjang, dan menu profil);
 dashboard dan pengelolaan restoran memakai sidebar operasional. Keranjang,
-detail makanan/pesanan, serta formulir menggunakan halaman penuh.
+detail pesanan, serta formulir menggunakan halaman penuh. Tombol Tambah pada kartu
+makanan membuka pop up detail dengan pengatur jumlah porsi.
 
 ```bash
 dotnet run --project src/Replate.Desktop
 ```
 
+Halaman Jelajah dibuka dengan banner sapaan, lalu lima kartu koleksi (Termurah, Segera
+berakhir, Makanan utama, Roti & kue, Buah & sayur) yang masing-masing membuka halamannya
+sendiri, dan daftar semua makanan berbentuk kartu. Enter atau ikon kaca pembesar di
+kolom cari membuka halaman hasil pencarian.
 Pelanggan dapat mencari makanan, mengatur keranjang, melakukan simulasi reservasi,
-dan memantau pesanan. Restoran dapat mengelola menu dan penawaran, mencatat produksi,
+dan memantau pesanan. Satu keranjang boleh berisi menu dari beberapa restoran;
+setiap restoran dipesan terpisah dari keranjang (satu pesanan per restoran) melalui pop up konfirmasi, secara atomik. Restoran dapat mengelola menu dan penawaran, mencatat produksi,
 mengonfirmasi pesanan, serta memverifikasi kode pengambilan. Dashboard menampilkan
 analisis surplus dan rekomendasi produksi berdasarkan model domain yang ada.
 
 Data awal merupakan **contoh lokal**, dengan perubahan tersimpan otomatis di JSON.
-Belum terhubung ke PostgreSQL, autentikasi nyata, atau pembayaran. Lihat
+Akun memakai autentikasi lokal tingkat prototype: kata sandi di-hash dengan PBKDF2
+dan disimpan di JSON lokal, bukan autentikasi produksi. Belum terhubung ke
+PostgreSQL untuk akun atau pembayaran. Lihat
 [panduan, alur demonstrasi, dan screenshot](./src/Replate.Desktop/README.md).
 
 # REPLATE TEAM

@@ -15,16 +15,16 @@ public sealed class DashboardView : UserControl
     private static readonly CultureInfo Indonesian = CultureInfo.GetCultureInfo("id-ID");
     internal Grid SummaryCards { get; private set; } = null!;
     internal ComboBox PeriodPicker { get; private set; } = null!;
-    internal DashboardView(DemoSession session) => Render(session, 28);
+    internal DashboardView(MainWindow host, DemoSession session) => Render(host, session, 28);
 
-    private void Render(DemoSession session, int days)
+    private void Render(MainWindow host, DemoSession session, int days)
     {
         var firstDate = DateOnly.FromDateTime(DateTime.Today.AddDays(1 - days));
         var lastDate = DateOnly.FromDateTime(DateTime.Today);
         var period = new ComboBox { ItemsSource = new[] { "7 hari terakhir", "28 hari terakhir" },
             SelectedIndex = days == 7 ? 0 : 1, MinWidth = 180 };
         PeriodPicker = period;
-        period.SelectionChanged += (_, _) => Render(session, period.SelectedIndex == 0 ? 7 : 28);
+        period.SelectionChanged += (_, _) => Render(host, session, period.SelectedIndex == 0 ? 7 : 28);
         var records = session.Restaurant.Menus.SelectMany(m => m.ProductionRecords).Where(r => r.RecordDate >= firstDate && r.RecordDate <= lastDate).ToList();
         var surplus = new SurplusDashboard();
         var finance = new FinancialDashboard();
@@ -34,9 +34,11 @@ public sealed class DashboardView : UserControl
         var summary = new Grid { ColumnSpacing = 16, RowSpacing = 16 };
         summary.Children.Add(MetricCard("Total Produksi", $"{surplus.CalculateTotalProduced(records).ToString("N0", Indonesian)} porsi", "Porsi pada periode terpilih"));
         summary.Children.Add(MetricCard("Surplus", $"{surplus.CalculateTotalSurplus(records).ToString("N0", Indonesian)} porsi",
-            $"{surplus.CalculateSurplusRate(records).ToString("0.0", Indonesian)}% dari total produksi"));
+            surplus.CalculateTotalProduced(records) == 0 ? "Belum ada produksi pada periode ini"
+                : $"{surplus.CalculateSurplusRate(records).ToString("0.0", Indonesian)}% dari total produksi"));
         summary.Children.Add(MetricCard("Porsi Terselamatkan", $"{surplus.CalculateRescuedFood(records).ToString("N0", Indonesian)} porsi",
-            $"{surplus.CalculateRescueRate(records).ToString("0.0", Indonesian)}% dari surplus"));
+            surplus.CalculateTotalSurplus(records) == 0 ? "Belum ada surplus pada periode ini"
+                : $"{surplus.CalculateRescueRate(records).ToString("0.0", Indonesian)}% dari surplus"));
         summary.Children.Add(MetricCard("Pendapatan Dipulihkan",
             DemoSession.Rupiah(finance.CalculateRecoveredRevenue(session.Restaurant.Orders.Where(o =>
                 DateOnly.FromDateTime(o.OrderedAt.ToLocalTime()) >= firstDate && DateOnly.FromDateTime(o.OrderedAt.ToLocalTime()) <= lastDate))),
@@ -62,7 +64,8 @@ public sealed class DashboardView : UserControl
         {
             var history = records.Where(r => r.MenuId == menu.Id).ToList();
             table.Children.Add(TableRow(false, menu.Name, surplus.CalculateTotalProduced(history).ToString("N0", Indonesian),
-                $"{surplus.CalculateTotalSurplus(history).ToString("N0", Indonesian)} ({surplus.CalculateSurplusRate(history).ToString("0.0", Indonesian)}%)",
+                surplus.CalculateTotalProduced(history) == 0 ? "0"
+                    : $"{surplus.CalculateTotalSurplus(history).ToString("N0", Indonesian)} ({surplus.CalculateSurplusRate(history).ToString("0.0", Indonesian)}%)",
                 surplus.CalculateRescuedFood(history).ToString("N0", Indonesian), surplus.CalculateWastedFood(history.Where(r => r.RecordDate < lastDate)).ToString("N0", Indonesian)));
         }
         var analysis = Ui.Stack(12, Ui.Text("Surplus per menu", 20, bold: true), table,
@@ -93,8 +96,14 @@ public sealed class DashboardView : UserControl
             Summary("Berat terselamatkan", $"{surplus.CalculateRescuedWeight(records).ToString("0.0", Indonesian)} kg"),
             Summary("Nilai terbuang", DemoSession.Rupiah(finance.CalculateEstimatedLoss(records.Where(r => r.RecordDate < lastDate)))),
             Ui.Text("Berat berdasarkan bobot per porsi. Nilai terbuang memakai harga normal menu.", 12, Ui.Muted));
-        var body = Ui.Stack(28, header, summary, Ui.Divider(), analysis, recommendationSection, impact,
-            Ui.Text("Pendapatan dan porsi terselamatkan bertambah setelah pengambilan diverifikasi. Reservasi belum dihitung sebagai penjualan selesai.", 12, Ui.Muted));
+        var addMenu = Ui.Button("Tambah menu", () => host.ShowMenuEditor(), true);
+        addMenu.HorizontalAlignment = HorizontalAlignment.Left;
+        var empty = Ui.Stack(12, Ui.Text("Belum ada menu", 20, bold: true),
+            Ui.Text("Tambahkan menu, lalu catat produksi harian untuk melihat surplus, rekomendasi produksi, dan pendapatan yang dipulihkan.", 14, Ui.Muted),
+            addMenu);
+        var details = session.Restaurant.Menus.Count == 0 ? new Control[] { empty } : new Control[] { analysis, recommendationSection, impact };
+        var body = Ui.Stack(28, [header, summary, Ui.Divider(), .. details,
+            Ui.Text("Pendapatan dan porsi terselamatkan bertambah setelah pengambilan diverifikasi. Reservasi belum dihitung sebagai penjualan selesai.", 12, Ui.Muted)]);
         body.Margin = new Thickness(32);
         Content = new ScrollViewer { Content = body,
             HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
@@ -114,7 +123,7 @@ public sealed class DashboardView : UserControl
         var card = new Border
         {
             Background = Brushes.White,
-            BorderBrush = Brush.Parse("#DDE3DA"), BorderThickness = new Thickness(1),
+            BorderBrush = Ui.CardBorder, BorderThickness = Ui.CardBorderThickness,
             CornerRadius = new CornerRadius(8), Padding = new Thickness(20), MinHeight = 140,
             RenderTransform = scale, RenderTransformOrigin = RelativePoint.Center,
             Cursor = new Cursor(StandardCursorType.Arrow),

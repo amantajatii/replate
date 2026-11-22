@@ -11,4 +11,10 @@
     <PackageReference Include="Npgsql" Version="10.0.3" />
     <ProjectReference Include="../Replate.Domain/Replate.Domain.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <AvaloniaResource Include="Assets/auth-hero.png" />
+    <AvaloniaResource Include="Assets/marketplace-hero.webp" />
+    <AvaloniaResource Include="Assets/logo-green.webp" />
+    <AvaloniaResource Include="Assets/logo-white.webp" />
+  </ItemGroup>
 </Project>

@@ -17,9 +17,9 @@ public sealed class Customer : User
 
     public void AddToCart(SurplusListing listing, int quantity) => GetOwnedCart().AddItem(listing, quantity);
 
-    public Order Checkout(CheckoutService checkout)
+    public Order Checkout(CheckoutService checkout, Guid restaurantId)
     {
-        var order = checkout.CreateOrder(GetOwnedCart());
+        var order = checkout.CreateOrder(GetOwnedCart(), restaurantId);
         Orders.Add(order);
         return order;
     }

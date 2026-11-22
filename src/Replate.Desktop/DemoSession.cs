@@ -9,39 +9,73 @@ namespace Replate.Desktop;
 // All data is local demonstration data; no database or payment service is used.
 public sealed class DemoSession
 {
-    public Restaurant Restaurant { get; private set; } = new() { Name = "Dapur Bumi", Address = "Jl. Kaliurang, Yogyakarta" };
-    public Cart Cart { get; private set; } = new() { CustomerId = Guid.NewGuid() };
+    public List<Restaurant> Restaurants { get; private set; } = [];
+    public Restaurant Restaurant { get; private set; } = null!;
+    public Cart Cart { get; private set; } = new();
+    public List<Cart> Carts { get; private set; } = [];
+    public List<User> Users { get; private set; } = [];
     public List<SurplusListing> Listings { get; private set; } = [];
     public Order? LastOrder { get; private set; }
+    internal IOrderStore? OrderStore { get; set; }
+    public User? CurrentUser { get; private set; }
+    public bool IsSignedIn => CurrentUser is not null;
     public static string Rupiah(decimal value) => "Rp" + value.ToString("N0", CultureInfo.GetCultureInfo("id-ID"));
 
     public string? StorePath { get; }
     public string? StorageError { get; private set; }
     public static string DefaultStorePath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Replate", "state.json");
-    public IEnumerable<Order> CustomerOrders => Restaurant.Orders.Where(o => o.CustomerId == Cart.CustomerId).OrderByDescending(o => o.OrderedAt);
+    public IEnumerable<Order> AllOrders => Restaurants.SelectMany(r => r.Orders);
+    public IEnumerable<Order> CustomerOrders => CurrentUser is Customer customer
+        ? AllOrders.Where(o => o.CustomerId == customer.Id).OrderByDescending(o => o.OrderedAt) : [];
+    public IEnumerable<SurplusListing> RestaurantListings => Listings.Where(l => l.Menu.RestaurantId == Restaurant.Id);
+    public Restaurant? FindRestaurant(Guid id) => Restaurants.FirstOrDefault(r => r.Id == id);
+    public string RestaurantLine(Guid restaurantId) =>
+        FindRestaurant(restaurantId) is { } restaurant ? $"{restaurant.Name} · {restaurant.Address}" : "Restoran tidak ditemukan";
 
     public DemoSession(string? storePath = null)
     {
         StorePath = storePath;
         if (storePath is not null && File.Exists(storePath))
         {
-            try { SessionStore.Load(this, storePath); return; }
-            catch (Exception e) when (e is System.Text.Json.JsonException or IOException or ArgumentException or KeyNotFoundException or InvalidOperationException or NullReferenceException)
+            try { SessionStore.Load(this, storePath); DemoAccounts.Ensure(Users, Restaurants, Carts); return; }
+            catch (Exception e) when (e is System.Text.Json.JsonException or IOException or InvalidDataException or ArgumentException or KeyNotFoundException or InvalidOperationException or NullReferenceException)
             { StorageError = "Data lokal tidak dapat dibaca. Berkas asli dipertahankan; perubahan dinonaktifkan. " + e.Message; }
         }
 
-        AddMenu("Chicken rice bowl", "Nasi hangat, ayam panggang, dan sayuran segar.", "Makanan utama", 32000, 16000, 6, 50, 36);
-        AddMenu("Butter croissant", "Croissant berlapis dengan mentega, dipanggang hari ini.", "Roti & kue", 24000, 12000, 4, 30, 23);
-        AddMenu("Garden salad", "Sayuran renyah dengan dressing wijen yang ringan.", "Vegetarian", 28000, 14000, 5, 26, 20);
-        AddMenu("Beef teriyaki bowl", "Daging teriyaki, nasi, dan sayuran pelengkap.", "Makanan utama", 40000, 20000, 3, 40, 35);
+        var bumi = AddRestaurant("Dapur Bumi", "Jl. Kaliurang, Yogyakarta", "Rice bowl, salad, dan roti harian.",
+            "0274 555 0101", new TimeOnly(9, 0), new TimeOnly(21, 0));
+        AddMenu(bumi, "Chicken rice bowl", "Nasi hangat, ayam panggang, dan sayuran segar.", "Makanan utama", 32000, 16000, 6, 50, 36);
+        AddMenu(bumi, "Butter croissant", "Croissant berlapis dengan mentega, dipanggang hari ini.", "Roti & kue", 24000, 12000, 4, 30, 23);
+        AddMenu(bumi, "Garden salad", "Sayuran renyah dengan dressing wijen yang ringan.", MenuCategories.Produce, 28000, 14000, 5, 26, 20);
+        AddMenu(bumi, "Beef teriyaki bowl", "Daging teriyaki, nasi, dan sayuran pelengkap.", "Makanan utama", 40000, 20000, 3, 40, 35);
+        var sambal = AddRestaurant("Warung Sambal Ijo", "Jl. Gejayan No. 21, Yogyakarta", "Masakan rumahan dengan sambal ijo.",
+            "0274 555 0202", new TimeOnly(10, 0), new TimeOnly(22, 0));
+        AddMenu(sambal, "Nasi ayam geprek", "Ayam goreng tepung, sambal ijo, dan nasi putih.", "Makanan utama", 25000, 12000, 7, 60, 48);
+        AddMenu(sambal, "Gado-gado", "Sayuran rebus, tahu, tempe, dan bumbu kacang.", MenuCategories.Produce, 22000, 11000, 4, 30, 24);
+        AddMenu(sambal, "Soto ayam", "Kuah kuning, suwiran ayam, soun, dan perkedel.", "Makanan utama", 20000, 9000, 5, 45, 38);
+        var pagi = AddRestaurant("Roti Pagi Kotabaru", "Jl. Suroto No. 8, Kotabaru, Yogyakarta", "Roti dan kue yang dipanggang setiap pagi.",
+            "0274 555 0303", new TimeOnly(6, 0), new TimeOnly(18, 0));
+        AddMenu(pagi, "Roti sobek cokelat", "Roti lembut isi cokelat, dipanggang pagi ini.", "Roti & kue", 18000, 8000, 6, 40, 31);
+        AddMenu(pagi, "Bolu pandan", "Bolu pandan potong dengan aroma daun pandan asli.", "Roti & kue", 30000, 14000, 3, 20, 16);
+        AddMenu(pagi, "Lumpia sayur", "Lumpia goreng isi rebung, wortel, dan kol.", MenuCategories.Produce, 15000, 7000, 8, 50, 40);
+        Restaurant = bumi;
+        DemoAccounts.Ensure(Users, Restaurants, Carts);
     }
 
-    private void AddMenu(string name, string description, string category, decimal normal, decimal rescue,
+    private Restaurant AddRestaurant(string name, string address, string description, string phone, TimeOnly opening, TimeOnly closing)
+    {
+        var restaurant = new Restaurant { Name = name, Address = address, Description = description, Phone = phone,
+            OpeningTime = opening, ClosingTime = closing };
+        Restaurants.Add(restaurant);
+        return restaurant;
+    }
+
+    private void AddMenu(Restaurant restaurant, string name, string description, string category, decimal normal, decimal rescue,
         int stock, int produced, int sold)
     {
         var menu = new Menu { Name = name, Description = description, Category = category,
-            NormalPrice = normal, WeightPerPortion = .3m, RestaurantId = Restaurant.Id, Restaurant = Restaurant };
-        Restaurant.Menus.Add(menu);
+            NormalPrice = normal, WeightPerPortion = .3m, RestaurantId = restaurant.Id, Restaurant = restaurant };
+        restaurant.Menus.Add(menu);
         var listing = new SurplusListing { Menu = menu, MenuId = menu.Id, Quantity = stock, RescuePrice = rescue,
             PickupStart = DateTime.UtcNow.AddHours(-1), PickupEnd = DateTime.UtcNow.AddHours(4) };
         Listings.Add(listing);
@@ -55,54 +89,144 @@ public sealed class DemoSession
             menu.ProductionRecords.Add(new ProductionRecord { MenuId = menu.Id, Menu = menu,
                 RecordDate = DateOnly.FromDateTime(DateTime.Today.AddDays(-day)), ProducedQuantity = produced,
                 RegularSoldQuantity = regular, RescuedQuantity = rescued });
-            var order = new Order { RestaurantId = Restaurant.Id, TotalPrice = rescue * rescued,
+            var order = new Order { RestaurantId = restaurant.Id, TotalPrice = rescue * rescued,
                 OrderedAt = DateTime.Today.AddDays(-day).AddHours(12).ToUniversalTime() };
             order.Items.Add(new OrderItem { Listing = listing, ListingId = listing.Id, MenuName = name,
                 Quantity = rescued, UnitPrice = rescue });
             order.Confirm(); order.MarkReady(); order.Complete();
-            Restaurant.Orders.Add(order);
+            restaurant.Orders.Add(order);
         }
+    }
+
+    public void SelectRestaurant(Guid restaurantId) => Restaurant = RequireOwnedRestaurant(restaurantId);
+
+    // Accounts
+    internal Dictionary<string, string> ValidateRegistration(UserRole role, string name, string email, string password, RestaurantProfile? restaurant = null) =>
+        role == UserRole.RestaurantOwner
+            ? AccountService.ValidateOwnerRegistration(Users, name, email, password, restaurant)
+            : AccountService.ValidateAccount(Users, name, email, password);
+
+    public User Register(UserRole role, string name, string email, string password, RestaurantProfile? restaurant = null)
+    {
+        EnsureWritable();
+        var errors = ValidateRegistration(role, name, email, password, restaurant);
+        if (errors.Count > 0) throw new InvalidOperationException(errors.First().Value);
+        User user = role == UserRole.RestaurantOwner
+            ? AccountService.CreateOwner(Users, name, email, password, restaurant!)
+            : AccountService.CreateCustomer(Users, name, email, password);
+        var created = user is RestaurantOwner owner ? owner.Restaurants.Single() : null;
+        Users.Add(user);
+        if (created is not null) Restaurants.Add(created);
+        try { Persist(); }
+        catch
+        {
+            Users.Remove(user);
+            if (created is not null) Restaurants.Remove(created);
+            throw;
+        }
+        return user;
+    }
+
+    public User SignIn(string email, string password)
+    {
+        var user = AccountService.Authenticate(Users, email, password)
+            ?? throw new InvalidOperationException(AccountService.SignInFailedMessage);
+        if (user is RestaurantOwner owner)
+        {
+            Restaurant = owner.Restaurants.FirstOrDefault(Restaurants.Contains)
+                ?? throw new InvalidOperationException("Akun pemilik ini belum memiliki restoran.");
+            Cart = new Cart();
+        }
+        else if (user is Customer customer)
+        {
+            var cart = Carts.FirstOrDefault(c => c.CustomerId == customer.Id);
+            if (cart is null) { cart = new Cart { CustomerId = customer.Id }; Carts.Add(cart); }
+            Cart = customer.Cart = cart;
+        }
+        if (CurrentUser != user) CurrentUser?.Logout();
+        CurrentUser = user; LastOrder = null;
+        return user;
+    }
+
+    public void SignOut()
+    {
+        CurrentUser?.Logout();
+        CurrentUser = null; Cart = new Cart(); LastOrder = null;
+    }
+
+    private Customer RequireCustomer() =>
+        CurrentUser as Customer ?? throw new InvalidOperationException("Masuk sebagai pelanggan untuk melanjutkan.");
+
+    private RestaurantOwner RequireOwner() =>
+        CurrentUser as RestaurantOwner ?? throw new InvalidOperationException("Masuk sebagai pemilik restoran untuk melanjutkan.");
+
+    private Restaurant RequireOwnedRestaurant(Guid restaurantId)
+    {
+        var owner = RequireOwner();
+        var restaurant = FindRestaurant(restaurantId);
+        return restaurant is not null && restaurant.OwnerId == owner.Id && owner.Restaurants.Contains(restaurant)
+            ? restaurant : throw new InvalidOperationException("Restoran ini bukan milik akun Anda.");
     }
 
     public IEnumerable<SurplusListing> Search(string query, string category) =>
         new MarketplaceService(Listings).GetActiveListings().Where(l =>
             l.Menu.IsActive && (category == "Semua" || l.Menu.Category == category) &&
             (l.Menu.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-             Restaurant.Name.Contains(query, StringComparison.OrdinalIgnoreCase)));
+             l.Menu.Restaurant?.Name.Contains(query, StringComparison.OrdinalIgnoreCase) == true));
 
-    public Order Checkout()
+    public Order Checkout(Guid restaurantId)
     {
-        var order = PrepareCheckout();
-        if (StorePath == DefaultStorePath)
-        {
-            new DatabaseService().SaveOrderAsync(order).GetAwaiter().GetResult();
-        }
-        Persist();
-        return order;
+        var order = PrepareCheckout(restaurantId);
+        try { OrderStoreForCheckout()?.SaveOrderAsync(order).GetAwaiter().GetResult(); }
+        finally { checkingOut = false; }
+        return CommitCheckout(order);
     }
 
-    public async Task<Order> CheckoutAsync()
+    public async Task<Order> CheckoutAsync(Guid restaurantId)
     {
-        var order = PrepareCheckout();
-        if (StorePath == DefaultStorePath)
-        {
-            await new DatabaseService().SaveOrderAsync(order);
-        }
-        Persist();
-        return order;
+        var order = PrepareCheckout(restaurantId);
+        try { if (OrderStoreForCheckout() is { } store) await store.SaveOrderAsync(order); }
+        finally { checkingOut = false; }
+        return CommitCheckout(order);
     }
 
-    private Order PrepareCheckout()
+    private bool checkingOut;
+
+    private IOrderStore? OrderStoreForCheckout() => OrderStore ?? (StorePath == DefaultStorePath ? new DatabaseService() : null);
+
+    private void EnsureNotCheckingOut()
+    {
+        if (checkingOut) throw new InvalidOperationException("Pesanan sedang diproses. Tunggu sampai selesai.");
+    }
+
+    private Order PrepareCheckout(Guid restaurantId)
     {
         EnsureWritable();
-        if (Cart.Items.Any(i => !i.Listing.Menu.IsActive)) throw new InvalidOperationException("Ada menu yang sudah tidak aktif. Hapus menu tersebut dari keranjang.");
-        LastOrder = new CheckoutService(new StockService()).CreateOrder(Cart);
-        Restaurant.Orders.Add(LastOrder);
-        return LastOrder;
+        RequireCustomer();
+        EnsureNotCheckingOut();
+        var group = Cart.FindGroup(restaurantId) ?? throw new InvalidOperationException("Restoran ini tidak ada di keranjang.");
+        if (group.Items.Any(i => !i.Listing.Menu.IsActive)) throw new InvalidOperationException("Ada menu yang sudah tidak aktif. Hapus menu tersebut dari keranjang.");
+        if (FindRestaurant(restaurantId) is null)
+            throw new InvalidOperationException("Restoran untuk keranjang ini tidak ditemukan. Kosongkan keranjang lalu pilih makanan lagi.");
+        var order = new CheckoutService(new StockService()).PrepareOrder(Cart, restaurantId);
+        checkingOut = true;
+        return order;
     }
 
-    internal void Restore(Restaurant restaurant, Cart cart, List<SurplusListing> listings)
-    { Restaurant = restaurant; Cart = cart; Listings = listings; }
+    private Order CommitCheckout(Order order)
+    {
+        new CheckoutService(new StockService()).CommitOrder(Cart, order);
+        FindRestaurant(order.RestaurantId)!.Orders.Add(order);
+        LastOrder = order;
+        Persist();
+        return order;
+    }
+
+    internal void Restore(List<Restaurant> restaurants, List<Cart> carts, List<User> users, List<SurplusListing> listings)
+    {
+        Restaurants = restaurants; Restaurant = restaurants[0]; Users = users; Listings = listings;
+        Carts = carts; Cart = new Cart(); CurrentUser = null; LastOrder = null;
+    }
 
     public void EnsureWritable()
     {
@@ -118,6 +242,8 @@ public sealed class DemoSession
     public void AddToCart(SurplusListing listing, int quantity)
     {
         EnsureWritable();
+        RequireCustomer();
+        EnsureNotCheckingOut();
         if (!listing.Menu.IsActive) throw new InvalidOperationException("Menu ini sudah tidak aktif.");
         Cart.AddItem(listing, quantity); Persist();
     }
@@ -125,6 +251,8 @@ public sealed class DemoSession
     public void ChangeQuantity(Guid listingId, int quantity)
     {
         EnsureWritable();
+        RequireCustomer();
+        EnsureNotCheckingOut();
         if (quantity == 0) Cart.RemoveItem(listingId); else Cart.UpdateQuantity(listingId, quantity);
         Persist();
     }
@@ -156,9 +284,11 @@ public sealed class DemoSession
     public Menu SaveMenu(Menu? existing, string name, string description, string category, decimal normalPrice, decimal weight, MenuPhotoChange? photoChange = null)
     {
         EnsureWritable();
+        category = MenuCategories.Normalize(category);
+        var restaurant = RequireOwnedRestaurant(existing?.RestaurantId ?? Restaurant.Id);
         var errors = ValidateMenu(existing, name, description, normalPrice, weight);
         if (errors.Count > 0) throw new InvalidOperationException(errors.First().Value);
-        var menu = existing ?? new Menu { RestaurantId = Restaurant.Id, Restaurant = Restaurant };
+        var menu = existing ?? new Menu { RestaurantId = restaurant.Id, Restaurant = restaurant };
         var old = (menu.Name, menu.Description, menu.Category, menu.NormalPrice, menu.WeightPerPortion, menu.ImageUrl);
         string? copiedPath = null;
         try
@@ -177,12 +307,12 @@ public sealed class DemoSession
                 }
             }
             menu.UpdateMenu(name.Trim(), description.Trim(), category, normalPrice, weight);
-            if (existing is null) Restaurant.Menus.Add(menu);
+            if (existing is null) restaurant.Menus.Add(menu);
             Persist(); return menu;
         }
         catch
         {
-            if (existing is null) Restaurant.Menus.Remove(menu);
+            if (existing is null) restaurant.Menus.Remove(menu);
             menu.UpdateMenu(old.Name, old.Description, old.Category, old.NormalPrice, old.WeightPerPortion);
             menu.ImageUrl = old.ImageUrl;
             if (copiedPath is not null)
@@ -194,23 +324,25 @@ public sealed class DemoSession
     public void DeleteMenu(Menu menu)
     {
         EnsureWritable();
-        var index = Restaurant.Menus.FindIndex(m => m.Id == menu.Id);
+        var owner = RequireOwnedRestaurant(menu.RestaurantId);
+        var index = owner.Menus.FindIndex(m => m.Id == menu.Id);
         if (index < 0) throw new InvalidOperationException("Menu tidak ditemukan.");
-        var stored = Restaurant.Menus[index];
+        var stored = owner.Menus[index];
         if (stored.SurplusListings.Count > 0 || Listings.Any(l => l.MenuId == stored.Id || l.Menu.Id == stored.Id) ||
-            Cart.Items.Any(i => i.Listing.MenuId == stored.Id || i.Listing.Menu.Id == stored.Id) ||
-            Restaurant.Orders.Any(o => o.Items.Any(i => i.Listing.MenuId == stored.Id || i.Listing.Menu.Id == stored.Id)) ||
-            Restaurant.Menus.SelectMany(m => m.ProductionRecords).Any(r => r.MenuId == stored.Id || r.Menu?.Id == stored.Id) ||
+            Carts.SelectMany(c => c.Items).Any(i => i.Listing.MenuId == stored.Id || i.Listing.Menu.Id == stored.Id) ||
+            AllOrders.Any(o => o.Items.Any(i => i.Listing.MenuId == stored.Id || i.Listing.Menu.Id == stored.Id)) ||
+            owner.Menus.SelectMany(m => m.ProductionRecords).Any(r => r.MenuId == stored.Id || r.Menu?.Id == stored.Id) ||
             stored.ProductionRecords.Count > 0)
             throw new InvalidOperationException("Menu tidak dapat dihapus karena masih digunakan oleh penawaran surplus, keranjang, pesanan, atau catatan produksi. Gunakan Nonaktifkan agar riwayat tetap tersimpan.");
-        Restaurant.Menus.RemoveAt(index);
+        owner.Menus.RemoveAt(index);
         try { Persist(); }
-        catch { Restaurant.Menus.Insert(index, stored); throw; }
+        catch { owner.Menus.Insert(index, stored); throw; }
     }
 
     public void ToggleMenu(Menu menu)
     {
         EnsureWritable();
+        RequireOwnedRestaurant(menu.RestaurantId);
         if (menu.IsActive) menu.Deactivate(); else menu.Activate();
         Persist();
     }
@@ -218,6 +350,8 @@ public sealed class DemoSession
     public SurplusListing SaveListing(SurplusListing? existing, Menu menu, decimal price, int quantity, DateTime start, DateTime end)
     {
         EnsureWritable();
+        RequireOwnedRestaurant(menu.RestaurantId);
+        if (existing is not null) RequireOwnedRestaurant(existing.Menu.RestaurantId);
         if (!menu.IsActive) throw new InvalidOperationException("Aktifkan menu sebelum membuat penawaran.");
         if (price <= 0 || price > menu.NormalPrice) throw new InvalidOperationException("Harga penawaran harus lebih dari nol dan tidak melebihi harga normal.");
         if (quantity < 1) throw new InvalidOperationException("Stok tersedia harus minimal satu porsi.");
@@ -230,7 +364,7 @@ public sealed class DemoSession
             throw new InvalidOperationException("Stok melebihi surplus yang belum dialokasikan. Periksa catatan produksi dan penawaran lain.");
         if (existing is not null && existing.Status is ListingStatus.Cancelled or ListingStatus.Expired)
             throw new InvalidOperationException("Penawaran yang berakhir tidak dapat diubah. Buat penawaran baru.");
-        if (existing is not null && Restaurant.Orders.Any(o => o.Status is not (OrderStatus.Completed or OrderStatus.Cancelled) && o.Items.Any(i => i.ListingId == existing.Id)) &&
+        if (existing is not null && AllOrders.Any(o => o.Status is not (OrderStatus.Completed or OrderStatus.Cancelled) && o.Items.Any(i => i.ListingId == existing.Id)) &&
             (ToMinute(existing.PickupStart.ToLocalTime()) != ToMinute(start) || ToMinute(existing.PickupEnd.ToLocalTime()) != ToMinute(end)))
             throw new InvalidOperationException("Jadwal tidak dapat diubah saat masih ada pesanan aktif.");
         var listing = existing ?? new SurplusListing { Menu = menu, MenuId = menu.Id };
@@ -244,11 +378,11 @@ public sealed class DemoSession
     private int Allocated(Menu menu, DateOnly date, SurplusListing? except = null) =>
         Listings.Where(l => l.MenuId == menu.Id && l.Id != except?.Id && l.Status == ListingStatus.Active &&
             DateOnly.FromDateTime(l.PickupStart.ToLocalTime()) == date && l.PickupEnd > DateTime.UtcNow).Sum(l => l.Quantity)
-        + Restaurant.Orders.Where(o => o.Status is not (OrderStatus.Completed or OrderStatus.Cancelled))
+        + AllOrders.Where(o => o.Status is not (OrderStatus.Completed or OrderStatus.Cancelled))
             .SelectMany(o => o.Items).Where(i => i.Listing.MenuId == menu.Id && DateOnly.FromDateTime(i.Listing.PickupStart.ToLocalTime()) == date).Sum(i => i.Quantity);
 
     public void CancelListing(SurplusListing listing)
-    { EnsureWritable(); listing.Cancel(); Persist(); }
+    { EnsureWritable(); RequireOwnedRestaurant(listing.Menu.RestaurantId); listing.Cancel(); Persist(); }
 
     internal Dictionary<string, string> ValidateProduction(Menu? menu, DateOnly? date, int? produced, int? regularSold)
     {
@@ -276,6 +410,7 @@ public sealed class DemoSession
     public void SaveProduction(Menu menu, DateOnly date, int produced, int regularSold)
     {
         EnsureWritable();
+        RequireOwnedRestaurant(menu.RestaurantId);
         var errors = ValidateProduction(menu, date, produced, regularSold);
         if (errors.Count > 0) throw new InvalidOperationException(errors.First().Value);
         var record = menu.ProductionRecords.SingleOrDefault(r => r.RecordDate == date)
@@ -289,26 +424,27 @@ public sealed class DemoSession
     public void ConfirmOrder(Order order, int preparationMinutes)
     {
         EnsureWritable();
+        RequireOwnedRestaurant(order.RestaurantId);
         EnsurePickupWindowOpen(order);
         if (preparationMinutes is < 1 or > 240) throw new InvalidOperationException("Waktu persiapan harus antara 1 dan 240 menit.");
         order.Confirm(); order.SetPreparationTime(TimeSpan.FromMinutes(preparationMinutes)); Persist();
     }
 
     public void ReadyOrder(Order order)
-    { EnsureWritable(); EnsurePickupWindowOpen(order); order.MarkReady(); Persist(); }
+    { EnsureWritable(); RequireOwnedRestaurant(order.RestaurantId); EnsurePickupWindowOpen(order); order.MarkReady(); Persist(); }
 
     public void CancelOrder(Order order) => CancelOrder(order, automatic: false);
 
     internal void ExpireOverdueOrders(DateTime now)
     {
-        if (StorageError is not null) return;
+        if (checkingOut || StorageError is not null) return;
         if (expirationNeedsSave)
         {
             Persist();
             expirationNeedsSave = false;
         }
 
-        foreach (var order in Restaurant.Orders.Where(order => order.IsPastPickupWindow(now)))
+        foreach (var order in AllOrders.Where(order => order.IsPastPickupWindow(now)))
             CancelOrder(order, automatic: true);
     }
 
@@ -322,6 +458,15 @@ public sealed class DemoSession
     private void CancelOrder(Order order, bool automatic)
     {
         EnsureWritable();
+        EnsureNotCheckingOut();
+        if (!automatic)
+        {
+            if (CurrentUser is Customer customer)
+            {
+                if (order.CustomerId != customer.Id) throw new InvalidOperationException("Pesanan ini bukan milik akun Anda.");
+            }
+            else RequireOwnedRestaurant(order.RestaurantId);
+        }
         if (order.Status is OrderStatus.Completed or OrderStatus.Cancelled)
             throw new InvalidOperationException("Pesanan sudah selesai atau dibatalkan.");
         order.Cancel();
@@ -336,6 +481,7 @@ public sealed class DemoSession
     public void CompletePickup(Order order, string code)
     {
         EnsureWritable();
+        RequireOwnedRestaurant(order.RestaurantId);
         EnsurePickupWindowOpen(order);
         if (order.Status != OrderStatus.ReadyForPickup) throw new InvalidOperationException("Pesanan belum siap diambil atau sudah selesai.");
         var verification = new PickupVerification { Order = order, OrderId = order.Id, EnteredCode = code.Trim().ToUpperInvariant() };

@@ -53,8 +53,10 @@ internal static class OrderBadgeVerification
             window.Show(); await Settle();
             foreach (var target in expected.Keys)
             {
+                session.AsCustomer();
                 session.AddToCart(listing, 1);
-                var order = session.Checkout(); orders.Add(order);
+                var order = session.Checkout(listing.Menu.RestaurantId); orders.Add(order);
+                session.AsOwner();
                 window.ShowOrder(order, true); await Settle(); CheckDetail(window, order);
                 if (target is OrderStatus.Confirmed or OrderStatus.ReadyForPickup or OrderStatus.Completed)
                 {
@@ -86,27 +88,39 @@ internal static class OrderBadgeVerification
             Ensure(listing.Quantity == 2, "Five reservations and one cancellation preserve stock rules");
             var ids = orders.ToDictionary(o => o.Id, o => o.Status);
             window.Close();
-            session = new DemoSession(path);
-            Ensure(session.StorageError is null && session.CustomerOrders.Count() == 5 && session.Restaurant.Orders.All(o => ids[o.Id] == o.Status),
+            session = new DemoSession(path).AsCustomer();
+            var customerOrders = session.CustomerOrders.ToList();
+            Ensure(session.StorageError is null && customerOrders.Count == 5 && session.Restaurant.Orders.All(o => ids[o.Id] == o.Status),
                 "All five order statuses survive reload");
             window = new MainWindow(session); window.Show(); await Settle();
             foreach (var restaurant in new[] { false, true })
             {
                 var area = restaurant ? "restaurant" : "customer";
+                if (restaurant) session.AsOwner(); else session.AsCustomer();
                 if (restaurant) window.ShowRestaurantOrders(); else window.ShowCustomerOrders();
                 await Settle();
-                var filter = window.GetVisualDescendants().OfType<ComboBox>().Single();
-                Ensure(window.GetVisualDescendants().OfType<OrderStatusBadge>().Count() == 3, "Active filter preserved");
-                filter.SelectedIndex = 1; await Settle();
+                void Filter(int index, string label)
+                {
+                    if (restaurant) window.GetVisualDescendants().OfType<ComboBox>().Single().SelectedIndex = index;
+                    else ((OrdersView)window.CurrentPage!).Select(label);
+                }
+                if (restaurant) Ensure(window.GetVisualDescendants().OfType<OrderStatusBadge>().Count() == 3, "Active filter preserved");
+                else
+                {
+                    Ensure(((OrdersView)window.CurrentPage!).SelectedFilter == OrdersView.All, "Customer orders open on Semua");
+                    Filter(0, OrdersView.Active); await Settle();
+                    Ensure(window.GetVisualDescendants().OfType<OrderStatusBadge>().Count() == 3, "Aktif holds the three open orders");
+                }
+                Filter(1, OrdersView.All); await Settle();
                 var badges = window.GetVisualDescendants().OfType<OrderStatusBadge>().ToList();
                 Ensure(badges.Count == 5, "All five badges present in order list");
                 foreach (var status in expected.Keys) CheckBadge(badges.Single(b => b.Status == status), status);
                 Shot(window, $"badges-{area}-list-all");
-                filter.SelectedIndex = 2; await Settle();
+                Filter(2, OrdersView.Done); await Settle();
                 CheckBadge(window.GetVisualDescendants().OfType<OrderStatusBadge>().Single(), OrderStatus.Completed);
-                filter.SelectedIndex = 3; await Settle();
+                Filter(3, OrdersView.Cancelled); await Settle();
                 CheckBadge(window.GetVisualDescendants().OfType<OrderStatusBadge>().Single(), OrderStatus.Cancelled);
-                foreach (var order in session.CustomerOrders)
+                foreach (var order in customerOrders)
                 {
                     window.ShowOrder(order, restaurant); await Settle(); CheckDetail(window, order);
                     var detail = (OrderDetailView)window.CurrentPage!;

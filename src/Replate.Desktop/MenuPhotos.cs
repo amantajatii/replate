@@ -50,12 +50,13 @@ internal sealed class MenuPhotoView : Border
     private readonly string? path;
     private readonly byte[]? data;
     private readonly int decodeWidth;
+    private readonly double placeholderSize;
     private Bitmap? bitmap;
     internal bool HasPhoto => bitmap is not null;
 
-    internal MenuPhotoView(string? path, double width, double height, byte[]? data = null)
+    internal MenuPhotoView(string? path, double width, double height, byte[]? data = null, double placeholderSize = 12)
     {
-        this.path = path; this.data = data; decodeWidth = (int)width;
+        this.path = path; this.data = data; decodeWidth = (int)width; this.placeholderSize = placeholderSize;
         Width = width; Height = height; CornerRadius = new CornerRadius(8); ClipToBounds = true;
         Background = Brush.Parse("#E0E9DF");
         Avalonia.Automation.AutomationProperties.SetName(this, "Foto menu");
@@ -65,7 +66,7 @@ internal sealed class MenuPhotoView : Border
     }
     private void Placeholder()
     {
-        var text = Ui.Text("Foto belum tersedia", 12, Ui.Muted);
+        var text = Ui.Text("Foto belum tersedia", placeholderSize, Ui.Muted);
         text.TextAlignment = TextAlignment.Center;
         text.HorizontalAlignment = HorizontalAlignment.Center;
         text.Margin = new Thickness(8);

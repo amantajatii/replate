@@ -106,11 +106,11 @@ public sealed class MenuEditorView : UserControl
         var photoField = Ui.Stack(8, Ui.Text("Foto menu", 14, bold: true), photoHost,
             Ui.SupportingText("Opsional. JPG, JPEG, atau PNG, maksimal 5 MB."),
             Ui.Row(12, PickPhotoButton, RemovePhotoButton), PhotoError);
-        NameInput = Ui.Input(menu?.Name ?? "");
-        DescriptionInput = Ui.Input(menu?.Description ?? "", true);
-        var category = new ComboBox { ItemsSource = new[] { "Makanan utama", "Roti & kue", "Vegetarian" }, SelectedItem = menu?.Category ?? "Makanan utama", MinHeight = 42 };
-        PriceInput = Ui.Number(menu?.NormalPrice ?? 20000, 10000000, 1000);
-        WeightInput = Ui.Number(menu?.WeightPerPortion ?? .3m, 100, .05m);
+        NameInput = Ui.Input("Masukkan nama menu", menu?.Name ?? "");
+        DescriptionInput = Ui.Input("Masukkan deskripsi menu", menu?.Description ?? "", true);
+        var category = new ComboBox { ItemsSource = MenuCategories.Names, SelectedItem = menu?.Category ?? "Makanan utama", MinHeight = 42 };
+        PriceInput = Ui.Number("Masukkan harga", menu?.NormalPrice ?? 20000, 10000000, 1000);
+        WeightInput = Ui.Number("Masukkan berat per porsi", menu?.WeightPerPortion ?? .3m, 100, .05m);
         var inputs = new Dictionary<string, Control>
         {
             ["name"] = NameInput, ["description"] = DescriptionInput, ["category"] = category,
@@ -219,7 +219,7 @@ public sealed class ListingsView : UserControl
     internal ListingsView(MainWindow host, DemoSession session)
     {
         var list = Ui.Stack(0);
-        foreach (var listing in session.Listings.OrderByDescending(l => l.CreatedAt))
+        foreach (var listing in session.RestaurantListings.OrderByDescending(l => l.CreatedAt))
         {
             var ended = listing.PickupEnd <= DateTime.UtcNow || listing.Status is ListingStatus.Cancelled or ListingStatus.Expired;
             var status = listing.Status == ListingStatus.Cancelled ? "Dibatalkan" : listing.PickupEnd <= DateTime.UtcNow ? "Berakhir" :
@@ -253,8 +253,8 @@ public sealed class ListingEditorView : UserControl
         var menu = new ComboBox { ItemsSource = menus, SelectedItem = listing?.Menu ?? menus[0], MinHeight = 42,
             ItemTemplate = new Avalonia.Controls.Templates.FuncDataTemplate<Menu>((m, _) => Ui.Text(m?.Name ?? "")) };
         menu.IsEnabled = listing is null;
-        var price = Ui.Number(listing?.RescuePrice ?? menus[0].NormalPrice / 2, 10000000, 1000);
-        var stock = Ui.Number(listing?.Quantity ?? 1, 100000); stock.Minimum = 1;
+        var price = Ui.Number("Masukkan harga penawaran", listing?.RescuePrice ?? menus[0].NormalPrice / 2, 10000000, 1000);
+        var stock = Ui.Number("Masukkan stok", listing?.Quantity ?? 1, 100000); stock.Minimum = 1;
         var start = listing?.PickupStart.ToLocalTime() ?? DateTime.Now.AddMinutes(-5);
         var end = listing?.PickupEnd.ToLocalTime() ?? DateTime.Now.AddHours(2);
         if (end.Date != start.Date) end = start.Date.AddDays(1).AddSeconds(-1);
@@ -294,7 +294,7 @@ public sealed class ProductionView : UserControl
         DateInput = new DatePicker { SelectedDate = DateTimeOffset.Now, MaxYear = DateTimeOffset.Now };
         MenuInput = new ComboBox { ItemsSource = menus, SelectedIndex = 0, MinWidth = 220, MinHeight = 42,
             ItemTemplate = new Avalonia.Controls.Templates.FuncDataTemplate<Menu>((m, _) => Ui.Text(m?.Name ?? "")) };
-        ProducedInput = Ui.Number(); SoldInput = Ui.Number();
+        ProducedInput = Ui.Number("Masukkan jumlah produksi"); SoldInput = Ui.Number("Masukkan jumlah terjual");
         var rescued = Ui.SupportingText("");
         var table = Ui.Stack(0);
         var inputs = new Dictionary<string, Control>

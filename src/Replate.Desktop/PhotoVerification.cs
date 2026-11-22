@@ -60,12 +60,14 @@ internal static class PhotoVerification
         var reloaded = new DemoSession(path);
         var reloadedMenu = reloaded.Restaurant.Menus.Single(m => m.Id == menu.Id);
         Ensure(reloaded.StorageError is null && reloadedMenu.ImageUrl == firstReference && File.Exists(reloaded.PhotoPath(reloadedMenu.ImageUrl)), "Photo survives reload with original moved");
+        session.AsCustomer();
         window.ShowMarketplace(); await Settle();
         Ensure(window.GetVisualDescendants().OfType<MenuPhotoView>().Any(p => p.HasPhoto), "Marketplace shows photo");
         Shot("marketplace-with-photo");
         window.ShowFood(session.Listings.First(l => l.MenuId == menu.Id)); await Settle();
         Ensure(window.GetVisualDescendants().OfType<MenuPhotoView>().Single().HasPhoto, "Food detail shows photo");
         Shot("food-detail-with-photo");
+        session.AsOwner();
         window.ShowMenuEditor(menu); await Settle();
         editor = (MenuEditorView)window.CurrentPage!;
         await editor.SelectPhoto(new MemoryStream(jpegBytes), "replacement.jpeg");
@@ -114,6 +116,7 @@ internal static class PhotoVerification
         }
         finally { Directory.Delete(path + ".tmp"); }
         File.Delete(session.PhotoPath(beforeFailure)!);
+        session.AsCustomer();
         window.ShowFood(session.Listings.First(l => l.MenuId == menu.Id)); await Settle();
         Ensure(!window.GetVisualDescendants().OfType<MenuPhotoView>().Single().HasPhoto, "Missing photo uses placeholder");
         Shot("food-detail-missing-photo");
@@ -124,6 +127,7 @@ internal static class PhotoVerification
         File.WriteAllText(legacy, json.ToJsonString());
         var oldSession = new DemoSession(legacy);
         Ensure(oldSession.StorageError is null && oldSession.Restaurant.Menus.All(m => string.IsNullOrEmpty(m.ImageUrl)), "Legacy data without photos remains readable");
+        session.AsOwner();
         window.ShowMenuEditor(); await Settle();
         editor = (MenuEditorView)window.CurrentPage!;
         editor.NameInput.Text = "Menu foto baru";
