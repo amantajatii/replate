@@ -197,7 +197,7 @@ internal static class MarketplaceVerification
         var listings = view.ListingsPanel.Children.OfType<Border>().Select(c => Rect(c, view)).ToList();
         Ensure(listings.Count > 0 && listings.All(c => Math.Abs(bannerBox.X - c.X) <= 1 && Math.Abs(bannerBox.Right - c.Right) <= 1),
             $"{label}: banner edges match the listing cards");
-        var cards = view.CollectionCards.Values.Select(c => Rect(c, view)).ToList();
+        var cards = view.CollectionCards.Values.Select(c => LayoutRect(c, view)).ToList();
         Ensure(cards.All(c => Math.Abs(c.Y - cards[0].Y) < .5 && Math.Abs(c.Width - cards[0].Width) <= 1),
             $"{label}: six equal collection cards in one row within one layout pixel");
         var count = MarketplaceView.CollectionNames.Length;
@@ -293,6 +293,15 @@ internal static class MarketplaceVerification
 
     private static Rect Rect(Visual visual, Visual root) =>
         new(visual.TranslatePoint(default, root) ?? throw new InvalidOperationException("Element is outside Jelajah"), visual.Bounds.Size);
+
+    // Layout position without render transforms, so a real mouse hovering a card (hover scale) cannot skew geometry checks.
+    private static Rect LayoutRect(Visual visual, Visual root)
+    {
+        var origin = new Point();
+        for (Visual? current = visual; current is not null && current != root; current = current.GetVisualParent())
+            origin += current.Bounds.Position;
+        return new Rect(origin, visual.Bounds.Size);
+    }
 
     private static Color ColorOf(IBrush? brush) => brush is ISolidColorBrush solid ? solid.Color : Colors.Transparent;
 

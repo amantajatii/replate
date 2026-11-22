@@ -496,22 +496,39 @@ public sealed class DemoSession
         if (revision != accountRevision || restaurant.UpdatedAt != originalUpdatedAt)
             throw new InvalidOperationException("Profil restoran berubah. Muat ulang profil lalu coba lagi.");
 
-        if (session is not null)
-            await SupabaseCatalog.SaveRestaurantAsync(session, restaurant.Id, profile, location);
-        if (revision != accountRevision || restaurant.UpdatedAt != originalUpdatedAt)
-            throw new InvalidOperationException("Profil restoran berubah. Muat ulang profil lalu coba lagi.");
-
+        // Save locally first so a local failure never leaves Supabase ahead of this device.
         restaurant.UpdateProfile(profile.Name.Trim(), (profile.Description ?? "").Trim(), address,
             profile.Phone.Trim(), profile.OpeningTime!.Value, profile.ClosingTime!.Value);
         if (needsGeocode) restaurant.SetLocation(location);
-        try { Persist(); }
-        catch
+        var savedUpdatedAt = restaurant.UpdatedAt;
+        void Restore()
         {
             restaurant.UpdateProfile(originalProfile.Name, originalProfile.Description, originalProfile.Address,
                 originalProfile.Phone, originalProfile.OpeningTime!.Value, originalProfile.ClosingTime!.Value);
             restaurant.SetLocation(originalLocation);
             restaurant.UpdatedAt = originalUpdatedAt;
+        }
+        try { Persist(); }
+        catch
+        {
+            Restore();
             throw;
+        }
+
+        if (session is not null)
+        {
+            try { await SupabaseCatalog.SaveRestaurantAsync(session, restaurant.Id, profile, location); }
+            catch
+            {
+                // Undo the local save so the device matches Supabase again, unless the profile changed meanwhile.
+                if (revision == accountRevision && restaurant.UpdatedAt == savedUpdatedAt)
+                {
+                    Restore();
+                    try { Persist(); }
+                    catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidOperationException) { }
+                }
+                throw;
+            }
         }
 
         LastGeocodeWarning = location is null ? "Alamat tersimpan, tetapi lokasinya belum ditemukan di peta." : null;
