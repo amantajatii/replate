@@ -216,6 +216,77 @@ internal static class Ui
         return button;
     }
 
+    // Pill
+    public const double PillHeight = 36;
+    public const double PillGap = 8;
+    public const string PillSelectedClass = "selected";
+    public readonly record struct PillFace(IBrush Background, IBrush Border, IBrush Foreground, FontWeight Weight);
+    public sealed record PillPalette(PillFace Rest, PillFace Hover, PillFace Pressed, PillFace Selected, PillFace SelectedHover, PillFace SelectedPressed);
+    public static readonly PillPalette QuietPills = new(
+        new(Brushes.Transparent, Brushes.Transparent, Muted, FontWeight.Normal),
+        new(Sidebar, Brushes.Transparent, Ink, FontWeight.Normal),
+        new(DividerFill, Brushes.Transparent, Ink, FontWeight.Normal),
+        new(Selection, Brushes.Transparent, Green, FontWeight.SemiBold),
+        new(Selection, Brushes.Transparent, Green, FontWeight.SemiBold),
+        new(DividerFill, Brushes.Transparent, Green, FontWeight.SemiBold));
+    public static readonly PillPalette SolidPills = new(
+        new(Surface, DividerFill, Ink, FontWeight.Normal),
+        new(Selection, Selection, Green, FontWeight.Normal),
+        new(DividerFill, DividerFill, Green, FontWeight.Normal),
+        new(Green, Green, OnPrimary, FontWeight.SemiBold),
+        new(Green, Green, OnPrimary, FontWeight.SemiBold),
+        new(Green, Green, OnPrimary, FontWeight.SemiBold));
+    public static Button Pill(string label, string kind, double border, Action select)
+    {
+        var button = new Button
+        {
+            Content = label, Height = PillHeight, Padding = new Thickness(Spacing.Related, 0), FontSize = 14,
+            CornerRadius = new CornerRadius(PillHeight / 2), BorderThickness = new Thickness(border), VerticalContentAlignment = VerticalAlignment.Center,
+            Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand)
+        };
+        button.Classes.Add(kind);
+        AutomationProperties.SetName(button, label);
+        button.Click += (_, _) => select();
+        return button;
+    }
+    public static Styles PillStyles(string kind, PillPalette palette)
+    {
+        Style State(Func<Selector, Selector> state, PillFace face) =>
+            new(x => state(x.OfType<Button>().Class(kind)))
+            {
+                Setters =
+                {
+                    new Setter(TemplatedControl.BackgroundProperty, face.Background), new Setter(TemplatedControl.BorderBrushProperty, face.Border),
+                    new Setter(TemplatedControl.ForegroundProperty, face.Foreground), new Setter(TemplatedControl.FontWeightProperty, face.Weight),
+                    new Setter(Visual.RenderTransformProperty, TransformOperations.Identity)
+                }
+            };
+        Style Face(Func<Selector, Selector> state, PillFace face) =>
+            new(x => state(x.OfType<Button>().Class(kind)).Template().OfType<ContentPresenter>().Name("PART_ContentPresenter"))
+            {
+                Setters =
+                {
+                    new Setter(ContentPresenter.BackgroundProperty, face.Background), new Setter(ContentPresenter.BorderBrushProperty, face.Border),
+                    new Setter(ContentPresenter.ForegroundProperty, face.Foreground)
+                }
+            };
+        var styles = new Styles();
+        foreach (var (state, face) in new (Func<Selector, Selector>, PillFace)[]
+        {
+            (x => x, palette.Rest),
+            (x => x.Class(":pointerover"), palette.Hover),
+            (x => x.Class(":pressed"), palette.Pressed),
+            (x => x.Class(PillSelectedClass), palette.Selected),
+            (x => x.Class(PillSelectedClass).Class(":pointerover"), palette.SelectedHover),
+            (x => x.Class(PillSelectedClass).Class(":pressed"), palette.SelectedPressed)
+        })
+        {
+            styles.Add(State(state, face));
+            styles.Add(Face(state, face));
+        }
+        return styles;
+    }
+
     // Primary button
     public const string PrimaryClass = "primary";
     public const string CompactClass = "compact";

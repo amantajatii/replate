@@ -187,6 +187,8 @@ internal static class UiVerification
             window.ShowListingEditor(); await Shot("listing-editor");
             window.ShowProduction(); await Shot("production");
             window.ShowRestaurantOrders(); await Shot("restaurant-orders");
+            await RestaurantStatusPills(window);
+            await LabelWidths(window);
             window.ShowOrder(order, true); await Shot("restaurant-order-detail");
             Click(((OrderDetailView)window.CurrentPage!).ConfirmButton!);
             Click(((OrderDetailView)window.CurrentPage!).ReadyButton!);
@@ -463,6 +465,114 @@ internal static class UiVerification
         Ensure(button.GetVisualAncestors().OfType<Visual>().Where(v => v.ClipToBounds).All(v => v.TransformToVisual(window) is { } m && new Rect(v.Bounds.Size).TransformToAABB(m).Contains(reach)),
             $"{label}: no container clips the hover shadow ({reach})");
     }
+    // Restaurant status pills
+    private static async Task RestaurantStatusPills(MainWindow window)
+    {
+        var (width, height) = (window.Width, window.Height);
+        void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        int Expected(int index) => window.Session.RestaurantOrders.Count(o => index switch
+        {
+            0 => o.Status is not (Replate.Domain.Enums.OrderStatus.Completed or Replate.Domain.Enums.OrderStatus.Cancelled),
+            2 => o.Status == Replate.Domain.Enums.OrderStatus.Completed, 3 => o.Status == Replate.Domain.Enums.OrderStatus.Cancelled, _ => true
+        });
+        foreach (var (w, h) in new[] { (1040d, 720d), (1920d, 1080d) })
+        {
+            window.Width = w; window.Height = h;
+            var size = $"{w:0}x{h:0}";
+            window.ShowRestaurantOrders(); await Settle();
+            var page = (OrdersView)window.CurrentPage!;
+            var pills = page.StatusButtons;
+            Ensure(!page.GetVisualDescendants().OfType<ComboBox>().Any() && pills.Count == OrdersView.StatusOptions.Length &&
+                pills.Select(p => p.Content as string).SequenceEqual(OrdersView.StatusOptions) &&
+                pills.All(p => Avalonia.Automation.AutomationProperties.GetName(p) == p.Content as string && p.Classes.Contains(OrdersView.StatusClass)),
+                $"{size}: one named pill per status option, in the dropdown order");
+            Ensure(page.StatusIndex == 0 && pills[0].Classes.Contains(Ui.PillSelectedClass) && pills.Skip(1).All(p => !p.Classes.Contains(Ui.PillSelectedClass)),
+                $"{size}: Aktif is the initial pill");
+            Ensure(pills.All(p => p.Bounds.Height >= Ui.PillHeight - .5 && Math.Abs(p.CornerRadius.TopLeft - p.Bounds.Height / 2) < .5 && p.Focusable && p.IsTabStop),
+                $"{size}: pills are at least 36 high, fully rounded and reachable with Tab");
+            void Faces(int selected)
+            {
+                for (var i = 0; i < pills.Count; i++)
+                {
+                    var presenter = Presenter(pills[i]);
+                    var expected = i == selected ? (Primary, Colors.White) : (Colors.White, Color.Parse("#202522"));
+                    Ensure(Fill(presenter.Background) == expected.Item1 && Fill(presenter.Foreground) == expected.Item2 &&
+                        (i == selected || Fill(presenter.BorderBrush) == DividerColor) && Math.Abs(Scale(pills[i]) - 1) <= .005,
+                        $"{size}: pill {pills[i].Content} shows {Fill(presenter.Background)} with {Fill(presenter.Foreground)} text, expected {expected.Item1} and {expected.Item2}");
+                }
+            }
+            Faces(0);
+            var gap = pills[1].Bounds.X - pills[0].Bounds.Right;
+            Ensure(Math.Abs(gap - Ui.PillGap) < .5 || pills[1].Bounds.Y > pills[0].Bounds.Y, $"{size}: pills sit {gap:0.#} apart");
+            var label = page.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == OrdersView.StatusLabel);
+            var labelBottom = label.TranslatePoint(new Point(0, label.Bounds.Height), page)!.Value.Y;
+            var rowTop = page.StatusRow!.TranslatePoint(default, page)!.Value.Y;
+            Ensure(Math.Abs(rowTop - labelBottom - 8) < .5, $"{size}: label sits {rowTop - labelBottom:0.#} above the pills");
+            var scroll = page.GetVisualDescendants().OfType<ScrollViewer>().First();
+            for (var i = 0; i < pills.Count; i++)
+            {
+                Click(pills[i]); await Settle();
+                page = (OrdersView)window.CurrentPage!; pills = page.StatusButtons;
+                var badges = page.GetVisualDescendants().OfType<OrderStatusBadge>().Count();
+                Ensure(page.StatusIndex == i && badges == Expected(i), $"{size}: {pills[i].Content} lists {badges} orders, expected {Expected(i)}");
+                Faces(i);
+                Ensure(pills.Count(p => p.Classes.Contains(Ui.PillSelectedClass)) == 1, $"{size}: only {pills[i].Content} is selected");
+            }
+            Ensure(Fits(scroll) && page.StatusRow!.Bounds.Right <= scroll.Viewport.Width + .5, $"{size}: no horizontal scrolling on Pesanan restoran");
+            Click(pills[0]); await Settle();
+        }
+        window.Width = width; window.Height = height; window.ShowRestaurantOrders(); await Settle();
+    }
+
+    // Button label widths
+    private static async Task LabelWidths(MainWindow window)
+    {
+        var (width, height) = (window.Width, window.Height);
+        foreach (var (w, h) in new[] { (1040d, 720d), (1920d, 1080d) })
+        {
+            window.Width = w; window.Height = h;
+            var size = $"{w:0}x{h:0}";
+            window.ShowRestaurantOrders(); await Settle();
+            var orders = window.CurrentPage!.GetVisualDescendants().OfType<Button>().Where(b => b.Content as string == "Lihat pesanan").ToList();
+            Ensure(orders.Count == window.Session.RestaurantOrders.Count(o => o.Status is not (Replate.Domain.Enums.OrderStatus.Completed or Replate.Domain.Enums.OrderStatus.Cancelled)),
+                $"{size}: one Lihat pesanan button per active order ({orders.Count})");
+            await LabelFits(window, window.CurrentPage!, $"{size} Pesanan restoran");
+            window.ShowMenus(); await Settle(); await LabelFits(window, window.CurrentPage!, $"{size} Menu restoran");
+            window.ShowListings(); await Settle(); await LabelFits(window, window.CurrentPage!, $"{size} Penawaran");
+            window.Session.AsCustomer();
+            window.ShowMarketplace(); await Settle(); await LabelFits(window, window.Marketplace, $"{size} Jelajah");
+            window.Session.AsOwner();
+        }
+        window.Width = width; window.Height = height; window.ShowRestaurantOrders(); await Settle();
+    }
+    private static async Task LabelFits(Window window, Control page, string label)
+    {
+        var buttons = page.GetVisualDescendants().OfType<Button>()
+            .Where(b => b.IsEffectivelyVisible && b.Content is string { Length: > 0 } && b.Padding.Left > 0 && b.Padding.Right > 0).ToList();
+        Ensure(buttons.Count > 0, $"{label}: has labelled buttons to measure");
+        foreach (var button in buttons)
+        {
+            button.BringIntoView(); await Settle();
+            var text = (string)button.Content!;
+            var probe = new TextBlock { Text = text, FontSize = button.FontSize, FontWeight = button.FontWeight, FontFamily = button.FontFamily, FontStyle = button.FontStyle };
+            probe.Measure(Size.Infinity);
+            var need = probe.DesiredSize.Width + button.Padding.Left + button.Padding.Right + button.BorderThickness.Left + button.BorderThickness.Right;
+            Ensure(button.Bounds.Width >= need - .5, $"{label} {text}: button is {button.Bounds.Width:0.#} wide, text and padding need {need:0.#}");
+            var shown = Presenter(button).GetVisualDescendants().OfType<TextBlock>().FirstOrDefault(t => t.Text == text);
+            Ensure(shown is null || (shown.Bounds.Width >= probe.DesiredSize.Width - .5 && shown.Bounds.Height <= probe.DesiredSize.Height + .5),
+                $"{label} {text}: label shows {shown?.Bounds.Width:0.#} of {probe.DesiredSize.Width:0.#} on one line");
+            var compact = button.Classes.Contains(Ui.CompactClass) && button.IsEffectivelyEnabled;
+            if (compact) await Hold(button, ":pointerover", true);
+            var box = new Rect(button.Bounds.Size).TransformToAABB(button.TransformToVisual(window)!.Value);
+            var scale = Scale(button);
+            if (compact) await Hold(button, ":pointerover", false);
+            Ensure(!compact || Math.Abs(scale - Ui.PrimaryHoverScale) <= .005, $"{label} {text}: hover scale is {scale:0.###}");
+            Ensure(button.GetVisualAncestors().OfType<Visual>().Where(v => v.ClipToBounds).All(v => v.TransformToVisual(window) is { } m &&
+                    new Rect(v.Bounds.Size).TransformToAABB(m).Inflate(.5).Contains(box)),
+                $"{label} {text}: no container clips the button at scale {scale:0.###} ({box})");
+        }
+    }
+
     // Text links
     private static readonly Color PrimaryHover = Color.Parse("#2F7D5F");
     private static async Task TextLinks(MainWindow window)

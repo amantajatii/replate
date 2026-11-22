@@ -101,7 +101,7 @@ internal static class OrderBadgeVerification
                 await Settle();
                 void Filter(int index, string label)
                 {
-                    if (restaurant) window.GetVisualDescendants().OfType<ComboBox>().Single().SelectedIndex = index;
+                    if (restaurant) ((OrdersView)window.CurrentPage!).StatusButtons[index].RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
                     else ((OrdersView)window.CurrentPage!).Select(label);
                 }
                 if (restaurant) Ensure(window.GetVisualDescendants().OfType<OrderStatusBadge>().Count() == 3, "Active filter preserved");

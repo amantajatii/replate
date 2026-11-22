@@ -114,11 +114,11 @@ internal static class FormLayoutVerification
                     await Settle();
                     if (restaurant)
                     {
-                        var filter = window.GetVisualDescendants().OfType<ComboBox>().Single();
-                        Ensure(filter.Bounds.Width >= 280 && filter.Bounds.Width <= 360 && filter.FontSize >= 14,
-                            "Order status dropdown has readable font and compact width");
-                        Ensure(window.CurrentPage!.Bounds.Width > filter.Bounds.Width, "Orders page remains full width");
-                        filter.SelectedIndex = 1; await Settle();
+                        var orders = (OrdersView)window.CurrentPage!;
+                        Ensure(!orders.GetVisualDescendants().OfType<ComboBox>().Any() && orders.StatusButtons.Count == OrdersView.StatusOptions.Length &&
+                            orders.StatusButtons.All(b => b.FontSize >= 14), "Restaurant status filters are readable pills");
+                        Ensure(orders.Bounds.Width > orders.StatusRow!.Bounds.Width, "Orders page remains full width");
+                        orders.StatusButtons[1].RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); await Settle();
                     }
                     else
                     {

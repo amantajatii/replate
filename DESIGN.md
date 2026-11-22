@@ -376,6 +376,24 @@ components:
     typography: "14px semibold"
     rounded: "{rounded.full}"
     height: "36px"
+  status-filter:
+    backgroundColor: "{colors.surface}"
+    borderColor: "{colors.divider}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.full}"
+    height: "36px"
+    padding: "0px 16px"
+  status-filter-hover:
+    backgroundColor: "{colors.selection}"
+    textColor: "{colors.primary}"
+    rounded: "{rounded.full}"
+    height: "36px"
+  status-filter-selected:
+    backgroundColor: "{colors.primary}"
+    textColor: "{colors.surface}"
+    typography: "14px semibold"
+    rounded: "{rounded.full}"
+    height: "36px"
   order-card:
     backgroundColor: "{colors.surface}"
     rounded: "{rounded.card}"
@@ -646,7 +664,7 @@ The customer cart page (`CartView.cs`), under the same top bar and in the same c
 No animation other than the shared primary button hover; no blur, glow, or gradient. No em dashes in its text.
 
 ### Pesanan saya
-The customer orders page (`OrdersView`, customer part in `CustomerOrdersView.cs`), under the same top bar and in the same content column as Keranjang (at most 1200, centered, inset 32, top 24). From top to bottom, (16) apart (`Ui.Spacing.Related`): the shared "Kembali ke Jelajah" text link (`CollectionView.CreateBackLink`), the title "Pesanan saya" (32, bold, `ink`, the size of "Keranjang" and "Jelajahi Menu"), the status filter, and the list. Only the list scrolls (vertical only), with the Keranjang 24 inset so card shadows are not cut; it ends (32) under the last card. The restaurant orders page keeps its own table and dropdown.
+The customer orders page (`OrdersView`, customer part in `CustomerOrdersView.cs`), under the same top bar and in the same content column as Keranjang (at most 1200, centered, inset 32, top 24). From top to bottom, (16) apart (`Ui.Spacing.Related`): the shared "Kembali ke Jelajah" text link (`CollectionView.CreateBackLink`), the title "Pesanan saya" (32, bold, `ink`, the size of "Keranjang" and "Jelajahi Menu"), the status filter, and the list. Only the list scrolls (vertical only), with the Keranjang 24 inset so card shadows are not cut; it ends (32) under the last card. The restaurant orders page keeps its own table; its status filter is pills too (see Pesanan restoran).
 
 **Status filter** (`order-filter`): one row of four pill buttons, 8 apart: Semua, Aktif, Selesai, Dibatalkan; pick one, Semua by default. Each pill is 36 high with `CornerRadius` 18 (half its height), padding 0 by 16, 14 text, no border. At rest: transparent with `muted` text; hover: `sidebar` fill with `ink` text; pressed: `divider` fill. Selected (`order-filter-selected`): `selection` fill with semibold `primary` text, also on hover; pressed `divider`. Every fill is painted on the pill itself (hover follows the shape): no box outside the pill, no shadow, no scale, no transition. The shared `:focus-visible` ring follows the pill. The groups map the existing `OrderStatus` values: Aktif is Reserved (Menunggu Konfirmasi), Confirmed (Diproses), and ReadyForPickup (Siap Diambil); Selesai is Completed; Dibatalkan is Cancelled; Semua shows all five. The filter row is hidden while the customer has no orders at all.
 
@@ -659,6 +677,9 @@ The customer orders page (`OrdersView`, customer part in `CustomerOrdersView.cs`
 **Empty states:** both are centered under the header with the 80 bold outline receipt icon (`Ui.EmptyIcon(Ui.ReceiptOutline)`, stroke 6.4, `primary`, see Outline icons) and a 22 semibold `ink` title. With no orders at all: "Belum ada pesanan", "Pesananmu akan muncul di sini setelah kamu memesan." (15, `muted`), and the compact primary "Jelajahi menu" (opens Jelajah); the filter row is hidden. When the chosen filter has no orders: "Tidak ada pesanan di sini" and, 24 under the title and centered, the compact primary "Lihat semua pesanan" (the same shared button as "Jelajahi menu" on the empty cart), which selects Semua again.
 
 Checkout is unchanged: ordering the last restaurant in the cart still opens the detail page of the new order with "Pesanan berhasil dibuat.", and the new orders sit at the top of Pesanan saya. At (1040 × 720) and (1920 × 1080) nothing scrolls sideways or is cut off. No animation; no blur, glow, or gradient. No em dashes in its text.
+
+### Pesanan restoran
+The restaurant orders page (`OrdersView`, restaurant part in `CustomerViews.cs`) keeps its heading and order table. Under the heading, the label "Status pesanan" (14 semibold, `ink`) and, (8) under it, the status filter (`status-filter`); the table follows (24) under the filter. The filter is one pill per status, in this order: Aktif (default), Semua, Selesai, Dibatalkan; pick one. The pills come from the same shared helper as the Pesanan saya filter (`Ui.Pill` and `Ui.PillStyles` in `Ui.cs`): 36 high, `CornerRadius` 18, padding 0 by 16, 14 text, 8 apart, with no shadow, scale, or transition, and the shared `:focus-visible` ring. Only the palette differs (`Ui.SolidPills`): at rest a `surface` fill with a 1 px `divider` border and `ink` text; hover `selection` fill with `primary` text; pressed `divider` fill; selected (`status-filter-selected`) a `primary` fill with semibold white text, also on hover and press. The pills sit in a wrap panel: when the width is short they move to the next line (8 apart), so nothing scrolls sideways at (1040 × 720) and (1920 × 1080). Each pill carries its label as its automation name and is reached with Tab and activated with Enter or Space. The mapping is unchanged: Aktif is every order that is neither Completed nor Cancelled, Selesai is Completed, Dibatalkan is Cancelled, Semua shows all. Other restaurant screens keep their native ComboBox controls.
 
 ### Detail pesanan
 The customer order detail (`OrderDetailView`, customer part in `CustomerOrdersView.cs`), in the same content column (at most 1200, inset 32, top 24, 32 below), scrolling vertically as one page. From top to bottom, (16) apart: the shared text link "Kembali ke Pesanan saya" (opens Pesanan saya); the title "Detail pesanan" (32, bold, `ink`) with the status badge (16) beside it, vertically centered; (8) under it the existing status sentence (14, `muted`); then two columns, (24) apart, about 60% and 40% of the column (`3*,2*`). The minimum window (1040) already fits both, so the layout never stacks and never scrolls sideways. All cards are `order-detail-card` (`surface`, `rounded.card`, `elevation.card`, padding 24, no border), (16) apart.

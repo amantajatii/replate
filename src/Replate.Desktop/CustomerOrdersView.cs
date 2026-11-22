@@ -24,9 +24,9 @@ public sealed partial class OrdersView
     internal const string Cancelled = "Dibatalkan";
     internal static readonly string[] Filters = [All, Active, Done, Cancelled];
     internal const string FilterClass = "order-filter";
-    internal const string SelectedClass = "selected";
-    internal const double FilterHeight = 36;
-    internal const double FilterGap = 8;
+    internal const string SelectedClass = Ui.PillSelectedClass;
+    internal const double FilterHeight = Ui.PillHeight;
+    internal const double FilterGap = Ui.PillGap;
     internal const string EmptyTitle = "Belum ada pesanan";
     internal const string EmptyMessage = "Pesananmu akan muncul di sini setelah kamu memesan.";
     internal const string EmptyAction = "Jelajahi menu";
@@ -109,54 +109,12 @@ public sealed partial class OrdersView
     // Filter
     private Button FilterButton(string label)
     {
-        var button = new Button
-        {
-            Content = label, Height = FilterHeight, Padding = new Thickness(Ui.Spacing.Related, 0), FontSize = 14,
-            CornerRadius = new CornerRadius(FilterHeight / 2), BorderThickness = default, VerticalContentAlignment = VerticalAlignment.Center,
-            Cursor = new Cursor(StandardCursorType.Hand)
-        };
-        button.Classes.Add(FilterClass);
-        AutomationProperties.SetName(button, label);
-        button.Click += (_, _) => Select(label);
+        var button = Ui.Pill(label, FilterClass, 0, () => Select(label));
         filterButtons.Add(button);
         return button;
     }
 
-    internal static void AddFilterStyles(Styles styles)
-    {
-        Style State(Func<Selector, Selector> state, IBrush background, IBrush foreground, FontWeight weight) =>
-            new(x => state(x.OfType<Button>().Class(FilterClass)))
-            {
-                Setters =
-                {
-                    new Setter(TemplatedControl.BackgroundProperty, background), new Setter(TemplatedControl.BorderBrushProperty, Brushes.Transparent),
-                    new Setter(TemplatedControl.ForegroundProperty, foreground), new Setter(TemplatedControl.FontWeightProperty, weight),
-                    new Setter(Visual.RenderTransformProperty, TransformOperations.Identity)
-                }
-            };
-        Style Face(Func<Selector, Selector> state, IBrush background, IBrush foreground) =>
-            new(x => state(x.OfType<Button>().Class(FilterClass)).Template().OfType<ContentPresenter>().Name("PART_ContentPresenter"))
-            {
-                Setters =
-                {
-                    new Setter(ContentPresenter.BackgroundProperty, background), new Setter(ContentPresenter.BorderBrushProperty, Brushes.Transparent),
-                    new Setter(ContentPresenter.ForegroundProperty, foreground)
-                }
-            };
-        foreach (var (state, background, foreground, weight) in new (Func<Selector, Selector>, IBrush, IBrush, FontWeight)[]
-        {
-            (x => x, Brushes.Transparent, Ui.Muted, FontWeight.Normal),
-            (x => x.Class(":pointerover"), Ui.Sidebar, Ui.Ink, FontWeight.Normal),
-            (x => x.Class(":pressed"), Ui.DividerFill, Ui.Ink, FontWeight.Normal),
-            (x => x.Class(SelectedClass), Ui.Selection, Ui.Green, FontWeight.SemiBold),
-            (x => x.Class(SelectedClass).Class(":pointerover"), Ui.Selection, Ui.Green, FontWeight.SemiBold),
-            (x => x.Class(SelectedClass).Class(":pressed"), Ui.DividerFill, Ui.Green, FontWeight.SemiBold)
-        })
-        {
-            styles.Add(State(state, background, foreground, weight));
-            styles.Add(Face(state, background, foreground));
-        }
-    }
+    internal static void AddFilterStyles(Styles styles) => styles.Add(Ui.PillStyles(FilterClass, Ui.QuietPills));
 
     // State
     internal void Select(string filter)
