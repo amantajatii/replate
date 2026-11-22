@@ -123,7 +123,7 @@ public sealed class DashboardView : UserControl
         var card = new Border
         {
             Background = Brushes.White,
-            BorderBrush = Brush.Parse("#DDE3DA"), BorderThickness = new Thickness(1),
+            BorderBrush = Ui.CardBorder, BorderThickness = Ui.CardBorderThickness,
             CornerRadius = new CornerRadius(8), Padding = new Thickness(20), MinHeight = 140,
             RenderTransform = scale, RenderTransformOrigin = RelativePoint.Center,
             Cursor = new Cursor(StandardCursorType.Arrow),

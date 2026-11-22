@@ -39,7 +39,6 @@ public sealed partial class OrdersView
     internal const double TotalSize = 22;
     internal const double CodeSize = 18;
     internal static string MoreText(int count) => $"+{count} menu lainnya";
-    internal static readonly Geometry OrdersIcon = Geometry.Parse("M6 3H18V21L15 19L12 21L9 19L6 21Z M9 7H15 M9 11H15 M9 15H13");
 
     internal static bool InFilter(Order order, string filter) => filter switch
     {
@@ -83,7 +82,7 @@ public sealed partial class OrdersView
     private void BuildCustomer(MainWindow owner, DemoSession source)
     {
         host = owner; session = source;
-        CollectionView.AddBackLinkStyles(Styles);
+        CollectionView.AddTextLinkStyles(Styles);
         AddFilterStyles(Styles);
 
         // Header
@@ -186,11 +185,7 @@ public sealed partial class OrdersView
     // Empty
     private StackPanel Empty(bool noHistory)
     {
-        EmptyIcon = new Path
-        {
-            Data = OrdersIcon, Width = 72, Height = 72, Stretch = Stretch.Uniform, StrokeThickness = 2,
-            StrokeLineCap = PenLineCap.Round, StrokeJoin = PenLineJoin.Round, Stroke = Ui.Green, HorizontalAlignment = HorizontalAlignment.Center
-        };
+        EmptyIcon = Ui.EmptyIcon(Ui.ReceiptOutline);
         EmptyHeading = Ui.Text(noHistory ? EmptyTitle : FilterEmptyTitle, 22, Ui.Ink, true);
         EmptyHeading.TextAlignment = TextAlignment.Center;
         var texts = Ui.Stack(8, EmptyHeading);
@@ -200,8 +195,9 @@ public sealed partial class OrdersView
             message.TextAlignment = TextAlignment.Center;
             texts.Children.Add(message);
         }
-        EmptyButton = noHistory ? Ui.Button(EmptyAction, host.ShowMarketplace, true) : Ui.Button(FilterEmptyAction, () => { Select(All); filterButtons[0].Focus(); });
+        EmptyButton = noHistory ? Ui.Button(EmptyAction, host.ShowMarketplace, true) : Ui.Button(FilterEmptyAction, () => { Select(All); filterButtons[0].Focus(); }, true);
         EmptyButton.HorizontalAlignment = HorizontalAlignment.Center;
+        if (!noHistory) EmptyButton.Margin = new Thickness(0, Ui.Spacing.Section - Ui.Spacing.Related, 0, 0);
         EmptyState = Ui.Stack(Ui.Spacing.Related, EmptyIcon, texts, EmptyButton);
         EmptyState.MaxWidth = 480; EmptyState.Margin = new Thickness(0, 0, 0, Ui.Spacing.Page);
         EmptyState.HorizontalAlignment = HorizontalAlignment.Center; EmptyState.VerticalAlignment = VerticalAlignment.Center;
@@ -270,8 +266,9 @@ public sealed partial class OrdersView
             TotalText.FontWeight = FontWeight.Bold; TotalText.TextWrapping = TextWrapping.NoWrap;
             var total = Ui.Stack(4, TotalLabel, TotalText);
             total.VerticalAlignment = VerticalAlignment.Center; total.HorizontalAlignment = HorizontalAlignment.Left;
-            DetailButton = Ui.Button(DetailLabel, () => host.ShowOrder(order, false));
+            DetailButton = CollectionView.CreateTextLink(DetailLabel, () => host.ShowOrder(order, false));
             DetailButton.VerticalAlignment = VerticalAlignment.Center; DetailButton.HorizontalAlignment = HorizontalAlignment.Right;
+            DetailButton.Margin = new Thickness(0, 0, -8, 0);
             AutomationProperties.SetName(DetailButton, $"Lihat detail pesanan dari {NameText.Text}");
             FooterRow = Ui.Columns("*,Auto", total, DetailButton);
             body.Children.Add(DividerLine);
@@ -280,7 +277,7 @@ public sealed partial class OrdersView
             Card = new Border
             {
                 Child = body, Background = Brushes.White, CornerRadius = new CornerRadius(16), BoxShadow = MarketplaceView.CardShadow,
-                Padding = new Thickness(CardPadding)
+                Padding = new Thickness(CardPadding), BorderBrush = Ui.CardBorder, BorderThickness = Ui.CardBorderThickness
             };
             AutomationProperties.SetName(Card, $"Pesanan dari {NameText.Text}");
         }
@@ -317,7 +314,7 @@ public sealed partial class OrderDetailView
     private static Border DetailCard(Control child) => new()
     {
         Child = child, Background = Brushes.White, CornerRadius = new CornerRadius(16), BoxShadow = MarketplaceView.CardShadow,
-        Padding = new Thickness(CardPadding), VerticalAlignment = VerticalAlignment.Top
+        Padding = new Thickness(CardPadding), VerticalAlignment = VerticalAlignment.Top, BorderBrush = Ui.CardBorder, BorderThickness = Ui.CardBorderThickness
     };
 
     internal string? CopyRequest { get; private set; }
@@ -336,7 +333,7 @@ public sealed partial class OrderDetailView
 
     private void BuildCustomer(MainWindow host, DemoSession session, Order order)
     {
-        CollectionView.AddBackLinkStyles(Styles);
+        CollectionView.AddTextLinkStyles(Styles);
 
         // Header
         BackLink = CollectionView.CreateBackLink(host.ShowCustomerOrders, out _, BackText);

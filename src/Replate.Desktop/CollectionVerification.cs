@@ -247,7 +247,7 @@ internal static class CollectionVerification
         var panel = page.Feed.Panel;
         var label2 = Rect(page.BackLink.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == CollectionView.BackLabel), window);
         Ensure(page.BackGlyph.Bounds.Width <= CollectionView.BackIconSize && page.BackGlyph.Bounds.Height <= CollectionView.BackIconSize && page.BackGlyph.StrokeThickness == 1.75 &&
-            page.BackGlyph.StrokeLineCap == PenLineCap.Round && link.Height >= CollectionView.BackLinkMinHeight - .5 && Math.Abs(label2.X - glyph.Right - 8) <= 1 &&
+            page.BackGlyph.StrokeLineCap == PenLineCap.Round && link.Height >= CollectionView.TextLinkMinHeight - .5 && Math.Abs(label2.X - glyph.Right - 8) <= 1 &&
             Math.Abs(glyph.Center.Y - label2.Center.Y) <= 1 && Math.Abs(glyph.Center.Y - link.Center.Y) <= 1,
             $"{label}: back arrow {page.BackGlyph.Bounds.Width:0}x{page.BackGlyph.Bounds.Height:0}, 8 from the text, centered; link {link.Height:0.#} high");
         var hasIntro = page.Collection is not null && page.VisibleListings.Count > 0;

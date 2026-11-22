@@ -18,7 +18,7 @@ internal static class MarketplaceVerification
 {
     private static readonly Color Primary = Color.Parse("#245B43");
     private static readonly Color Ink = Color.Parse("#23382C");
-    private static readonly Color CanvasColor = Color.Parse("#FAFAF8");
+    private static readonly Color CanvasColor = ((ISolidColorBrush)Ui.CanvasFill).Color;
     private static readonly Color OnPrimary = Colors.White;
     private static readonly Color Selection = Color.Parse("#E0E9DF");
     private static readonly Color Divider = Color.Parse("#DDE3DA");
@@ -80,7 +80,7 @@ internal static class MarketplaceVerification
         var cards = view.ListingsPanel.Children.OfType<Border>().ToList();
         Ensure(cards.Count == all && view.ListingsPanel.Spacing == 16, "Every listing is a card, 16 apart");
         Ensure(cards.All(c => c.CornerRadius == new CornerRadius(16) && c.BoxShadow.ToString() == MarketplaceView.CardShadow.ToString() &&
-            ColorOf(c.Background) == Colors.White && c.BorderThickness == default), "Listing cards are white with the card shadow and no border");
+            ColorOf(c.Background) == Colors.White && c.BorderThickness == Ui.CardBorderThickness), "Listing cards are white with the card shadow and the thin divider border");
         Ensure(!view.GetVisualDescendants().OfType<Border>().Any(b => b.BorderThickness == new Thickness(0, 0, 0, 1)), "Old row separators are gone");
         foreach (var listing in view.VisibleListings.Take(1))
         {

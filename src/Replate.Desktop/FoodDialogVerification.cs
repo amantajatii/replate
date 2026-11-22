@@ -53,9 +53,9 @@ internal static class FoodDialogVerification
 
         // Style
         Ensure(ColorOf(dialog.ScrimLayer.Background) == Color.Parse("#6623382C"), "Scrim is ink at 40% alpha");
-        Ensure(dialog.Card.Width == FoodDialog.CardWidth && dialog.Card.CornerRadius == new CornerRadius(16) && dialog.Card.BorderThickness == default &&
+        Ensure(dialog.Card.Width == FoodDialog.CardWidth && dialog.Card.CornerRadius == new CornerRadius(16) && dialog.Card.BorderThickness == Ui.CardBorderThickness &&
             dialog.Card.BoxShadow.ToString() == MarketplaceView.CardShadow.ToString() && ColorOf(dialog.Card.Background) == Colors.White,
-            "White card, card radius and shadow, no border");
+            "White card, card radius and shadow, thin divider border");
         Ensure(ColorOf(dialog.Bar.Background) == Selection && ColorOf(dialog.AddButton.Background) == Primary && ColorOf(dialog.AddButton.Foreground) == Colors.White &&
             dialog.AddButton.Content as string == FoodDialog.AddLabel, "Selection bar with the primary Tambah ke keranjang button");
         foreach (var stepper in new[] { dialog.MinusButton, dialog.PlusButton })

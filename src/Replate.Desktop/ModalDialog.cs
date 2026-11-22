@@ -52,7 +52,7 @@ internal abstract class ModalDialog : Grid
     {
         Card = new Border
         {
-            Width = width, Background = Brushes.White, CornerRadius = new CornerRadius(16), BoxShadow = MarketplaceView.CardShadow,
+            Width = width, Background = Brushes.White, CornerRadius = new CornerRadius(16), BoxShadow = MarketplaceView.CardShadow, BorderBrush = Ui.CardBorder, BorderThickness = Ui.CardBorderThickness,
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Child = content
         };
         AutomationProperties.SetName(Card, name);
