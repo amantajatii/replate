@@ -8,7 +8,8 @@ colors:
   accent: "#F4A261"
   ink: "#202522"
   muted: "#69736D"
-  canvas: "#FAF8F3"
+  canvas: "#FFFFFF"
+  workspace-fill: "#FFFFFF"
   surface: "#FFFFFF"
   sidebar: "#EEF4F1"
   selection: "#DDEDE5"
@@ -413,18 +414,19 @@ Forest green is a functional accent within a pale, warm-neutral workspace. Front
 | Primary 500 | `primary-500` | `#59AC87` | Non-text only: the password-toggle icon on hover |
 | Primary 100 | `selection` | `#DDEDE5` | Primary button hover fill (with `primary` text), selected navigation, hover fills |
 | Accent | `accent` | `#F4A261` | The 1 px border of the Masuk database warning only |
-| Background | `canvas` | `#FAF8F3` | Page canvas |
+| Background | `canvas` | `#FFFFFF` | Page canvas. Deliberately deviates from the team palette. |
+| Workspace | `workspace-fill` | `#FFFFFF` | Restaurant workspace area, same as `canvas` |
 | Surface | `surface` | `#FFFFFF` | Cards, panels, dialogs, input fields |
 | Text Primary | `ink` | `#202522` | Default readable text |
 | Text Secondary | `muted` | `#69736D` | Supporting text, placeholders, inactive navigation |
 
 Derived from Primary 700: `primary-hover` `#2F7D5F` (Primary 700 mixed 28% toward Primary 500), `sidebar` `#EEF4F1` (Primary 700 at about 8% over white), `divider` `#D7E4DF` (Primary 700 at about 18% over white), and the `elevation.card-primary`, `elevation.card-primary-hover`, and `elevation.button-primary-hover` shadows. `scrim` and `elevation.card` derive from Text Primary.
 
-Contrast: white on `primary` 6.4:1; `primary` on `selection` 5.3:1; `primary` on `divider` 4.9:1; `primary-hover` 5.0:1 on `surface` and 4.7:1 on `canvas`; `muted` 4.9:1 on `surface` and 4.6:1 on `canvas`; `ink` 15.6:1 on `surface` and 14.7:1 on `canvas`.
+Contrast: white on `primary` 6.4:1; `primary` on `selection` 5.3:1; `primary` on `divider` 4.9:1; `primary-hover` 5.0:1 on `surface` and `canvas`; `muted` 4.9:1 on `surface` and `canvas`; `ink` 15.6:1 on `surface` and `canvas`.
 
 ### Primary
 - **Primary 700** (`primary`): primary actions, selected routes and filters, rescue prices, and meaningful operational emphasis.
-- **Primary hover** (`primary-hover`): the text and icon color of the shared text link on hover only. About 4.7:1 on `canvas` and 5.0:1 on `surface`. Never a fill. Primary 500 is never used for text.
+- **Primary hover** (`primary-hover`): the text and icon color of the shared text link on hover only. About 5.0:1 on `canvas` and `surface`. Never a fill. Primary 500 is never used for text.
 - **Primary 500** (`primary-500`): the hover color of the password-toggle icon only. About 2.7:1 on white, so it never carries text; the icon is `ink` at rest.
 - **Accent** (`accent`): the border of the Masuk database warning only. No other element uses it.
 
@@ -432,6 +434,7 @@ Contrast: white on `primary` 6.4:1; `primary` on `selection` 5.3:1; `primary` on
 - **Text Primary** (`ink`): default readable content and secondary button text; also the hover fill of the selected role-button, where white text reaches about 15.6:1.
 - **Text Secondary** (`muted`): metadata, subtitles, supporting explanations, and inactive navigation.
 - **Background** (`canvas`): the main window background.
+- **Workspace** (`workspace-fill`): the restaurant screens' work area background, the same white as `canvas`.
 - **Surface** (`surface`): cards, panels, dialogs, secondary buttons, the search input, the profile menu, and, on the green top bar, the white logo, icons, cart badge, profile circle, and focus ring.
 - **Pale Sage Sidebar** (`sidebar`): restaurant navigation rail.
 - **Primary 100** (`selection`): selected navigation, profile menu items on hover and keyboard focus, the profile circle on hover, the cart icon on hover (about 5.3:1 on `primary`), and the Jelajah collection cards and every primary button on hover, where `primary` icon and label reach about 5.3:1.
@@ -594,7 +597,7 @@ The first block on Jelajah: `rounded.card` corners, no border, no shadow, center
 - **Text block:** overlaid on the empty top-left of the image, left inset (40), centered vertically in the area above the cabinets (which start at 87.8% of the height). Its right edge stays at or left of 45% of the banner width; the illustration's nearest object starts at 46.2% and the empty area reaches about 55% at the top, so the text never covers the illustration at any size.
 
 ### Collection Card
-Five equal cards in one row, (24) under the banner and (24) above the section title, (16) apart: Termurah (tag icon), Segera berakhir (clock), Makanan utama (fork and spoon), Roti & kue (bread), Buah & sayur (leaf). Each is a button styled as a card: `primary` fill, `rounded.card`, `elevation.card-primary`, no border, height (96); a 24 line icon in white (`surface`, Path geometry, stroke 1.75, round caps) above a 14 white label (about 6.4:1 on `primary`). The icon stroke follows the card's text color. Hover: the fill changes to `selection` and the icon and label to `primary` (about 5.3:1), the shadow deepens to `elevation.card-primary-hover`, and the card scales to 1.03 from its center as a render transform, so no other card moves or resizes; the hovered card sits above its neighbours (ZIndex 1), and the 16 gap keeps the grown card clear of them. Pressing changes the fill to `divider` (`primary` text about 4.9:1). Leaving returns to `primary`, white, scale 1.0, and the resting shadow. Color, scale, and shadow share the 120 ms ease-out `motion.collection-card-hover`, the only animation in the customer app. There is no selected state. Keyboard focus: the shared 2 px `primary` ring 2 outside the card, drawn on the canvas (about 6.0:1), never white on green; the ring is part of the card, so it scales and rises with it and is never covered. Enter or Space opens it. Each card is a link: it opens that collection's page (see Collection Page), and Jelajah itself always lists every available listing in the default order. There is no Semua card. At (1040) the cards narrow and stay in one row.
+Five equal cards in one row, (24) under the banner and (24) above the section title, (16) apart: Termurah (tag icon), Segera berakhir (clock), Makanan utama (fork and spoon), Roti & kue (bread), Buah & sayur (leaf). Each is a button styled as a card: `primary` fill, `rounded.card`, `elevation.card-primary`, no border, height (96); a 24 line icon in white (`surface`, Path geometry, stroke 1.75, round caps) above a 14 white label (about 6.4:1 on `primary`). The icon stroke follows the card's text color. Hover: the fill changes to `selection` and the icon and label to `primary` (about 5.3:1), the shadow deepens to `elevation.card-primary-hover`, and the card scales to 1.03 from its center as a render transform, so no other card moves or resizes; the hovered card sits above its neighbours (ZIndex 1), and the 16 gap keeps the grown card clear of them. Pressing changes the fill to `divider` (`primary` text about 4.9:1). Leaving returns to `primary`, white, scale 1.0, and the resting shadow. Color, scale, and shadow share the 120 ms ease-out `motion.collection-card-hover`, the only animation in the customer app. There is no selected state. Keyboard focus: the shared 2 px `primary` ring 2 outside the card, drawn on the canvas (about 6.4:1), never white on green; the ring is part of the card, so it scales and rises with it and is never covered. Enter or Space opens it. Each card is a link: it opens that collection's page (see Collection Page), and Jelajah itself always lists every available listing in the default order. There is no Semua card. At (1040) the cards narrow and stay in one row.
 
 ### Collection Page
 One reused view (`CollectionView.cs`) for the five collections and for search results, under the same top bar and in the same content column as Jelajah (at most 1200, inset 32), with no banner. From top to bottom:

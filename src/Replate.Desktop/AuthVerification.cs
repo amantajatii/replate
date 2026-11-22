@@ -89,7 +89,7 @@ internal static class AuthVerification
             !surface.FormScroll.GetVisualDescendants().Contains(surface.Logo), $"{where}: logo stays fully visible above the scroll area");
         Check(Math.Abs(mark.X - cardBox.X) < 1, $"{where}: logo aligns with the card left edge ({mark.X:0.#}, card {cardBox.X:0.#})");
         var header = RectIn(surface.Header, surface); var clip = RectIn(surface.FormClip, surface);
-        Check(ColorOf(surface.Header.Background) == Color.Parse("#FAF8F3") && header.Contains(mark) && header.Bottom <= clip.Y + .5 &&
+        Check(ColorOf(surface.Header.Background) == ColorOf(Ui.Canvas) && header.Contains(mark) && header.Bottom <= clip.Y + .5 &&
             surface.FormClip.ClipToBounds && surface.Header.GetVisualParent() is Panel host && host.Children.IndexOf(surface.Header) > host.Children.IndexOf(surface.FormClip),
             $"{where}: logo sits on a clean canvas band above a clipped scroll area (band bottom {header.Bottom:0.#}, scroll top {clip.Y:0.#})");
         Check(cardBox.X >= scrollBox.X - .5 && cardBox.Right <= scrollBox.Right + .5 && scrollBox.Right <= plate.X + 1,
@@ -206,7 +206,7 @@ internal static class AuthVerification
             foreach (var (name, make, surfaceOf) in screens)
             {
                 var view = make();
-                var canvas = new Border { Child = view, Width = size.Width, Height = size.Height, Background = Brush.Parse("#FAF8F3") };
+                var canvas = new Border { Child = view, Width = size.Width, Height = size.Height, Background = Ui.Canvas };
                 var frame = new Window
                 {
                     Width = 1040, Height = 720, FontFamily = new FontFamily("Helvetica Neue, Segoe UI, sans-serif"),

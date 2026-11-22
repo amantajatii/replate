@@ -25,7 +25,7 @@ internal static class Ui
     public static readonly IBrush Primary500 = Brush.Parse("#59AC87");
     public static readonly IBrush Selection = Brush.Parse("#DDEDE5");
     public static readonly IBrush Accent = Brush.Parse("#F4A261");
-    public static readonly IBrush Canvas = Brush.Parse("#FAF8F3");
+    public static readonly IBrush Canvas = Brush.Parse("#FFFFFF");
     public static readonly IBrush Surface = Brushes.White;
     public static readonly IBrush Ink = Brush.Parse("#" + TextPrimaryHex);
     public static readonly IBrush Muted = Brush.Parse("#69736D");
@@ -33,7 +33,7 @@ internal static class Ui
     public static readonly IBrush DividerFill = Brush.Parse("#D7E4DF");
     public static readonly IBrush Sidebar = Brush.Parse("#EEF4F1");
     public static readonly IBrush Scrim = Brush.Parse("#66" + TextPrimaryHex);
-    public static readonly IBrush WorkspaceFill = Brush.Parse("#F7F8F4");
+    public static readonly IBrush WorkspaceFill = Brush.Parse("#FFFFFF");
     public static readonly IBrush CardBorder = DividerFill;
     public static readonly Thickness CardBorderThickness = new(1);
     public static readonly IBrush Danger = Brush.Parse("#B3261E");
