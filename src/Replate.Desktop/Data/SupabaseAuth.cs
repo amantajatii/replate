@@ -18,7 +18,7 @@ internal static class SupabaseAuth
     private static string? PublishableKey => Environment.GetEnvironmentVariable("REPLATE_SUPABASE_PUBLISHABLE_KEY");
     internal static bool IsConfigured => !string.IsNullOrWhiteSpace(ProjectUrl) || !string.IsNullOrWhiteSpace(PublishableKey);
 
-    internal static async Task<Identity> SignInAsync(string email, string password)
+    internal static async Task<Session> SignInAsync(string email, string password)
     {
         var key = PublishableKey?.Trim();
         if (!Uri.TryCreate(ProjectUrl?.Trim(), UriKind.Absolute, out var project) ||
@@ -51,10 +51,11 @@ internal static class SupabaseAuth
                 throw new InvalidOperationException("Supabase Auth belum bisa memproses login. Coba lagi sebentar.");
 
             var result = await response.Content.ReadFromJsonAsync<TokenResponse>().ConfigureAwait(false);
-            if (result?.User is not { } user || user.Id == Guid.Empty || string.IsNullOrWhiteSpace(user.Email))
+            if (result?.User is not { } user || user.Id == Guid.Empty || string.IsNullOrWhiteSpace(user.Email) ||
+                string.IsNullOrWhiteSpace(result.AccessToken))
                 throw new InvalidOperationException("Identitas akun tidak ditemukan di Supabase Auth.");
 
-            return user;
+            return new Session(project, key, user, result.AccessToken);
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException or JsonException)
         {
@@ -63,5 +64,13 @@ internal static class SupabaseAuth
     }
 
     internal sealed record Identity(Guid Id, string Email);
-    private sealed record TokenResponse([property: JsonPropertyName("user")] Identity? User);
+    internal sealed class Session(Uri project, string publishableKey, Identity user, string accessToken)
+    {
+        internal Uri Project { get; } = project;
+        internal string PublishableKey { get; } = publishableKey;
+        internal Identity User { get; } = user;
+        internal string AccessToken { get; } = accessToken;
+    }
+
+    private sealed record TokenResponse(Identity? User, [property: JsonPropertyName("access_token")] string? AccessToken);
 }

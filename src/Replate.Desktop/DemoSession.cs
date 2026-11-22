@@ -17,6 +17,8 @@ public sealed class DemoSession
     public Order? LastOrder { get; private set; }
     internal IOrderStore? OrderStore { get; set; }
     public User? CurrentUser { get; private set; }
+    private SupabaseAuth.Session? supabaseSession;
+    private readonly HashSet<Guid> customerApiOrderIds = [];
     public bool IsSignedIn => CurrentUser is not null;
     public static string Rupiah(decimal value) => "Rp" + value.ToString("N0", CultureInfo.GetCultureInfo("id-ID"));
 
@@ -25,7 +27,8 @@ public sealed class DemoSession
     public static string DefaultStorePath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Replate", "state.json");
     public IEnumerable<Order> AllOrders => Restaurants.SelectMany(r => r.Orders);
     public IEnumerable<Order> CustomerOrders => CurrentUser is Customer customer
-        ? AllOrders.Where(o => o.CustomerId == customer.Id).OrderByDescending(o => o.OrderedAt) : [];
+        ? AllOrders.Where(o => o.CustomerId == customer.Id &&
+            (supabaseSession is null || customerApiOrderIds.Contains(o.Id))).OrderByDescending(o => o.OrderedAt) : [];
     public IEnumerable<SurplusListing> RestaurantListings => Listings.Where(l => l.Menu.RestaurantId == Restaurant.Id);
     public Restaurant? FindRestaurant(Guid id) => Restaurants.FirstOrDefault(r => r.Id == id);
     public string RestaurantLine(Guid restaurantId) =>
@@ -130,8 +133,11 @@ public sealed class DemoSession
 
     public User SignIn(string email, string password)
     {
-        var user = UsesSharedStock && SupabaseAuth.IsConfigured
-            ? SignInWithSupabase(email, password)
+        var session = UsesSharedStock && SupabaseAuth.IsConfigured
+            ? SupabaseAuth.SignInAsync(email, password).GetAwaiter().GetResult()
+            : null;
+        var user = session is not null
+            ? SignInWithSupabase(session.User)
             : AccountService.Authenticate(Users, email, password)
                 ?? throw new InvalidOperationException(AccountService.SignInFailedMessage);
         if (user is RestaurantOwner owner)
@@ -147,13 +153,14 @@ public sealed class DemoSession
             Cart = customer.Cart = cart;
         }
         if (CurrentUser != user) CurrentUser?.Logout();
+        supabaseSession = session;
+        customerApiOrderIds.Clear();
         CurrentUser = user; LastOrder = null;
         return user;
     }
 
-    private User SignInWithSupabase(string email, string password)
+    private User SignInWithSupabase(SupabaseAuth.Identity identity)
     {
-        var identity = SupabaseAuth.SignInAsync(email, password).GetAwaiter().GetResult();
         var owned = new DatabaseService().LoadOwnedRestaurants(identity.Id);
         if (owned.Count == 0)
             return new Customer { Id = identity.Id, Name = identity.Email, Email = identity.Email };
@@ -183,6 +190,8 @@ public sealed class DemoSession
     public void SignOut()
     {
         CurrentUser?.Logout();
+        supabaseSession = null;
+        customerApiOrderIds.Clear();
         CurrentUser = null; Cart = new Cart(); LastOrder = null;
     }
 
@@ -232,12 +241,21 @@ public sealed class DemoSession
         if (!UsesSharedStock || checkingOut) return;
 
         var customer = RequireCustomer();
+        customerApiOrderIds.Clear();
         RefreshSharedListings();
         var listings = Listings.ToDictionary(listing => listing.Id);
+        if (supabaseSession is { } session)
+        {
+            var orders = SupabaseOrderReader.LoadCustomerOrdersAsync(session, listings).GetAwaiter().GetResult();
+            MergeSharedOrders(orders, preferRemote: true);
+            customerApiOrderIds.UnionWith(orders.Select(order => order.Id));
+            return;
+        }
+
         MergeSharedOrders(new DatabaseService().LoadOrders(null, listings, customer.Id));
     }
 
-    private void MergeSharedOrders(IEnumerable<Order> orders)
+    private void MergeSharedOrders(IEnumerable<Order> orders, bool preferRemote = false)
     {
         foreach (var order in orders)
         {
@@ -250,7 +268,7 @@ public sealed class DemoSession
             }
 
             var local = restaurant.Orders[index];
-            if (local.Status is OrderStatus.Completed or OrderStatus.Cancelled || order.Status <= local.Status)
+            if (!preferRemote && (local.Status is OrderStatus.Completed or OrderStatus.Cancelled || order.Status <= local.Status))
                 continue;
 
             restaurant.Orders[index] = order;
