@@ -128,7 +128,11 @@ public sealed class MenuEditorView : UserControl
     internal Dictionary<string, TextBlock> FieldErrors { get; } = new();
     private readonly DemoSession photoSession;
     private readonly Menu? originalMenu;
-    private readonly ContentControl photoHost = new();
+    private readonly ContentControl photoHost = new()
+    {
+        HorizontalContentAlignment = HorizontalAlignment.Stretch,
+        VerticalContentAlignment = VerticalAlignment.Stretch
+    };
     private MenuPhotoChange? photoChange;
     internal TextBlock PhotoError { get; } = Ui.FieldError();
     internal Button PickPhotoButton { get; }
@@ -136,10 +140,10 @@ public sealed class MenuEditorView : UserControl
     internal MenuPhotoView PhotoPreview => (MenuPhotoView)photoHost.Content!;
     internal MenuEditorView(MainWindow host, DemoSession session, Menu? menu)
     {
+        Background = Ui.WorkspaceFill;
         photoSession = session; originalMenu = menu;
         PhotoError.IsVisible = false;
-        UpdatePhotoPreview();
-        PickPhotoButton = Ui.Button("Pilih Foto", async () =>
+        PickPhotoButton = Ui.Button("Pilih foto", async () =>
         {
             SaveButton!.IsEnabled = false;
             try
@@ -160,10 +164,18 @@ public sealed class MenuEditorView : UserControl
             { ShowPhotoError(e.Message); }
             finally { SaveButton!.IsEnabled = true; }
         });
-        RemovePhotoButton = Ui.Button("Hapus Foto", RemovePhoto);
-        var photoField = Ui.Stack(8, Ui.Text("Foto menu", 14, bold: true), photoHost,
+        RemovePhotoButton = Ui.Button("Hapus foto", RemovePhoto);
+        UpdatePhotoPreview();
+        var photoControls = Ui.Stack(12,
             Ui.SupportingText("Opsional. JPG, JPEG, atau PNG, maksimal 5 MB."),
-            Ui.Row(12, PickPhotoButton, RemovePhotoButton), PhotoError);
+            Ui.Row(8, PickPhotoButton, RemovePhotoButton), PhotoError);
+        var photoField = new Grid
+        {
+            RowDefinitions = RowDefinitions.Parse("Auto,*,Auto"), RowSpacing = 12,
+            Children = { Ui.Text("Foto menu", 18, bold: true), photoHost, photoControls }
+        };
+        Grid.SetRow(photoHost, 1);
+        Grid.SetRow(photoControls, 2);
         NameInput = Ui.Input("Masukkan nama menu", menu?.Name ?? "");
         DescriptionInput = Ui.Input("Masukkan deskripsi menu", menu?.Description ?? "", true);
         var category = new ComboBox { ItemsSource = MenuCategories.Names, SelectedItem = menu?.Category ?? "Makanan utama", MinHeight = 42 };
@@ -171,8 +183,8 @@ public sealed class MenuEditorView : UserControl
         WeightInput = Ui.Number("Masukkan berat per porsi", menu?.WeightPerPortion ?? .3m, 100, .05m);
         var inputs = new Dictionary<string, Control>
         {
-            ["name"] = NameInput, ["description"] = DescriptionInput, ["category"] = category,
-            ["price"] = PriceInput, ["weight"] = WeightInput
+            ["name"] = NameInput, ["category"] = category, ["price"] = PriceInput,
+            ["weight"] = WeightInput, ["description"] = DescriptionInput
         };
         var outlines = new Dictionary<string, Border>();
         var red = Avalonia.Media.Brush.Parse("#B3261E");
@@ -234,16 +246,33 @@ public sealed class MenuEditorView : UserControl
                 category.SelectedItem?.ToString() ?? "Makanan utama", ReadNumber(PriceInput)!.Value, ReadNumber(WeightInput)!.Value, photoChange),
                 host.ShowMenus, "Menu berhasil disimpan.");
         }, true);
-        var form = Ui.Stack(20, Field("name", "Nama menu"), Field("description", "Deskripsi"), Field("category", "Kategori"),
-            Ui.FormPair(Field("price", "Harga normal (Rp)"), Field("weight", "Berat per porsi (kg)")), photoField,
-            Ui.Row(12, SaveButton, Ui.Button("Batal", host.ShowMenus)));
+        Border Panel(Control content) => new()
+        {
+            Child = content, Background = Brushes.White, CornerRadius = new CornerRadius(16), Padding = new Thickness(20),
+            BorderBrush = Ui.CardBorder, BorderThickness = Ui.CardBorderThickness
+        };
+        var numbers = Ui.Columns("*,*", Field("price", "Harga normal (Rp)"), Field("weight", "Berat per porsi (kg)"));
+        numbers.ColumnSpacing = Ui.Spacing.Related;
+        var details = Ui.Stack(Ui.Spacing.Related, Field("name", "Nama menu"), Field("category", "Kategori"), numbers,
+            Field("description", "Deskripsi"));
+        var actions = Ui.Row(12, Ui.Button("Batal", host.ShowMenus), SaveButton);
+        actions.HorizontalAlignment = HorizontalAlignment.Right;
+        var side = new Grid
+        {
+            RowDefinitions = RowDefinitions.Parse("*,Auto"), RowSpacing = 12,
+            Children = { Panel(photoField), actions }
+        };
+        Grid.SetRow(actions, 1);
+        var form = Ui.Columns("*,284", Panel(details), side);
+        form.ColumnSpacing = Ui.Spacing.Related;
         foreach (var pair in inputs)
             pair.Value.PropertyChanged += (_, e) =>
             {
                 if (attempted && (e.Property == TextBox.TextProperty || e.Property == NumericUpDown.TextProperty || e.Property == NumericUpDown.ValueProperty))
                     Display(pair.Key, Errors());
             };
-        Content = Ui.Page(Ui.Heading(menu is null ? "Tambah menu" : "Ubah menu", "Menu dipakai untuk pencatatan produksi dan penawaran surplus."), Ui.Form(form));
+        Content = Ui.Page(Ui.Heading(menu is null ? "Tambah menu" : "Ubah menu",
+            menu?.Name ?? "Siapkan menu untuk pencatatan produksi dan penawaran surplus."), Ui.Form(form));
     }
     internal async Task SelectPhoto(Stream stream, string name)
     {
@@ -264,12 +293,17 @@ public sealed class MenuEditorView : UserControl
         UpdatePhotoPreview();
     }
     private void ShowPhotoError(string message)
-    { PhotoError.Text = message; PhotoError.IsVisible = true; }
+    {
+        PhotoError.Text = message;
+        PhotoError.IsVisible = true;
+        RemovePhotoButton.IsEnabled = true;
+    }
     private void UpdatePhotoPreview()
     {
         var path = photoChange is null ? photoSession.PhotoPath(originalMenu?.ImageUrl) : null;
-        photoHost.Content = new MenuPhotoView(path, 240, 140, photoChange?.Data)
-        { HorizontalAlignment = HorizontalAlignment.Left };
+        RemovePhotoButton.IsEnabled = path is not null || photoChange?.Data is not null;
+        photoHost.Content = new MenuPhotoView(path, 242, 156, photoChange?.Data)
+        { Height = double.NaN, MinHeight = 156, MaxHeight = 260 };
     }
 }
 public sealed class ListingsView : UserControl
