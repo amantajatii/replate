@@ -19,6 +19,7 @@ public sealed class CollectionView : UserControl
     internal const string BackLabel = "Kembali ke Jelajah";
     internal const string SearchPrefix = "Hasil untuk ";
     internal const string CollectionEmpty = "Belum ada menu di sini";
+    internal const string LocationHint = "Atur lokasimu di bar atas untuk melihat urutan terdekat.";
     internal const string SearchEmpty = "Tidak ada menu yang cocok";
     internal const string TextLinkClass = "text-link";
     internal const double BackIconSize = 16;
@@ -28,6 +29,7 @@ public sealed class CollectionView : UserControl
     private static readonly Geometry BackIcon = Geometry.Parse("M13 8H3 M7.5 3.5L3 8L7.5 12.5");
     internal static readonly IReadOnlyDictionary<string, string> Intros = new Dictionary<string, string>
     {
+        [MarketplaceView.Nearest] = "Makanan dari restoran paling dekat dengan lokasimu.",
         [MarketplaceView.Cheapest] = "Temukan berbagai makanan lezat, pas, dan ramah di kantong!",
         [MarketplaceView.EndingSoon] = "Nikmati hidangan favorit sebelum terlambat!",
         [MenuCategories.MainCourse] = "Temukan hidangan mengenyangkan untuk menemani harimu!",
@@ -73,6 +75,12 @@ public sealed class CollectionView : UserControl
             Intro = Ui.Text(intro, IntroSize, Ui.Muted);
             Header.Children.Add(Intro);
             Feed.Refreshed += () => Intro.IsVisible = Feed.Listings.Count > 0;
+        }
+        if (collection == MarketplaceView.Nearest)
+        {
+            var hint = Ui.Text(LocationHint, 13, Ui.Muted);
+            Header.Children.Add(hint);
+            Feed.Refreshed += () => hint.IsVisible = session.CurrentCustomer?.Location is null;
         }
 
         // Layout
@@ -158,6 +166,9 @@ internal static class ListingQuery
 
     internal static IEnumerable<SurplusListing> Collection(DemoSession session, string name) => name switch
     {
+        MarketplaceView.Nearest => Available(session)
+            .OrderBy(l => session.TravelTo(l.Menu.Restaurant)?.DistanceKm ?? double.PositiveInfinity)
+            .ThenBy(l => l.PickupEnd),
         MarketplaceView.Cheapest => Available(session).OrderBy(l => l.RescuePrice),
         MarketplaceView.EndingSoon => Available(session).OrderBy(l => l.PickupEnd),
         _ => Available(session).Where(l => l.Menu.Category.Equals(name, StringComparison.OrdinalIgnoreCase))

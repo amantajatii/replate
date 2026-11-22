@@ -2,6 +2,7 @@ using System.Security.Authentication;
 using Npgsql;
 using Replate.Domain.Entities;
 using Replate.Domain.Enums;
+using Replate.Domain.ValueObjects;
 
 namespace Replate.Desktop.Data;
 
@@ -69,6 +70,8 @@ internal sealed class DatabaseService : IOrderStore
                 closing_time time
             );
             ALTER TABLE public.restaurants
+                ADD COLUMN IF NOT EXISTS latitude double precision,
+                ADD COLUMN IF NOT EXISTS longitude double precision,
                 ADD COLUMN IF NOT EXISTS phone text,
                 ADD COLUMN IF NOT EXISTS description text,
                 ADD COLUMN IF NOT EXISTS opening_time time,
@@ -152,7 +155,7 @@ internal sealed class DatabaseService : IOrderStore
             using var connection = CreateConnection();
             connection.Open();
             using var command = new NpgsqlCommand("""
-                SELECT id, name, address, phone, description, opening_time, closing_time
+                SELECT id, name, address, phone, description, opening_time, closing_time, latitude, longitude
                 FROM public.restaurants WHERE owner_id = @owner_id
                 ORDER BY name, id
                 """, connection);
@@ -160,14 +163,18 @@ internal sealed class DatabaseService : IOrderStore
             using var reader = command.ExecuteReader();
             var restaurants = new List<Restaurant>();
             while (reader.Read())
-                restaurants.Add(new Restaurant
+            {
+                var restaurant = new Restaurant
                 {
                     Id = reader.GetGuid(0), Name = reader.GetString(1), Address = reader.GetString(2),
                     Phone = reader.IsDBNull(3) ? "" : reader.GetString(3),
                     Description = reader.IsDBNull(4) ? "" : reader.GetString(4),
                     OpeningTime = reader.IsDBNull(5) ? default : reader.GetFieldValue<TimeOnly>(5),
                     ClosingTime = reader.IsDBNull(6) ? default : reader.GetFieldValue<TimeOnly>(6)
-                });
+                };
+                if (ReadLocation(reader, 7, 8) is { } location) restaurant.SetLocation(location);
+                restaurants.Add(restaurant);
+            }
             return restaurants;
         }
         catch (NpgsqlException e)
@@ -188,7 +195,8 @@ internal sealed class DatabaseService : IOrderStore
                        COALESCE(menu.normal_price, listing.normal_price),
                        COALESCE(menu.weight_per_portion, listing.weight_per_portion), listing.rescue_price, listing.quantity,
                        listing.pickup_start, listing.pickup_end, listing.closed,
-                       restaurant.id, restaurant.name, restaurant.address, COALESCE(menu.is_active, true)
+                       restaurant.id, restaurant.name, restaurant.address, COALESCE(menu.is_active, true),
+                       restaurant.latitude, restaurant.longitude
                 FROM public.surplus_listings AS listing
                 LEFT JOIN public.menus AS menu ON menu.id = listing.menu_id
                 LEFT JOIN public.restaurants AS restaurant ON restaurant.id = menu.restaurant_id
@@ -209,6 +217,7 @@ internal sealed class DatabaseService : IOrderStore
                     {
                         Id = menu.RestaurantId, Name = reader.GetString(13), Address = reader.GetString(14)
                     };
+                    if (ReadLocation(reader, 16, 17) is { } location) menu.Restaurant.SetLocation(location);
                 }
                 var listing = new SurplusListing
                 {
@@ -231,6 +240,10 @@ internal sealed class DatabaseService : IOrderStore
             throw new InvalidOperationException($"Penawaran dari PostgreSQL gagal dimuat. Penyebab: {e.Message}", e);
         }
     }
+
+    private static GeoPoint? ReadLocation(NpgsqlDataReader reader, int latitude, int longitude) =>
+        reader.IsDBNull(latitude) || reader.IsDBNull(longitude)
+            ? null : new GeoPoint(reader.GetDouble(latitude), reader.GetDouble(longitude));
 
     internal void SaveListing(Restaurant restaurant, SurplusListing listing, int? expectedQuantity, bool preserveCatalog)
     {

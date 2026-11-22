@@ -1,3 +1,5 @@
+using Replate.Domain.ValueObjects;
+
 namespace Replate.Domain.Entities;
 
 public sealed class Restaurant
@@ -11,10 +13,17 @@ public sealed class Restaurant
     public string Phone { get; set; } = string.Empty;
     public TimeOnly OpeningTime { get; set; }
     public TimeOnly ClosingTime { get; set; }
+    public GeoPoint? Location { get; private set; }
     public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     public List<Menu> Menus { get; } = [];
     public List<Order> Orders { get; } = [];
+
+    public void SetLocation(GeoPoint? location)
+    {
+        Location = location;
+        UpdatedAt = DateTime.UtcNow;
+    }
 
     public void UpdateProfile(
         string name,

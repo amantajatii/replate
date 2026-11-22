@@ -486,7 +486,8 @@ internal static class AuthVerification
             {
                 ("ShowDashboard", window.ShowDashboard), ("ShowMenus", window.ShowMenus), ("ShowMenuEditor", () => window.ShowMenuEditor()),
                 ("ShowListings", window.ShowListings), ("ShowListingEditor", () => window.ShowListingEditor()), ("ShowProduction", window.ShowProduction),
-                ("ShowRestaurantOrders", window.ShowRestaurantOrders), ("ShowOrder(restaurant)", () => window.ShowOrder(bumiOrder, true))
+                ("ShowRestaurantOrders", window.ShowRestaurantOrders), ("ShowRestaurantProfile", window.ShowRestaurantProfile),
+                ("ShowOrder(restaurant)", () => window.ShowOrder(bumiOrder, true))
             };
             void Guarded(Action signIn, (string Name, Action Show)[] routes, string role)
             {

@@ -92,7 +92,7 @@ public sealed class DashboardView : UserControl
             var history = records.Where(r => r.MenuId == menu.Id).ToList();
             if (history.Count == 0)
             {
-                recommendationTable.Children.Add(RecommendationRow(false, menu.Name, "Belum ada data", "—", "—"));
+                recommendationTable.Children.Add(RecommendationRow(false, menu.Name, "Belum ada data", "-", "-"));
                 continue;
             }
             var periodMenu = new Replate.Domain.Entities.Menu { Id = menu.Id, Name = menu.Name };
