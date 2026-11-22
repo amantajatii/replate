@@ -58,7 +58,7 @@ internal sealed class MenuPhotoView : Border
     {
         this.path = path; this.data = data; decodeWidth = (int)width; this.placeholderSize = placeholderSize;
         Width = width; Height = height; CornerRadius = new CornerRadius(8); ClipToBounds = true;
-        Background = Brush.Parse("#E0E9DF");
+        Background = Ui.Selection;
         Avalonia.Automation.AutomationProperties.SetName(this, "Foto menu");
         Placeholder();
         AttachedToVisualTree += (_, _) => Load();

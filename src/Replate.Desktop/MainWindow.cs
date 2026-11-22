@@ -42,12 +42,12 @@ public sealed class MainWindow : Window
         this.startupError = startupError;
         Title = "Replate"; Width = 1360; Height = 940; MinWidth = 1040; MinHeight = 720;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
-        Background = Ui.CanvasFill;
+        Background = Ui.Canvas;
         FontFamily = new FontFamily("Helvetica Neue, Segoe UI, sans-serif");
         successBanner = new Border
         {
             Child = successText, IsVisible = false,
-            Background = Brush.Parse("#E0E9DF"), BorderBrush = Ui.Green,
+            Background = Ui.Selection, BorderBrush = Ui.Green,
             BorderThickness = new Thickness(4, 0, 0, 0), CornerRadius = new CornerRadius(6),
             Padding = new Thickness(16, 12), Margin = new Thickness(32, 16, 32, 0)
         };

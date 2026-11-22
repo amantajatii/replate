@@ -10,7 +10,7 @@ internal sealed class QuantityStepper : StackPanel
 {
     internal const double ButtonSize = 36;
     internal const double Gap = 12;
-    internal static readonly IBrush DisabledFill = Brush.Parse("#DDE3DA");
+    internal static readonly IBrush DisabledFill = Ui.DividerFill;
     private static readonly Geometry MinusIcon = Geometry.Parse("M5 11H19V13H5Z");
     private static readonly Geometry PlusIcon = Geometry.Parse("M11 5H13V11H19V13H13V19H11V13H5V11H11Z");
 

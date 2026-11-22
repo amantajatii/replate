@@ -29,7 +29,7 @@ internal static class OrderBadgeVerification
             var label = (TextBlock)badge.Child!;
             Ensure(badge.Status == status && label.Text == expected[status].Label, "Badge matches actual order status and requested label");
             Ensure(((ISolidColorBrush)badge.Background!).Color == Color.Parse(expected[status].Color) &&
-                ((ISolidColorBrush)label.Foreground!).Color == Color.Parse("#23382C"), "Badge color and dark text");
+                ((ISolidColorBrush)label.Foreground!).Color == Color.Parse("#202522"), "Badge color and dark text");
             Ensure(badge.CornerRadius == new CornerRadius(6) && badge.Padding == new Thickness(10, 5), "Consistent badge shape");
         }
         void CheckDetail(MainWindow window, Order order)

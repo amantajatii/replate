@@ -124,7 +124,7 @@ internal static class DashboardVerification
                     Ensure(card.Transitions!.OfType<BrushTransition>().Single().Duration == TimeSpan.FromMilliseconds(180) &&
                         scale.Transitions!.OfType<DoubleTransition>().All(t => t.Duration == TimeSpan.FromMilliseconds(180)), "Color and scale use 180ms transitions");
                     Hover(card, true); await Settle();
-                    Ensure(((ISolidColorBrush)card.Background!).Color == Color.Parse("#E0E9DF") &&
+                    Ensure(((ISolidColorBrush)card.Background!).Color == Color.Parse("#DDEDE5") &&
                         Math.Abs(scale.ScaleX - 1.02) < .0001 && Math.Abs(scale.ScaleY - 1.02) < .0001,
                         "Hover turns card green and scales both axes to 1.02");
                     Ensure(cards.Select(c => c.Bounds).SequenceEqual(bounds), "Hover never changes layout bounds or moves neighboring cards");

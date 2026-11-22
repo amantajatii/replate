@@ -25,13 +25,13 @@ public sealed class MarketplaceView : UserControl
     internal const string SectionTitle = "Jelajahi Menu";
     internal const double TitleSize = 32;
     internal static readonly string[] CollectionNames = [Cheapest, EndingSoon, MenuCategories.MainCourse, MenuCategories.Bakery, MenuCategories.Produce];
-    internal static readonly BoxShadows CardShadow = BoxShadows.Parse("0 8 24 0 #1F23382C");
-    internal static readonly BoxShadows PrimaryCardShadow = BoxShadows.Parse("0 6 18 0 #4D245B43");
-    internal static readonly BoxShadows PrimaryCardHoverShadow = BoxShadows.Parse("0 10 24 0 #59245B43");
+    internal static readonly BoxShadows CardShadow = Ui.CardShadow;
+    internal static readonly BoxShadows PrimaryCardShadow = Ui.PrimaryCardShadow;
+    internal static readonly BoxShadows PrimaryCardHoverShadow = Ui.PrimaryCardHoverShadow;
     internal const double HoverScale = 1.03;
     internal static readonly TimeSpan HoverDuration = TimeSpan.FromMilliseconds(120);
     internal const string CardFacePart = "PART_CardFace";
-    internal static readonly IBrush PressedFill = Brush.Parse("#DDE3DA");
+    internal static readonly IBrush PressedFill = Ui.DividerFill;
     private static readonly Dictionary<string, Geometry> CollectionIcons = new()
     {
         [Cheapest] = Geometry.Parse("M3.5 12.2V4.5A1 1 0 0 1 4.5 3.5H12.2L20.5 11.8A1.5 1.5 0 0 1 20.5 13.9L13.9 20.5A1.5 1.5 0 0 1 11.8 20.5Z M8 6.5A1.5 1.5 0 1 1 8 9.5A1.5 1.5 0 1 1 8 6.5Z"),

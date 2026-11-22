@@ -15,10 +15,10 @@ namespace Replate.Desktop;
 
 internal static class TopBarVerification
 {
-    private static readonly Color Primary = Color.Parse("#245B43");
-    private static readonly Color Ink = Color.Parse("#23382C");
-    private static readonly Color Muted = Color.Parse("#59675D");
-    private static readonly Color Selection = Color.Parse("#E0E9DF");
+    private static readonly Color Primary = Color.Parse("#1F6B4F");
+    private static readonly Color Ink = Color.Parse("#202522");
+    private static readonly Color Muted = Color.Parse("#69736D");
+    private static readonly Color Selection = Color.Parse("#DDEDE5");
 
     internal static async Task Run(MainWindow window)
     {
@@ -117,13 +117,13 @@ internal static class TopBarVerification
         Click(bar.ProfileButton); await Settle();
         Ensure(bar.ProfileMenu.IsOpen && bar.MenuCard.IsEffectivelyVisible, "Profile circle opens the menu");
         Ensure(bar.NameText.Text == session.CurrentUser!.Name && bar.EmailText.Text == session.CurrentUser.Email &&
-            ColorOf(bar.NameText.Foreground) == Color.Parse("#59675D") && ColorOf(bar.EmailText.Foreground) == Color.Parse("#59675D") &&
+            ColorOf(bar.NameText.Foreground) == Color.Parse("#69736D") && ColorOf(bar.EmailText.Foreground) == Color.Parse("#69736D") &&
             bar.NameText.FindAncestorOfType<Button>() is null && bar.EmailText.FindAncestorOfType<Button>() is null,
             "Menu shows muted, non-clickable name and email");
         Ensure(bar.MenuCard.GetVisualDescendants().OfType<Button>().Select(b => b.Content as string).SequenceEqual(["Pesanan saya", "Keluar"]),
             "Menu holds Pesanan saya and Keluar");
-        Ensure(bar.MenuCard.CornerRadius == new CornerRadius(16) && bar.MenuCard.BoxShadow.ToString() == BoxShadows.Parse("0 8 24 0 #1F23382C").ToString() &&
-            bar.MenuCard.BorderThickness == Ui.CardBorderThickness && ColorOf(bar.MenuCard.Background) == Colors.White, "Menu is a white card with the card shadow and the thin divider border");
+        Ensure(bar.MenuCard.CornerRadius == new CornerRadius(16) && bar.MenuCard.BoxShadow.ToString() == BoxShadows.Parse("0 8 24 0 #1F202522").ToString() &&
+            bar.MenuCard.BorderThickness == default && ColorOf(bar.MenuCard.Background) == Colors.White, "Menu is a white card with the card shadow and no border");
         Ensure(bar.OrdersItem.IsFocused && !FocusVisible(bar.OrdersItem) && ColorOf(bar.OrdersItem.Background) == Colors.Transparent,
             "Opening the menu with the mouse focuses Pesanan saya without a visible focus");
         foreach (var item in new[] { bar.OrdersItem, bar.SignOutItem })

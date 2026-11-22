@@ -14,7 +14,7 @@ namespace Replate.Desktop;
 internal abstract class ModalDialog : Grid
 {
     internal const double Inset = 32;
-    internal static readonly IBrush Scrim = Brush.Parse("#6623382C");
+    internal static readonly IBrush Scrim = Ui.Scrim;
     internal static readonly IBrush ErrorBrush = Brush.Parse("#9B3A25");
     private static readonly Geometry CloseIcon = Geometry.Parse("M6 6L18 18 M18 6L6 18");
 
@@ -52,7 +52,7 @@ internal abstract class ModalDialog : Grid
     {
         Card = new Border
         {
-            Width = width, Background = Brushes.White, CornerRadius = new CornerRadius(16), BoxShadow = MarketplaceView.CardShadow, BorderBrush = Ui.CardBorder, BorderThickness = Ui.CardBorderThickness,
+            Width = width, Background = Brushes.White, CornerRadius = new CornerRadius(16), BoxShadow = MarketplaceView.CardShadow,
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Child = content
         };
         AutomationProperties.SetName(Card, name);
