@@ -150,10 +150,11 @@ internal sealed class DatabaseService : IOrderStore
             connection.Open();
             using var command = new NpgsqlCommand("""
                 SELECT listing.id, listing.menu_id, COALESCE(menu.name, listing.menu_name),
-                       listing.description, listing.category, listing.normal_price,
-                       listing.weight_per_portion, listing.rescue_price, listing.quantity,
+                       COALESCE(menu.description, listing.description), COALESCE(menu.category, listing.category),
+                       COALESCE(menu.normal_price, listing.normal_price),
+                       COALESCE(menu.weight_per_portion, listing.weight_per_portion), listing.rescue_price, listing.quantity,
                        listing.pickup_start, listing.pickup_end, listing.closed,
-                       restaurant.id, restaurant.name, restaurant.address
+                       restaurant.id, restaurant.name, restaurant.address, COALESCE(menu.is_active, true)
                 FROM public.surplus_listings AS listing
                 LEFT JOIN public.menus AS menu ON menu.id = listing.menu_id
                 LEFT JOIN public.restaurants AS restaurant ON restaurant.id = menu.restaurant_id
@@ -166,6 +167,7 @@ internal sealed class DatabaseService : IOrderStore
                 var menu = new Menu { Id = reader.GetGuid(1) };
                 menu.UpdateMenu(reader.GetString(2), reader.GetString(3), reader.GetString(4),
                     reader.GetDecimal(5), reader.GetDecimal(6));
+                if (!reader.GetBoolean(15)) menu.Deactivate();
                 if (!reader.IsDBNull(12))
                 {
                     menu.RestaurantId = reader.GetGuid(12);
@@ -196,7 +198,7 @@ internal sealed class DatabaseService : IOrderStore
         }
     }
 
-    internal void SaveListing(Restaurant restaurant, SurplusListing listing, int? expectedQuantity)
+    internal void SaveListing(Restaurant restaurant, SurplusListing listing, int? expectedQuantity, bool preserveCatalog)
     {
         try
         {
@@ -209,23 +211,32 @@ internal sealed class DatabaseService : IOrderStore
                 VALUES (@id, @name, @address)
                 ON CONFLICT (id) DO UPDATE
                 SET name = EXCLUDED.name, address = EXCLUDED.address
+                WHERE NOT @preserve
                 """, connection, transaction);
             saveRestaurant.Parameters.AddWithValue("id", restaurant.Id);
             saveRestaurant.Parameters.AddWithValue("name", restaurant.Name);
             saveRestaurant.Parameters.AddWithValue("address", restaurant.Address);
+            saveRestaurant.Parameters.AddWithValue("preserve", preserveCatalog);
             saveRestaurant.ExecuteNonQuery();
 
             using var saveMenu = new NpgsqlCommand("""
-                INSERT INTO public.menus AS menu (id, restaurant_id, name)
-                VALUES (@id, @restaurant_id, @name)
-                ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name
-                WHERE menu.restaurant_id = EXCLUDED.restaurant_id
+                INSERT INTO public.menus AS menu (id, restaurant_id, name, description, category, normal_price, weight_per_portion)
+                VALUES (@id, @restaurant_id, @name, @description, @category, @normal_price, @weight)
+                ON CONFLICT (id) DO UPDATE SET name = CASE WHEN @preserve THEN menu.name ELSE EXCLUDED.name END
+                WHERE menu.restaurant_id = EXCLUDED.restaurant_id AND menu.deleted_at IS NULL
+                    AND (NOT @preserve OR (menu.is_active AND COALESCE(menu.normal_price, @normal_price) >= @rescue_price))
                 """, connection, transaction);
             saveMenu.Parameters.AddWithValue("id", listing.MenuId);
             saveMenu.Parameters.AddWithValue("restaurant_id", restaurant.Id);
             saveMenu.Parameters.AddWithValue("name", listing.Menu.Name);
+            saveMenu.Parameters.AddWithValue("description", listing.Menu.Description);
+            saveMenu.Parameters.AddWithValue("category", listing.Menu.Category);
+            saveMenu.Parameters.AddWithValue("normal_price", listing.Menu.NormalPrice);
+            saveMenu.Parameters.AddWithValue("weight", listing.Menu.WeightPerPortion);
+            saveMenu.Parameters.AddWithValue("rescue_price", listing.RescuePrice);
+            saveMenu.Parameters.AddWithValue("preserve", preserveCatalog);
             if (saveMenu.ExecuteNonQuery() != 1)
-                throw new InvalidOperationException("Menu sudah terdaftar untuk restoran lain di PostgreSQL.");
+                throw new InvalidOperationException("Menu sudah berubah atau tidak tersedia. Buka kembali daftar menu.");
 
             var sql = expectedQuantity.HasValue
                 ? """

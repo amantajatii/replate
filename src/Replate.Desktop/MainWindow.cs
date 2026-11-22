@@ -159,7 +159,13 @@ public sealed class MainWindow : Window
     }
     internal void ShowMenus()
     {
-        if (Allowed(true)) Render(true, new MenusView(this, Session), "Menu");
+        if (!Allowed(true)) return;
+        Render(true, new MenusView(this, Session), "Menu");
+        Run(Session.RefreshRestaurantMenus, () => Render(true, new MenusView(this, Session), "Menu"));
+    }
+    internal void ShowRestaurantProfile()
+    {
+        if (Allowed(true)) Render(true, new RestaurantProfileView(this, Session), "Dashboard");
     }
     internal void ShowMenuEditor(Menu? menu = null)
     {

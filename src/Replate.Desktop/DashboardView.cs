@@ -29,7 +29,8 @@ public sealed class DashboardView : UserControl
         var surplus = new SurplusDashboard();
         var finance = new FinancialDashboard();
         var recommendations = new ProductionRecommendationService();
-        var header = Ui.Heading("Dashboard restoran", $"{session.Restaurant.Name} · {firstDate:dd MMM}–{lastDate:dd MMM yyyy}", period);
+        var header = Ui.Heading("Dashboard restoran", $"{session.Restaurant.Name} · {firstDate:dd MMM}–{lastDate:dd MMM yyyy}",
+            Ui.Row(8, Ui.Button("Ubah profil", host.ShowRestaurantProfile), period));
 
         var summary = new Grid { ColumnSpacing = 16, RowSpacing = 16 };
         summary.Children.Add(MetricCard("Total Produksi", $"{surplus.CalculateTotalProduced(records).ToString("N0", Indonesian)} porsi", "Porsi pada periode terpilih"));
