@@ -23,12 +23,19 @@ if ($RootCertificate) {
 }
 
 $databasePassword = $null
+$authUrl = $env:REPLATE_SUPABASE_URL
+$authKey = $env:REPLATE_SUPABASE_PUBLISHABLE_KEY
 $envPath = Join-Path $PSScriptRoot '.env'
 if (Test-Path -LiteralPath $envPath -PathType Leaf) {
     foreach ($line in Get-Content -LiteralPath $envPath -Encoding UTF8) {
         if ($line -cmatch '^REPLATE_DB_PASSWORD=(.*)$') {
             $databasePassword = $Matches[1]
-            break
+        }
+        if ($line -cmatch '^REPLATE_SUPABASE_URL=(.*)$') {
+            $authUrl = $Matches[1]
+        }
+        if ($line -cmatch '^REPLATE_SUPABASE_PUBLISHABLE_KEY=(.*)$') {
+            $authKey = $Matches[1]
         }
     }
 }
@@ -46,10 +53,14 @@ if ([string]::IsNullOrWhiteSpace($databasePassword)) {
 $previousConnection = $env:REPLATE_DB_CONNECTION_STRING
 $previousPassword = $env:REPLATE_DB_PASSWORD
 $previousRootCertificate = $env:PGSSLROOTCERT
+$previousAuthUrl = $env:REPLATE_SUPABASE_URL
+$previousAuthKey = $env:REPLATE_SUPABASE_PUBLISHABLE_KEY
 
 try {
     $env:REPLATE_DB_CONNECTION_STRING = "Host=$DatabaseHost;Port=$DatabasePort;Database=postgres;Username=$DatabaseUser;SSL Mode=VerifyFull;Timeout=10"
     $env:REPLATE_DB_PASSWORD = $databasePassword
+    $env:REPLATE_SUPABASE_URL = $authUrl
+    $env:REPLATE_SUPABASE_PUBLISHABLE_KEY = $authKey
     if ($RootCertificate) {
         $env:PGSSLROOTCERT = $RootCertificate
     }
@@ -62,4 +73,6 @@ finally {
     $env:REPLATE_DB_CONNECTION_STRING = $previousConnection
     $env:REPLATE_DB_PASSWORD = $previousPassword
     $env:PGSSLROOTCERT = $previousRootCertificate
+    $env:REPLATE_SUPABASE_URL = $previousAuthUrl
+    $env:REPLATE_SUPABASE_PUBLISHABLE_KEY = $previousAuthKey
 }

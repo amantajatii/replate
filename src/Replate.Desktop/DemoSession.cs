@@ -108,6 +108,8 @@ public sealed class DemoSession
     public User Register(UserRole role, string name, string email, string password, RestaurantProfile? restaurant = null)
     {
         EnsureWritable();
+        if (UsesSharedStock && SupabaseAuth.IsConfigured)
+            throw new InvalidOperationException("Buat akun melalui administrator Supabase, lalu masuk di sini.");
         var errors = ValidateRegistration(role, name, email, password, restaurant);
         if (errors.Count > 0) throw new InvalidOperationException(errors.First().Value);
         User user = role == UserRole.RestaurantOwner
@@ -128,8 +130,10 @@ public sealed class DemoSession
 
     public User SignIn(string email, string password)
     {
-        var user = AccountService.Authenticate(Users, email, password)
-            ?? throw new InvalidOperationException(AccountService.SignInFailedMessage);
+        var user = UsesSharedStock && SupabaseAuth.IsConfigured
+            ? SignInWithSupabase(email, password)
+            : AccountService.Authenticate(Users, email, password)
+                ?? throw new InvalidOperationException(AccountService.SignInFailedMessage);
         if (user is RestaurantOwner owner)
         {
             Restaurant = owner.Restaurants.FirstOrDefault(Restaurants.Contains)
@@ -145,6 +149,35 @@ public sealed class DemoSession
         if (CurrentUser != user) CurrentUser?.Logout();
         CurrentUser = user; LastOrder = null;
         return user;
+    }
+
+    private User SignInWithSupabase(string email, string password)
+    {
+        var identity = SupabaseAuth.SignInAsync(email, password).GetAwaiter().GetResult();
+        var owned = new DatabaseService().LoadOwnedRestaurants(identity.Id);
+        if (owned.Count == 0)
+            return new Customer { Id = identity.Id, Name = identity.Email, Email = identity.Email };
+
+        var owner = new RestaurantOwner { Id = identity.Id, Name = identity.Email, Email = identity.Email };
+        foreach (var remote in owned)
+        {
+            var restaurant = FindRestaurant(remote.Id);
+            if (restaurant is null)
+            {
+                restaurant = remote;
+                Restaurants.Add(restaurant);
+            }
+
+            restaurant.Name = remote.Name;
+            restaurant.Address = remote.Address;
+            restaurant.Owner?.Restaurants.Remove(restaurant);
+            restaurant.Owner = owner;
+            restaurant.OwnerId = owner.Id;
+            owner.Restaurants.Add(restaurant);
+            ImportedRestaurantIds.Add(restaurant.Id);
+        }
+
+        return owner;
     }
 
     public void SignOut()
