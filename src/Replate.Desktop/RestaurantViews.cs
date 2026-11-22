@@ -1,8 +1,11 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
+using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Styling;
 using Avalonia.VisualTree;
 using Replate.Domain.Entities;
 using Replate.Domain.Enums;
@@ -44,25 +47,105 @@ public sealed class MenusView : UserControl
 
 internal sealed class RestaurantProfileView : UserControl
 {
+    internal const string Subtitle = "Atur informasi restoran yang tampil kepada pelanggan.";
+    internal const double FormWidth = 720;
+    internal const double DescriptionHeight = 88;
+    internal TextBox NameInput { get; }
+    internal TextBox AddressInput { get; }
+    internal TextBox PhoneInput { get; }
+    internal TextBox DescriptionInput { get; }
+    internal ProfileTimeField OpeningInput { get; }
+    internal ProfileTimeField ClosingInput { get; }
+    internal Button SaveButton { get; }
+    internal Button BackLink { get; }
+    internal Border FormCard { get; }
+    internal FieldGrid NameRow { get; }
+    internal FieldGrid TimeRow { get; }
+    internal StackPanel Actions { get; }
+    internal Dictionary<string, FieldFrame> Frames { get; } = new();
     internal RestaurantProfileView(MainWindow host, DemoSession session)
     {
         Background = Ui.WorkspaceFill;
         Styles.Add(Ui.FocusStyles());
+        CollectionView.AddTextLinkStyles(Styles);
         var restaurant = session.Restaurant;
-        var name = Ui.Input("Nama restoran"); name.Text = restaurant.Name;
-        var address = Ui.Input("Alamat"); address.Text = restaurant.Address;
-        var phone = Ui.Input("Telepon"); phone.Text = restaurant.Phone;
-        var description = Ui.Input("Deskripsi"); description.Text = restaurant.Description;
-        var opening = new TimeField("Jam buka") { Value = restaurant.OpeningTime };
-        var closing = new TimeField("Jam tutup") { Value = restaurant.ClosingTime };
-        var save = Ui.Button("Simpan profil", () => host.Run(() => session.SaveRestaurantProfile(
-            new RestaurantProfile(name.Text ?? "", address.Text ?? "", phone.Text ?? "",
-                opening.Value, closing.Value, description.Text ?? "")), host.ShowDashboard, "Profil restoran tersimpan."), true);
-        Content = Ui.Page(Ui.Heading("Profil restoran", ""),
-            Ui.Form(Ui.Stack(14, Ui.Field("Nama restoran", name), Ui.Field("Alamat", address),
-                Ui.Field("Telepon", phone), Ui.Field("Deskripsi", description),
-                Ui.Field("Jam buka", opening), Ui.Field("Jam tutup", closing),
-                Ui.Row(8, Ui.Button("Kembali", host.ShowDashboard), save)), 560));
+        TextBox Line(string placeholder, string? value)
+        {
+            var input = Ui.Input(placeholder, value ?? "");
+            input.TextWrapping = TextWrapping.NoWrap;
+            return input;
+        }
+        NameInput = Line("Masukkan nama restoran", restaurant.Name);
+        AddressInput = Line("Masukkan alamat restoran", restaurant.Address);
+        PhoneInput = Line("Masukkan nomor telepon", restaurant.Phone);
+        DescriptionInput = Ui.Input("Masukkan deskripsi restoran", restaurant.Description ?? "", true);
+        OpeningInput = new ProfileTimeField("Jam buka") { Value = restaurant.OpeningTime };
+        ClosingInput = new ProfileTimeField("Jam tutup") { Value = restaurant.ClosingTime };
+        Control Field(string key, string label, TextBox input)
+        {
+            var frame = Ui.TextField(input);
+            Frames[key] = frame;
+            AutomationProperties.SetName(input, label);
+            return Ui.Stack(Ui.FieldGap, Ui.Text(label, 14, bold: true), frame);
+        }
+        Control Time(string key, string label, ProfileTimeField input)
+        {
+            Frames[key + "Hour"] = input.HourFrame; Frames[key + "Minute"] = input.MinuteFrame;
+            return Ui.Stack(Ui.FieldGap, Ui.Text(label, 14, bold: true), input);
+        }
+        var description = Field("description", "Deskripsi", DescriptionInput);
+        var descriptionFrame = Frames["description"];
+        descriptionFrame.Face.Height = DescriptionHeight;
+        DescriptionInput.VerticalContentAlignment = VerticalAlignment.Top;
+        DescriptionInput.Padding = new Thickness(Ui.FieldInset, 12);
+        SaveButton = Ui.Button("Simpan profil", () => host.Run(() => session.SaveRestaurantProfile(
+            new RestaurantProfile(NameInput.Text ?? "", AddressInput.Text ?? "", PhoneInput.Text ?? "",
+                OpeningInput.Value, ClosingInput.Value, DescriptionInput.Text ?? "")), host.ShowDashboard, "Profil restoran tersimpan."), true);
+        BackLink = CollectionView.CreateTextLink("Kembali", host.ShowDashboard);
+        BackLink.VerticalAlignment = VerticalAlignment.Center;
+        NameRow = new FieldGrid(Field("name", "Nama restoran", NameInput), Field("phone", "Telepon", PhoneInput));
+        TimeRow = new FieldGrid(Time("opening", "Jam buka", OpeningInput), Time("closing", "Jam tutup", ClosingInput));
+        var fields = Ui.Stack(Ui.Spacing.Related, NameRow, Field("address", "Alamat", AddressInput), description, TimeRow);
+        Actions = Ui.Row(Ui.Spacing.Related, BackLink, SaveButton);
+        Actions.HorizontalAlignment = HorizontalAlignment.Right;
+        FormCard = Ui.FormCard(Ui.Stack(Ui.Spacing.Section, fields, Actions));
+        Content = Ui.Page(Ui.Heading("Profil restoran", Subtitle), Ui.Form(FormCard, FormWidth));
+    }
+}
+
+// Profile time field
+internal sealed class ProfileTimeField : StackPanel
+{
+    internal const double PartWidth = 104;
+    internal ComboBox Hour { get; }
+    internal ComboBox Minute { get; }
+    internal FieldFrame HourFrame { get; }
+    internal FieldFrame MinuteFrame { get; }
+    internal TextBlock Separator { get; }
+    internal ProfileTimeField(string label)
+    {
+        Orientation = Orientation.Horizontal; Spacing = Ui.FieldGap; HorizontalAlignment = HorizontalAlignment.Left;
+        Hour = Part(24, $"{label}, jam");
+        Minute = Part(60, $"{label}, menit");
+        HourFrame = Ui.SelectField(Hour); MinuteFrame = Ui.SelectField(Minute);
+        HourFrame.Width = MinuteFrame.Width = PartWidth;
+        Separator = Ui.Text(":", 15, bold: true);
+        Children.Add(HourFrame); Children.Add(Separator); Children.Add(MinuteFrame);
+        Hour.SelectionChanged += (_, _) =>
+        {
+            if (Hour.SelectedIndex >= 0 && Minute.SelectedIndex < 0) Minute.SelectedIndex = 0;
+        };
+    }
+    internal TimeOnly? Value
+    {
+        get => Hour.SelectedIndex >= 0 && Minute.SelectedIndex >= 0 ? new TimeOnly(Hour.SelectedIndex, Minute.SelectedIndex) : null;
+        set { Hour.SelectedIndex = value?.Hour ?? -1; Minute.SelectedIndex = value?.Minute ?? -1; }
+    }
+    private static ComboBox Part(int count, string name)
+    {
+        var box = new ComboBox { ItemsSource = Enumerable.Range(0, count).Select(i => i.ToString("00")).ToList(), PlaceholderText = "--" };
+        AutomationProperties.SetName(box, name);
+        return box;
     }
 }
 
@@ -103,7 +186,18 @@ internal sealed class RestaurantListCard : Border
         button.Foreground = foreground ?? Ui.Ink;
         button.BorderBrush = Ui.CardBorder;
         button.BorderThickness = Ui.CardBorderThickness;
+        button.Classes.AddRange([Ui.CardActionClass, Ui.CompactClass,
+            foreground == Ui.Danger ? Ui.CardActionDangerClass : background == Ui.Selection ? Ui.CardActionTonalClass : Ui.CardActionNeutralClass]);
         AutomationProperties.SetName(button, $"{label} {item}");
+        return button;
+    }
+
+    internal static Button PrimaryAction(string label, string item, Action action)
+    {
+        var button = Action(label, item, action, Ui.Green, Ui.OnPrimary);
+        button.BorderBrush = Brushes.Transparent;
+        button.Classes.Remove(Ui.CardActionNeutralClass);
+        button.Classes.Add(Ui.PrimaryClass);
         return button;
     }
 }
@@ -145,11 +239,26 @@ internal static class MenuDeletionDialog
 
 public sealed class MenuEditorView : UserControl
 {
+    internal const double DescriptionHeight = 112;
+    internal const double PhotoColumnWidth = 284;
+    internal const double PhotoButtonHeight = 44;
+    internal const double PhotoNoteSize = 13;
+    internal const string PhotoNoteText = "Opsional. JPG, JPEG, atau PNG, maksimal 5 MB.";
     internal TextBox NameInput { get; }
     internal TextBox DescriptionInput { get; }
+    internal ComboBox CategoryInput { get; }
     internal NumericUpDown PriceInput { get; }
     internal NumericUpDown WeightInput { get; }
+    internal NumberStepper PriceStepper { get; }
+    internal NumberStepper WeightStepper { get; }
     internal Button SaveButton { get; }
+    internal Button CancelLink { get; }
+    internal Border DetailsCard { get; }
+    internal Border PhotoCard { get; }
+    internal Grid NumberRow { get; }
+    internal StackPanel Actions { get; }
+    internal TextBlock PhotoNote { get; }
+    internal Dictionary<string, FieldFrame> Frames { get; } = new();
     internal Dictionary<string, TextBlock> FieldErrors { get; } = new();
     private readonly DemoSession photoSession;
     private readonly Menu? originalMenu;
@@ -166,6 +275,16 @@ public sealed class MenuEditorView : UserControl
     internal MenuEditorView(MainWindow host, DemoSession session, Menu? menu)
     {
         Background = Ui.WorkspaceFill;
+        Styles.Add(Ui.FocusStyles());
+        CollectionView.AddTextLinkStyles(Styles);
+        Styles.Add(new Style(x => x.OfType<Button>().Class(Ui.CardActionClass).Class(":disabled").Template().OfType<ContentPresenter>().Name("PART_ContentPresenter"))
+        {
+            Setters =
+            {
+                new Setter(ContentPresenter.ForegroundProperty, new Avalonia.Data.TemplateBinding(TemplatedControl.ForegroundProperty)),
+                new Setter(ContentPresenter.BorderBrushProperty, new Avalonia.Data.TemplateBinding(TemplatedControl.BorderBrushProperty))
+            }
+        });
         photoSession = session; originalMenu = menu;
         PhotoError.IsVisible = false;
         PickPhotoButton = Ui.Button("Pilih foto", async () =>
@@ -190,40 +309,52 @@ public sealed class MenuEditorView : UserControl
             finally { SaveButton!.IsEnabled = true; }
         });
         RemovePhotoButton = Ui.Button("Hapus foto", RemovePhoto);
+        PhotoAction(PickPhotoButton, Ui.Selection, Ui.Green, Brushes.Transparent, Ui.CardActionTonalClass);
+        PhotoAction(RemovePhotoButton, Ui.Surface, Ui.Ink, Ui.CardBorder, Ui.CardActionNeutralClass);
+        RemovePhotoButton.PropertyChanged += (_, e) => { if (e.Property == IsEnabledProperty) SyncRemovePhoto(); };
         UpdatePhotoPreview();
-        var photoControls = Ui.Stack(12,
-            Ui.SupportingText("Opsional. JPG, JPEG, atau PNG, maksimal 5 MB."),
-            Ui.Row(8, PickPhotoButton, RemovePhotoButton), PhotoError);
+        SyncRemovePhoto();
+        PhotoNote = Ui.Text(PhotoNoteText, PhotoNoteSize, Ui.Muted);
+        var photoControls = Ui.Stack(Ui.Spacing.Related, PhotoNote, Ui.Row(Ui.FieldGap, PickPhotoButton, RemovePhotoButton), PhotoError);
         var photoField = new Grid
         {
-            RowDefinitions = RowDefinitions.Parse("Auto,*,Auto"), RowSpacing = 12,
+            RowDefinitions = RowDefinitions.Parse("Auto,*,Auto"), RowSpacing = Ui.Spacing.Related,
             Children = { Ui.Text("Foto menu", 18, bold: true), photoHost, photoControls }
         };
         Grid.SetRow(photoHost, 1);
         Grid.SetRow(photoControls, 2);
         NameInput = Ui.Input("Masukkan nama menu", menu?.Name ?? "");
+        NameInput.TextWrapping = TextWrapping.NoWrap;
         DescriptionInput = Ui.Input("Masukkan deskripsi menu", menu?.Description ?? "", true);
-        var category = new ComboBox { ItemsSource = MenuCategories.Names, SelectedItem = menu?.Category ?? "Makanan utama", MinHeight = 42 };
+        CategoryInput = new ComboBox { ItemsSource = MenuCategories.Names, SelectedItem = menu?.Category ?? "Makanan utama" };
+        var category = CategoryInput;
         PriceInput = Ui.Number("Masukkan harga", menu?.NormalPrice ?? 20000, 10000000, 1000);
         WeightInput = Ui.Number("Masukkan berat per porsi", menu?.WeightPerPortion ?? .3m, 100, .05m);
+        PriceStepper = new NumberStepper(PriceInput, "Harga normal (Rp)");
+        WeightStepper = new NumberStepper(WeightInput, "Berat per porsi (kg)");
+        Frames["name"] = Ui.TextField(NameInput); Frames["category"] = Ui.SelectField(category);
+        Frames["price"] = PriceStepper.Frame; Frames["weight"] = WeightStepper.Frame;
+        Frames["description"] = Ui.TextField(DescriptionInput);
+        Frames["description"].Face.Height = DescriptionHeight;
+        DescriptionInput.VerticalContentAlignment = VerticalAlignment.Top;
+        DescriptionInput.Padding = new Thickness(Ui.FieldInset, 12);
         var inputs = new Dictionary<string, Control>
         {
             ["name"] = NameInput, ["category"] = category, ["price"] = PriceInput,
             ["weight"] = WeightInput, ["description"] = DescriptionInput
         };
-        var outlines = new Dictionary<string, Border>();
-        var red = Ui.Danger;
+        var shells = new Dictionary<string, Control>
+        {
+            ["name"] = Frames["name"], ["category"] = Frames["category"], ["price"] = PriceStepper,
+            ["weight"] = WeightStepper, ["description"] = Frames["description"]
+        };
         var attempted = false;
         Control Field(string key, string label)
         {
-            inputs[key].HorizontalAlignment = inputs[key] is DatePicker or TimePicker ? HorizontalAlignment.Left : HorizontalAlignment.Stretch;
             var error = Ui.FieldError(); error.IsVisible = false;
             FieldErrors[key] = error;
-            var outline = new Border { Child = inputs[key], CornerRadius = new CornerRadius(6),
-                BorderThickness = new Thickness(1), BorderBrush = Avalonia.Media.Brushes.Transparent };
-            outlines[key] = outline;
             Avalonia.Automation.AutomationProperties.SetName(inputs[key], label);
-            return Ui.Stack(8, Ui.Text(label, 14, bold: true), outline, error);
+            return Ui.Stack(Ui.FieldGap, Ui.Text(label, 14, bold: true), shells[key], error);
         }
         decimal? ReadNumber(NumericUpDown input) => decimal.TryParse(input.Text, input.ParsingNumberStyle,
             input.NumberFormat, out var value) ? value : null;
@@ -248,7 +379,7 @@ public sealed class MenuEditorView : UserControl
             var invalid = errors.TryGetValue(key, out var message);
             FieldErrors[key].Text = message ?? "";
             FieldErrors[key].IsVisible = invalid;
-            outlines[key].BorderBrush = invalid ? red : Avalonia.Media.Brushes.Transparent;
+            Frames[key].Invalid = invalid;
             Avalonia.Automation.AutomationProperties.SetHelpText(inputs[key], message ?? "");
         }
         SaveButton = Ui.Button("Simpan menu", () =>
@@ -271,24 +402,23 @@ public sealed class MenuEditorView : UserControl
                 category.SelectedItem?.ToString() ?? "Makanan utama", ReadNumber(PriceInput)!.Value, ReadNumber(WeightInput)!.Value, photoChange),
                 host.ShowMenus, "Menu berhasil disimpan.");
         }, true);
-        Border Panel(Control content) => new()
-        {
-            Child = content, Background = Brushes.White, CornerRadius = new CornerRadius(16), Padding = new Thickness(20),
-            BorderBrush = Ui.CardBorder, BorderThickness = Ui.CardBorderThickness
-        };
-        var numbers = Ui.Columns("*,*", Field("price", "Harga normal (Rp)"), Field("weight", "Berat per porsi (kg)"));
-        numbers.ColumnSpacing = Ui.Spacing.Related;
-        var details = Ui.Stack(Ui.Spacing.Related, Field("name", "Nama menu"), Field("category", "Kategori"), numbers,
+        NumberRow = Ui.Columns("*,*", Field("price", "Harga normal (Rp)"), Field("weight", "Berat per porsi (kg)"));
+        NumberRow.ColumnSpacing = Ui.Spacing.Related;
+        var details = Ui.Stack(Ui.Spacing.Related, Field("name", "Nama menu"), Field("category", "Kategori"), NumberRow,
             Field("description", "Deskripsi"));
-        var actions = Ui.Row(12, Ui.Button("Batal", host.ShowMenus), SaveButton);
-        actions.HorizontalAlignment = HorizontalAlignment.Right;
+        CancelLink = CollectionView.CreateTextLink("Batal", host.ShowMenus);
+        CancelLink.VerticalAlignment = VerticalAlignment.Center;
+        Actions = Ui.Row(Ui.Spacing.Related, CancelLink, SaveButton);
+        Actions.HorizontalAlignment = HorizontalAlignment.Right;
+        DetailsCard = Ui.FormCard(details);
+        PhotoCard = Ui.FormCard(photoField);
         var side = new Grid
         {
-            RowDefinitions = RowDefinitions.Parse("*,Auto"), RowSpacing = 12,
-            Children = { Panel(photoField), actions }
+            RowDefinitions = RowDefinitions.Parse("*,Auto"), RowSpacing = Ui.Spacing.Related,
+            Children = { PhotoCard, Actions }
         };
-        Grid.SetRow(actions, 1);
-        var form = Ui.Columns("*,284", Panel(details), side);
+        Grid.SetRow(Actions, 1);
+        var form = Ui.Columns($"*,{PhotoColumnWidth}", DetailsCard, side);
         form.ColumnSpacing = Ui.Spacing.Related;
         foreach (var pair in inputs)
             pair.Value.PropertyChanged += (_, e) =>
@@ -328,7 +458,23 @@ public sealed class MenuEditorView : UserControl
         var path = photoChange is null ? photoSession.PhotoPath(originalMenu?.ImageUrl) : null;
         RemovePhotoButton.IsEnabled = path is not null || photoChange?.Data is not null;
         photoHost.Content = new MenuPhotoView(path, 242, 156, photoChange?.Data)
-        { Height = double.NaN, MinHeight = 156, MaxHeight = 260 };
+        { Width = double.NaN, Height = double.NaN, MinHeight = 156, MaxHeight = 260 };
+    }
+    private static void PhotoAction(Button button, IBrush background, IBrush foreground, IBrush border, string role)
+    {
+        button.Height = PhotoButtonHeight;
+        button.Padding = new Thickness(Ui.FieldInset, 0);
+        button.VerticalContentAlignment = VerticalAlignment.Center;
+        button.Background = background; button.Foreground = foreground;
+        button.BorderBrush = border; button.BorderThickness = Ui.CardBorderThickness;
+        button.Classes.AddRange([Ui.CardActionClass, Ui.CompactClass, role]);
+    }
+    private void SyncRemovePhoto()
+    {
+        var enabled = RemovePhotoButton.IsEnabled;
+        RemovePhotoButton.Background = enabled ? Ui.Surface : Ui.Sidebar;
+        RemovePhotoButton.Foreground = enabled ? Ui.Ink : Ui.MutedFaint;
+        RemovePhotoButton.BorderBrush = enabled ? Ui.CardBorder : Ui.Sidebar;
     }
 }
 public sealed class ListingsView : UserControl
@@ -352,6 +498,18 @@ public sealed class ListingsView : UserControl
                 buttons.Children.Add(RestaurantListCard.Action("Ubah", name, () => host.ShowListingEditor(listing), Ui.Selection, Ui.Green));
                 buttons.Children.Add(RestaurantListCard.Action("Tutup", name, () => host.Run(() => session.CancelListing(listing), host.ShowListings)));
             }
+            else if (listing.Status == ListingStatus.Cancelled)
+            {
+                if (DemoSession.ReopenBlocker(listing, now) is { } blocker)
+                {
+                    var note = Ui.Text(blocker, 12, Ui.Muted);
+                    note.MaxWidth = 150;
+                    buttons.Children.Add(note);
+                }
+                else
+                    buttons.Children.Add(RestaurantListCard.PrimaryAction("Buka kembali", name,
+                        () => host.Run(() => session.ReopenListing(listing), host.ShowListings)));
+            }
             var start = listing.PickupStart.ToLocalTime();
             var end = listing.PickupEnd.ToLocalTime();
             var endTime = start.Date == end.Date ? $"{end:HH:mm}" : $"{end:dd MMM, HH:mm}";
@@ -370,36 +528,79 @@ public sealed class ListingsView : UserControl
 
 public sealed class ListingEditorView : UserControl
 {
+    internal const double FormWidth = 720;
+    internal const double NoteSize = 13;
+    internal const string NoteText = "Stok tidak boleh melebihi surplus dalam catatan produksi. Jadwal pesanan aktif tidak dapat diubah.";
+    internal ComboBox MenuInput { get; private set; } = null!;
+    internal NumericUpDown PriceInput { get; private set; } = null!;
+    internal NumericUpDown StockInput { get; private set; } = null!;
+    internal NumberStepper PriceStepper { get; private set; } = null!;
+    internal NumberStepper StockStepper { get; private set; } = null!;
+    internal DateField DateInput { get; private set; } = null!;
+    internal ProfileTimeField StartInput { get; private set; } = null!;
+    internal ProfileTimeField EndInput { get; private set; } = null!;
+    internal Button SaveButton { get; private set; } = null!;
+    internal Button CancelLink { get; private set; } = null!;
+    internal Border FormCard { get; private set; } = null!;
+    internal FieldGrid NumberRow { get; private set; } = null!;
+    internal FieldGrid TimeRow { get; private set; } = null!;
+    internal TextBlock Note { get; private set; } = null!;
+    internal StackPanel Actions { get; private set; } = null!;
+    internal Dictionary<string, FieldFrame> Frames { get; } = new();
     internal ListingEditorView(MainWindow host, DemoSession session, SurplusListing? listing)
     {
+        Background = Ui.WorkspaceFill;
+        Styles.Add(Ui.FocusStyles());
+        CollectionView.AddTextLinkStyles(Styles);
         var menus = session.Restaurant.Menus.Where(m => m.IsActive || m == listing?.Menu).ToList();
         if (menus.Count == 0)
         {
             Content = Ui.Page(Ui.Heading("Buat penawaran", "Tambahkan menu aktif terlebih dahulu."), Ui.Button("Tambah menu", () => host.ShowMenuEditor(), true)); return;
         }
-        var menu = new ComboBox { ItemsSource = menus, SelectedItem = listing?.Menu ?? menus[0], MinHeight = 42,
-            ItemTemplate = new Avalonia.Controls.Templates.FuncDataTemplate<Menu>((m, _) => Ui.Text(m?.Name ?? "")) };
-        menu.IsEnabled = listing is null;
-        var price = Ui.Number("Masukkan harga penawaran", listing?.RescuePrice ?? menus[0].NormalPrice / 2, 10000000, 1000);
-        var stock = Ui.Number("Masukkan stok", listing?.Quantity ?? 1, 100000); stock.Minimum = 1;
+        MenuInput = new ComboBox { ItemsSource = menus, SelectedItem = listing?.Menu ?? menus[0],
+            ItemTemplate = new Avalonia.Controls.Templates.FuncDataTemplate<Menu>((m, _) => new TextBlock
+            { Text = m?.Name ?? "", VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis }) };
+        MenuInput.IsEnabled = listing is null;
+        var menu = MenuInput;
+        PriceInput = Ui.Number("Masukkan harga penawaran", listing?.RescuePrice ?? menus[0].NormalPrice / 2, 10000000, 1000);
+        StockInput = Ui.Number("Masukkan stok", listing?.Quantity ?? 1, 100000); StockInput.Minimum = 1;
+        var (price, stock) = (PriceInput, StockInput);
+        PriceStepper = new NumberStepper(price, "Harga penawaran (Rp)");
+        StockStepper = new NumberStepper(stock, "Stok tersedia (porsi)");
         var start = listing?.PickupStart.ToLocalTime() ?? DateTime.Now.AddMinutes(-5);
         var end = listing?.PickupEnd.ToLocalTime() ?? DateTime.Now.AddHours(2);
         if (end.Date != start.Date) end = start.Date.AddDays(1).AddSeconds(-1);
-        var date = new DatePicker { SelectedDate = new DateTimeOffset(start.Date) };
-        var from = new TimePicker { SelectedTime = new TimeSpan(start.Hour, start.Minute, 0), ClockIdentifier = "24HourClock" };
-        var until = new TimePicker { SelectedTime = new TimeSpan(end.Hour, end.Minute, 0), ClockIdentifier = "24HourClock" };
-        var save = Ui.Button("Simpan penawaran", () => host.Run(() =>
+        DateInput = new DateField(DateTime.MaxValue.Date) { SelectedDate = new DateTimeOffset(start.Date) };
+        StartInput = new ProfileTimeField("Mulai") { Value = new TimeOnly(start.Hour, start.Minute) };
+        EndInput = new ProfileTimeField("Selesai") { Value = new TimeOnly(end.Hour, end.Minute) };
+        var (date, from, until) = (DateInput, StartInput, EndInput);
+        Frames["menu"] = Ui.SelectField(menu); Frames["price"] = PriceStepper.Frame; Frames["stock"] = StockStepper.Frame; Frames["date"] = DateInput.Frame;
+        Frames["startHour"] = from.HourFrame; Frames["startMinute"] = from.MinuteFrame;
+        Frames["endHour"] = until.HourFrame; Frames["endMinute"] = until.MinuteFrame;
+        SaveButton = Ui.Button("Simpan penawaran", () => host.Run(() =>
         {
-            if (date.SelectedDate is null || from.SelectedTime is null || until.SelectedTime is null)
+            if (date.SelectedDate is null || from.Value is null || until.Value is null)
                 throw new InvalidOperationException("Lengkapi tanggal dan waktu pengambilan.");
             session.SaveListing(listing, (Menu)menu.SelectedItem!, price.Value ?? 0, (int)(stock.Value ?? 0),
-                date.SelectedDate.Value.Date + from.SelectedTime.Value, date.SelectedDate.Value.Date + until.SelectedTime.Value);
+                date.SelectedDate.Value.Date + from.Value.Value.ToTimeSpan(), date.SelectedDate.Value.Date + until.Value.Value.ToTimeSpan());
         }, host.ShowListings), true);
-        var form = Ui.Stack(20, Ui.Field("Menu", menu), Ui.Field("Harga penawaran (Rp)", price), Ui.Field("Stok tersedia (porsi)", stock),
-            Ui.Field("Tanggal pengambilan", date), Ui.FormPair(Ui.Field("Mulai", from), Ui.Field("Selesai", until)),
-            Ui.SupportingText("Stok tidak boleh melebihi surplus dalam catatan produksi. Jadwal pesanan aktif tidak dapat diubah."),
-            Ui.Row(12, save, Ui.Button("Batal", host.ShowListings)));
-        Content = Ui.Page(Ui.Heading(listing is null ? "Buat penawaran" : "Ubah penawaran", "Harga khusus dan jadwal pengambilan makanan surplus."), Ui.Form(form));
+        CancelLink = CollectionView.CreateTextLink("Batal", host.ShowListings);
+        CancelLink.VerticalAlignment = VerticalAlignment.Center;
+        Control Field(string label, Control shell, Control named)
+        {
+            AutomationProperties.SetName(named, label);
+            return Ui.Stack(Ui.FieldGap, Ui.Text(label, 14, bold: true), shell);
+        }
+        NumberRow = new FieldGrid(Field("Harga penawaran (Rp)", PriceStepper, price), Field("Stok tersedia (porsi)", StockStepper, stock));
+        TimeRow = new FieldGrid(Ui.Stack(Ui.FieldGap, Ui.Text("Mulai", 14, bold: true), from), Ui.Stack(Ui.FieldGap, Ui.Text("Selesai", 14, bold: true), until));
+        Note = Ui.Text(NoteText, NoteSize, Ui.Muted);
+        var fields = Ui.Stack(Ui.Spacing.Related, Field("Menu", Frames["menu"], menu), NumberRow,
+            Field("Tanggal pengambilan", DateInput, DateInput.Face), TimeRow, Note);
+        Actions = Ui.Row(Ui.Spacing.Related, CancelLink, SaveButton);
+        Actions.HorizontalAlignment = HorizontalAlignment.Right;
+        FormCard = Ui.FormCard(Ui.Stack(Ui.Spacing.Section, fields, Actions));
+        Content = Ui.Page(Ui.Heading(listing is null ? "Buat penawaran" : "Ubah penawaran", "Harga khusus dan jadwal pengambilan makanan surplus."),
+            Ui.Form(FormCard, FormWidth));
     }
 }
 

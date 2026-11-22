@@ -35,6 +35,8 @@ public sealed class SurplusListing
 
     public void Cancel() => Status = ListingStatus.Cancelled;
 
+    public void Reopen() => Status = Quantity > 0 ? ListingStatus.Active : ListingStatus.SoldOut;
+
     public decimal CalculateDiscount()
     {
         if (Menu.NormalPrice <= 0)
