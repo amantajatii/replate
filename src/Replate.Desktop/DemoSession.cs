@@ -17,6 +17,9 @@ public sealed class DemoSession
     public Order? LastOrder { get; private set; }
     internal IOrderStore? OrderStore { get; set; }
     public User? CurrentUser { get; private set; }
+    private SupabaseAuth.Session? supabaseSession;
+    private readonly HashSet<Guid> customerApiOrderIds = [];
+    private readonly HashSet<Guid> restaurantApiOrderIds = [];
     public bool IsSignedIn => CurrentUser is not null;
     public static string Rupiah(decimal value) => "Rp" + value.ToString("N0", CultureInfo.GetCultureInfo("id-ID"));
 
@@ -25,8 +28,12 @@ public sealed class DemoSession
     public static string DefaultStorePath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Replate", "state.json");
     public IEnumerable<Order> AllOrders => Restaurants.SelectMany(r => r.Orders);
     public IEnumerable<Order> CustomerOrders => CurrentUser is Customer customer
-        ? AllOrders.Where(o => o.CustomerId == customer.Id).OrderByDescending(o => o.OrderedAt) : [];
+        ? AllOrders.Where(o => o.CustomerId == customer.Id &&
+            (supabaseSession is null || customerApiOrderIds.Contains(o.Id))).OrderByDescending(o => o.OrderedAt) : [];
     public IEnumerable<SurplusListing> RestaurantListings => Listings.Where(l => l.Menu.RestaurantId == Restaurant.Id);
+    internal IEnumerable<Order> RestaurantOrders => Restaurant.Orders.Where(CanViewRestaurantOrder);
+    internal bool CanViewRestaurantOrder(Order order) =>
+        supabaseSession is null || restaurantApiOrderIds.Contains(order.Id);
     public Restaurant? FindRestaurant(Guid id) => Restaurants.FirstOrDefault(r => r.Id == id);
     public string RestaurantLine(Guid restaurantId) =>
         FindRestaurant(restaurantId) is { } restaurant ? $"{restaurant.Name} · {restaurant.Address}" : "Restoran tidak ditemukan";
@@ -108,6 +115,8 @@ public sealed class DemoSession
     public User Register(UserRole role, string name, string email, string password, RestaurantProfile? restaurant = null)
     {
         EnsureWritable();
+        if (UsesSharedStock && SupabaseAuth.IsConfigured)
+            throw new InvalidOperationException("Buat akun melalui administrator Supabase, lalu masuk di sini.");
         var errors = ValidateRegistration(role, name, email, password, restaurant);
         if (errors.Count > 0) throw new InvalidOperationException(errors.First().Value);
         User user = role == UserRole.RestaurantOwner
@@ -128,8 +137,13 @@ public sealed class DemoSession
 
     public User SignIn(string email, string password)
     {
-        var user = AccountService.Authenticate(Users, email, password)
-            ?? throw new InvalidOperationException(AccountService.SignInFailedMessage);
+        var session = UsesSharedStock && SupabaseAuth.IsConfigured
+            ? SupabaseAuth.SignInAsync(email, password).GetAwaiter().GetResult()
+            : null;
+        var user = session is not null
+            ? SignInWithSupabase(session.User)
+            : AccountService.Authenticate(Users, email, password)
+                ?? throw new InvalidOperationException(AccountService.SignInFailedMessage);
         if (user is RestaurantOwner owner)
         {
             Restaurant = owner.Restaurants.FirstOrDefault(Restaurants.Contains)
@@ -143,13 +157,47 @@ public sealed class DemoSession
             Cart = customer.Cart = cart;
         }
         if (CurrentUser != user) CurrentUser?.Logout();
+        supabaseSession = session;
+        customerApiOrderIds.Clear();
+        restaurantApiOrderIds.Clear();
         CurrentUser = user; LastOrder = null;
         return user;
+    }
+
+    private User SignInWithSupabase(SupabaseAuth.Identity identity)
+    {
+        var owned = new DatabaseService().LoadOwnedRestaurants(identity.Id);
+        if (owned.Count == 0)
+            return new Customer { Id = identity.Id, Name = identity.Email, Email = identity.Email };
+
+        var owner = new RestaurantOwner { Id = identity.Id, Name = identity.Email, Email = identity.Email };
+        foreach (var remote in owned)
+        {
+            var restaurant = FindRestaurant(remote.Id);
+            if (restaurant is null)
+            {
+                restaurant = remote;
+                Restaurants.Add(restaurant);
+            }
+
+            restaurant.Name = remote.Name;
+            restaurant.Address = remote.Address;
+            restaurant.Owner?.Restaurants.Remove(restaurant);
+            restaurant.Owner = owner;
+            restaurant.OwnerId = owner.Id;
+            owner.Restaurants.Add(restaurant);
+            ImportedRestaurantIds.Add(restaurant.Id);
+        }
+
+        return owner;
     }
 
     public void SignOut()
     {
         CurrentUser?.Logout();
+        supabaseSession = null;
+        customerApiOrderIds.Clear();
+        restaurantApiOrderIds.Clear();
         CurrentUser = null; Cart = new Cart(); LastOrder = null;
     }
 
@@ -186,11 +234,20 @@ public sealed class DemoSession
 
     internal void RefreshRestaurantOrders()
     {
+        restaurantApiOrderIds.Clear();
         if (!UsesSharedStock || checkingOut) return;
 
         var restaurant = RequireOwnedRestaurant(Restaurant.Id);
         RefreshSharedListings();
         var listings = RestaurantListings.ToDictionary(listing => listing.Id);
+        if (supabaseSession is { } session)
+        {
+            var orders = SupabaseOrderReader.LoadRestaurantOrdersAsync(session, restaurant.Id, listings).GetAwaiter().GetResult();
+            MergeSharedOrders(orders, preferRemote: true);
+            restaurantApiOrderIds.UnionWith(orders.Select(order => order.Id));
+            return;
+        }
+
         MergeSharedOrders(new DatabaseService().LoadOrders(restaurant.Id, listings));
     }
 
@@ -199,12 +256,21 @@ public sealed class DemoSession
         if (!UsesSharedStock || checkingOut) return;
 
         var customer = RequireCustomer();
+        customerApiOrderIds.Clear();
         RefreshSharedListings();
         var listings = Listings.ToDictionary(listing => listing.Id);
+        if (supabaseSession is { } session)
+        {
+            var orders = SupabaseOrderReader.LoadCustomerOrdersAsync(session, listings).GetAwaiter().GetResult();
+            MergeSharedOrders(orders, preferRemote: true);
+            customerApiOrderIds.UnionWith(orders.Select(order => order.Id));
+            return;
+        }
+
         MergeSharedOrders(new DatabaseService().LoadOrders(null, listings, customer.Id));
     }
 
-    private void MergeSharedOrders(IEnumerable<Order> orders)
+    private void MergeSharedOrders(IEnumerable<Order> orders, bool preferRemote = false)
     {
         foreach (var order in orders)
         {
@@ -217,7 +283,7 @@ public sealed class DemoSession
             }
 
             var local = restaurant.Orders[index];
-            if (local.Status is OrderStatus.Completed or OrderStatus.Cancelled || order.Status <= local.Status)
+            if (!preferRemote && (local.Status is OrderStatus.Completed or OrderStatus.Cancelled || order.Status <= local.Status))
                 continue;
 
             restaurant.Orders[index] = order;
@@ -552,12 +618,14 @@ public sealed class DemoSession
     {
         EnsureWritable();
         RequireOwnedRestaurant(order.RestaurantId);
-        EnsurePickupWindowOpen(order);
+        if (supabaseSession is null) EnsurePickupWindowOpen(order);
         if (preparationMinutes is < 1 or > 240) throw new InvalidOperationException("Waktu persiapan harus antara 1 dan 240 menit.");
         if (order.Status != OrderStatus.Reserved)
             throw new InvalidOperationException("Hanya pesanan yang menunggu konfirmasi yang dapat dikonfirmasi.");
         EnsureNotCheckingOut();
-        if (UsesSharedStock && order.Items.Any(item => sharedListingIds.Contains(item.ListingId)))
+        if (supabaseSession is { } session)
+            SupabaseOrderWriter.UpdateStatusAsync(session, order.Id, OrderStatus.Confirmed, preparationMinutes).GetAwaiter().GetResult();
+        else if (UsesSharedStock && order.Items.Any(item => sharedListingIds.Contains(item.ListingId)))
             new DatabaseService().ConfirmOrder(order.Id, order.RestaurantId, preparationMinutes);
         order.Confirm(); order.SetPreparationTime(TimeSpan.FromMinutes(preparationMinutes)); Persist();
     }
@@ -567,10 +635,12 @@ public sealed class DemoSession
         EnsureWritable();
         EnsureNotCheckingOut();
         RequireOwnedRestaurant(order.RestaurantId);
-        EnsurePickupWindowOpen(order);
+        if (supabaseSession is null) EnsurePickupWindowOpen(order);
         if (order.Status != OrderStatus.Confirmed)
             throw new InvalidOperationException("Pesanan harus dikonfirmasi sebelum ditandai siap diambil.");
-        if (UsesSharedStock && order.Items.Any(item => sharedListingIds.Contains(item.ListingId)))
+        if (supabaseSession is { } session)
+            SupabaseOrderWriter.UpdateStatusAsync(session, order.Id, OrderStatus.ReadyForPickup).GetAwaiter().GetResult();
+        else if (UsesSharedStock && order.Items.Any(item => sharedListingIds.Contains(item.ListingId)))
             new DatabaseService().UpdateOrderStatus(order, OrderStatus.ReadyForPickup);
         order.MarkReady();
         Persist();
@@ -612,6 +682,17 @@ public sealed class DemoSession
         }
         if (order.Status is OrderStatus.Completed or OrderStatus.Cancelled)
             throw new InvalidOperationException("Pesanan sudah selesai atau dibatalkan.");
+        if (!automatic && supabaseSession is { } session)
+        {
+            var quantities = SupabaseOrderWriter.CancelOrderAsync(session, order.Id).GetAwaiter().GetResult();
+            order.Cancel();
+            foreach (var item in order.Items)
+                if (quantities.TryGetValue(item.ListingId, out var quantity))
+                    item.Listing.UpdateStock(quantity);
+            Persist();
+            return;
+        }
+
         var restoreStock = true;
         if (UsesSharedStock)
         {
@@ -639,18 +720,28 @@ public sealed class DemoSession
         EnsureWritable();
         EnsureNotCheckingOut();
         RequireOwnedRestaurant(order.RestaurantId);
-        EnsurePickupWindowOpen(order);
+        if (supabaseSession is null) EnsurePickupWindowOpen(order);
         if (order.Status != OrderStatus.ReadyForPickup) throw new InvalidOperationException("Pesanan belum siap diambil atau sudah selesai.");
         var verification = new PickupVerification { Order = order, OrderId = order.Id, EnteredCode = code.Trim().ToUpperInvariant() };
-        if (!verification.VerifyCode()) throw new InvalidOperationException("Kode pengambilan tidak cocok. Periksa kode dari pelanggan.");
+        if (supabaseSession is null && !verification.VerifyCode())
+            throw new InvalidOperationException("Kode pengambilan tidak cocok. Periksa kode dari pelanggan.");
         var changes = order.Items.GroupBy(i => (i.Listing.Menu, DateOnly.FromDateTime(i.Listing.PickupStart.ToLocalTime())))
             .Select(g => (Record: g.Key.Menu.ProductionRecords.SingleOrDefault(r => r.RecordDate == g.Key.Item2)
                 ?? throw new InvalidOperationException("Catatan produksi untuk pesanan ini tidak ditemukan."), Quantity: g.Sum(i => i.Quantity))).ToList();
         if (changes.Any(c => c.Record.RescuedQuantity + c.Quantity > c.Record.CalculateSurplus()))
             throw new InvalidOperationException("Porsi terselamatkan melebihi catatan surplus. Periksa catatan produksi.");
-        if (UsesSharedStock && order.Items.Any(item => sharedListingIds.Contains(item.ListingId)))
-            new DatabaseService().UpdateOrderStatus(order, OrderStatus.Completed, verification.VerifiedAt);
-        verification.CompletePickup();
+        if (supabaseSession is { } session)
+        {
+            var completedAt = SupabaseOrderWriter.UpdateStatusAsync(session, order.Id, OrderStatus.Completed,
+                pickupCode: verification.EnteredCode).GetAwaiter().GetResult();
+            order.Complete(completedAt);
+        }
+        else
+        {
+            if (UsesSharedStock && order.Items.Any(item => sharedListingIds.Contains(item.ListingId)))
+                new DatabaseService().UpdateOrderStatus(order, OrderStatus.Completed, verification.VerifiedAt);
+            verification.CompletePickup();
+        }
         foreach (var change in changes) change.Record.UpdateRescuedQuantity(change.Record.RescuedQuantity + change.Quantity);
         Persist();
     }

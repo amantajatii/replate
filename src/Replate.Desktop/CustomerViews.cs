@@ -40,7 +40,7 @@ public sealed partial class OrdersView : UserControl
         void Refresh()
         {
             list.Children.Clear();
-            var allOrders = session.Restaurant.Orders.OrderByDescending(o => o.OrderedAt).ToList();
+            var allOrders = session.RestaurantOrders.OrderByDescending(o => o.OrderedAt).ToList();
             var orders = allOrders.Where(o => filter.SelectedIndex switch {
                 0 => o.Status is not (OrderStatus.Completed or OrderStatus.Cancelled),
                 2 => o.Status == OrderStatus.Completed, 3 => o.Status == OrderStatus.Cancelled, _ => true }).ToList();

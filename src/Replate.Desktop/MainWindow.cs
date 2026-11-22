@@ -149,7 +149,9 @@ public sealed class MainWindow : Window
     }
     internal void ShowOrder(Order order, bool restaurant)
     {
-        var owned = restaurant ? OwnsRestaurant(order.RestaurantId) : Session.CurrentUser?.Id == order.CustomerId;
+        var owned = restaurant
+            ? OwnsRestaurant(order.RestaurantId) && Session.CanViewRestaurantOrder(order)
+            : Session.CurrentUser?.Id == order.CustomerId;
         if (Allowed(restaurant, owned))
             Render(restaurant, new OrderDetailView(this, Session, order, restaurant), restaurant ? "Pesanan" : "Pesanan saya");
     }
@@ -186,8 +188,15 @@ public sealed class MainWindow : Window
     internal void ShowRestaurantOrders()
     {
         if (!Allowed(true)) return;
-        Render(true, new OrdersView(this, Session, true), "Pesanan");
-        Run(Session.RefreshRestaurantOrders, () => Render(true, new OrdersView(this, Session, true), "Pesanan"));
+        Run(Session.RefreshRestaurantOrders, ShowList, onError: message =>
+        {
+            ShowList();
+            if (alert is null) return;
+            alert.Text = message;
+            alert.IsVisible = true;
+        });
+
+        void ShowList() => Render(true, new OrdersView(this, Session, true), "Pesanan");
     }
 
     // Dialog

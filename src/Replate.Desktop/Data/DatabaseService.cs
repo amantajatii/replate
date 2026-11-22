@@ -79,6 +79,15 @@ internal sealed class DatabaseService : IOrderStore
 
             await using var command = new NpgsqlCommand(sql, connection);
             await command.ExecuteNonQueryAsync();
+            if (SupabaseAuth.IsConfigured)
+            {
+                await using var ownership = new NpgsqlCommand("""
+                    ALTER TABLE public.restaurants
+                        ADD COLUMN IF NOT EXISTS owner_id uuid REFERENCES auth.users(id);
+                    CREATE INDEX IF NOT EXISTS restaurants_owner_id_idx ON public.restaurants (owner_id);
+                    """, connection);
+                await ownership.ExecuteNonQueryAsync();
+            }
         }
         catch (NpgsqlException e)
         {
@@ -99,6 +108,29 @@ internal sealed class DatabaseService : IOrderStore
             };
             throw new InvalidOperationException(
                 $"PostgreSQL {stage} di {target.Host}:{target.Port}/{target.Database}. {detail}", e);
+        }
+    }
+
+    internal List<Restaurant> LoadOwnedRestaurants(Guid ownerId)
+    {
+        try
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+            using var command = new NpgsqlCommand("""
+                SELECT id, name, address FROM public.restaurants WHERE owner_id = @owner_id
+                ORDER BY name, id
+                """, connection);
+            command.Parameters.AddWithValue("owner_id", ownerId);
+            using var reader = command.ExecuteReader();
+            var restaurants = new List<Restaurant>();
+            while (reader.Read())
+                restaurants.Add(new Restaurant { Id = reader.GetGuid(0), Name = reader.GetString(1), Address = reader.GetString(2) });
+            return restaurants;
+        }
+        catch (NpgsqlException e)
+        {
+            throw new InvalidOperationException("Hak akses restoran gagal dibaca dari Supabase.", e);
         }
     }
 

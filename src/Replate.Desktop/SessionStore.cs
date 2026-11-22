@@ -41,7 +41,8 @@ internal static class SessionStore
     {
         var menus = session.Restaurants.SelectMany(r => r.Menus).ToList();
         var state = new Snapshot(CurrentVersion,
-            session.Restaurants.Select(r => new RestaurantState(r.Id, r.Name, r.Address, r.OwnerId, r.Description,
+            session.Restaurants.Select(r => new RestaurantState(r.Id, r.Name, r.Address,
+                session.ImportedRestaurantIds.Contains(r.Id) ? Guid.Empty : r.OwnerId, r.Description,
                 r.Phone, r.OpeningTime, r.ClosingTime, session.ImportedRestaurantIds.Contains(r.Id))).ToList(),
             menus.Select(m => new MenuState(m.Id, m.Name, m.Description, m.Category,
                 m.NormalPrice, m.WeightPerPortion, m.IsActive, m.ImageUrl, m.RestaurantId)).ToList(),
