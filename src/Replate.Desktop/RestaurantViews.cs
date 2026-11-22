@@ -6,6 +6,7 @@ using Avalonia.Media;
 using Avalonia.VisualTree;
 using Replate.Domain.Entities;
 using Replate.Domain.Enums;
+using Replate.Domain.Services;
 using Menu = Replate.Domain.Entities.Menu;
 
 namespace Replate.Desktop;
@@ -17,7 +18,7 @@ public sealed class MenusView : UserControl
         Background = Ui.WorkspaceFill;
         Styles.Add(Ui.FocusStyles());
         var list = Ui.Stack(Ui.Spacing.Related);
-        foreach (var menu in session.Restaurant.Menus)
+        foreach (var menu in session.RestaurantMenus)
         {
             var description = Ui.Text(menu.Description, 13, Ui.Muted);
             description.MaxLines = 2;
@@ -38,6 +39,30 @@ public sealed class MenusView : UserControl
         if (list.Children.Count == 0) list.Children.Add(Ui.Text("Belum ada menu. Tambahkan menu untuk mulai mencatat produksi."));
         Content = Ui.Page(Ui.Heading("Menu restoran", "Daftar menu, harga normal, dan berat per porsi.",
             Ui.Button("Tambah menu", () => host.ShowMenuEditor(), true)), list);
+    }
+}
+
+internal sealed class RestaurantProfileView : UserControl
+{
+    internal RestaurantProfileView(MainWindow host, DemoSession session)
+    {
+        Background = Ui.WorkspaceFill;
+        Styles.Add(Ui.FocusStyles());
+        var restaurant = session.Restaurant;
+        var name = Ui.Input("Nama restoran"); name.Text = restaurant.Name;
+        var address = Ui.Input("Alamat"); address.Text = restaurant.Address;
+        var phone = Ui.Input("Telepon"); phone.Text = restaurant.Phone;
+        var description = Ui.Input("Deskripsi"); description.Text = restaurant.Description;
+        var opening = new TimeField("Jam buka") { Value = restaurant.OpeningTime };
+        var closing = new TimeField("Jam tutup") { Value = restaurant.ClosingTime };
+        var save = Ui.Button("Simpan profil", () => host.Run(() => session.SaveRestaurantProfile(
+            new RestaurantProfile(name.Text ?? "", address.Text ?? "", phone.Text ?? "",
+                opening.Value, closing.Value, description.Text ?? "")), host.ShowDashboard, "Profil restoran tersimpan."), true);
+        Content = Ui.Page(Ui.Heading("Profil restoran", ""),
+            Ui.Form(Ui.Stack(14, Ui.Field("Nama restoran", name), Ui.Field("Alamat", address),
+                Ui.Field("Telepon", phone), Ui.Field("Deskripsi", description),
+                Ui.Field("Jam buka", opening), Ui.Field("Jam tutup", closing),
+                Ui.Row(8, Ui.Button("Kembali", host.ShowDashboard), save)), 560));
     }
 }
 
@@ -399,7 +424,7 @@ public sealed class ProductionView : UserControl
     {
         Background = Ui.WorkspaceFill;
         Styles.Add(Ui.FocusStyles());
-        var menus = session.Restaurant.Menus.ToList();
+        var menus = session.RestaurantMenus.ToList();
         if (menus.Count == 0)
         {
             Content = Ui.Page(Ui.Heading("Catatan produksi", "Tambahkan menu sebelum mencatat produksi."), Ui.Button("Tambah menu", () => host.ShowMenuEditor(), true)); return;
@@ -467,6 +492,9 @@ public sealed class ProductionView : UserControl
                 var record = selected.ProductionRecords.SingleOrDefault(r => r.RecordDate == selectedDate);
                 ProducedInput.Value = record?.ProducedQuantity ?? 0; SoldInput.Value = record?.RegularSoldQuantity ?? 0;
                 RescuedCount.Text = (record?.RescuedQuantity ?? 0).ToString();
+                RescuedNote.Text = record is not null && !session.IsDashboardProduction(record)
+                    ? RescuedNoteText + " Catatan ini masih di komputer. Simpan catatan untuk mengirimnya ke Supabase."
+                    : RescuedNoteText;
             }
             table.Children.Clear();
             table.Children.Add(Ui.TableRow("1.6*,*,*,*,*", true, Ui.Text("Menu", 13, Ui.Muted), Ui.Text("Produksi", 13, Ui.Muted),

@@ -109,14 +109,40 @@ public sealed class DemoSession
     // Accounts
     internal Dictionary<string, string> ValidateRegistration(UserRole role, string name, string email, string password, RestaurantProfile? restaurant = null) =>
         role == UserRole.RestaurantOwner
-            ? AccountService.ValidateOwnerRegistration(Users, name, email, password, restaurant)
-            : AccountService.ValidateAccount(Users, name, email, password);
+            ? AccountService.ValidateOwnerRegistration(UsesSupabaseAuth ? [] : Users, name, email, password, restaurant)
+            : AccountService.ValidateAccount(UsesSupabaseAuth ? [] : Users, name, email, password);
+
+    private bool UsesSupabaseAuth => UsesSharedStock && SupabaseAuth.IsConfigured;
+
+    internal bool RegisterAndSignIn(UserRole role, string name, string email, string password, RestaurantProfile? restaurant)
+    {
+        if (!UsesSupabaseAuth)
+        {
+            Register(role, name, email, password, restaurant);
+            SignIn(email, password);
+            return true;
+        }
+
+        EnsureWritable();
+        var errors = ValidateRegistration(role, name, email, password, restaurant);
+        if (errors.Count > 0) throw new InvalidOperationException(errors.First().Value);
+
+        var session = SupabaseAuth.SignUpAsync(name, email, password, role == UserRole.RestaurantOwner ? restaurant : null)
+            .GetAwaiter().GetResult();
+        if (session is null) return false;
+
+        var user = SignInWithSupabase(session);
+        if (user.Role != role)
+            throw new InvalidOperationException("Akun dibuat, tetapi profil restoran belum tersedia. Periksa migrasi pendaftaran di Supabase.");
+        StartAccountSession(user, session);
+        return true;
+    }
 
     public User Register(UserRole role, string name, string email, string password, RestaurantProfile? restaurant = null)
     {
         EnsureWritable();
-        if (UsesSharedStock && SupabaseAuth.IsConfigured)
-            throw new InvalidOperationException("Buat akun melalui administrator Supabase, lalu masuk di sini.");
+        if (UsesSupabaseAuth)
+            throw new InvalidOperationException("Gunakan alur pendaftaran Supabase.");
         var errors = ValidateRegistration(role, name, email, password, restaurant);
         if (errors.Count > 0) throw new InvalidOperationException(errors.First().Value);
         User user = role == UserRole.RestaurantOwner
@@ -137,13 +163,18 @@ public sealed class DemoSession
 
     public User SignIn(string email, string password)
     {
-        var session = UsesSharedStock && SupabaseAuth.IsConfigured
+        var session = UsesSupabaseAuth
             ? SupabaseAuth.SignInAsync(email, password).GetAwaiter().GetResult()
             : null;
         var user = session is not null
-            ? SignInWithSupabase(session.User)
+            ? SignInWithSupabase(session)
             : AccountService.Authenticate(Users, email, password)
                 ?? throw new InvalidOperationException(AccountService.SignInFailedMessage);
+        return StartAccountSession(user, session);
+    }
+
+    private User StartAccountSession(User user, SupabaseAuth.Session? session)
+    {
         if (user is RestaurantOwner owner)
         {
             Restaurant = owner.Restaurants.FirstOrDefault(Restaurants.Contains)
@@ -164,13 +195,16 @@ public sealed class DemoSession
         return user;
     }
 
-    private User SignInWithSupabase(SupabaseAuth.Identity identity)
+    private User SignInWithSupabase(SupabaseAuth.Session session)
     {
+        var identity = session.User;
         var owned = new DatabaseService().LoadOwnedRestaurants(identity.Id);
+        var displayName = identity.Metadata?.DisplayName?.Trim();
+        if (string.IsNullOrWhiteSpace(displayName) || displayName.Length > 80) displayName = identity.Email;
         if (owned.Count == 0)
-            return new Customer { Id = identity.Id, Name = identity.Email, Email = identity.Email };
+            return new Customer { Id = identity.Id, Name = displayName, Email = identity.Email };
 
-        var owner = new RestaurantOwner { Id = identity.Id, Name = identity.Email, Email = identity.Email };
+        var owner = new RestaurantOwner { Id = identity.Id, Name = displayName, Email = identity.Email };
         foreach (var remote in owned)
         {
             var restaurant = FindRestaurant(remote.Id);
@@ -182,11 +216,15 @@ public sealed class DemoSession
 
             restaurant.Name = remote.Name;
             restaurant.Address = remote.Address;
+            if (!string.IsNullOrEmpty(remote.Phone))
+                restaurant.UpdateProfile(remote.Name, remote.Description, remote.Address, remote.Phone,
+                    remote.OpeningTime, remote.ClosingTime);
             restaurant.Owner?.Restaurants.Remove(restaurant);
             restaurant.Owner = owner;
             restaurant.OwnerId = owner.Id;
             owner.Restaurants.Add(restaurant);
             ImportedRestaurantIds.Add(restaurant.Id);
+            ApplyRestaurantMenus(restaurant, SupabaseCatalog.LoadMenusAsync(session, restaurant.Id).GetAwaiter().GetResult());
         }
 
         return owner;
@@ -301,6 +339,12 @@ public sealed class DemoSession
             if (remoteRestaurant is not null && menu is not null && menu.RestaurantId != remoteRestaurant.Id)
                 continue;
 
+            if (menu is not null && supabaseSession is not null)
+            {
+                menu.UpdateMenu(shared.Menu.Name, shared.Menu.Description, MenuCategories.Normalize(shared.Menu.Category),
+                    shared.Menu.NormalPrice, shared.Menu.WeightPerPortion);
+                if (shared.Menu.IsActive) menu.Activate(); else menu.Deactivate();
+            }
             sharedListingIds.Add(shared.Id);
             var restaurant = remoteRestaurant is null ? null : FindRestaurant(remoteRestaurant.Id);
             if (restaurant is not null && remoteRestaurant is not null && ImportedRestaurantIds.Contains(restaurant.Id))
@@ -344,28 +388,37 @@ public sealed class DemoSession
 
     public Order Checkout(Guid restaurantId)
     {
+        var cart = Cart;
         var order = PrepareCheckout(restaurantId);
         try
         {
+            if (supabaseSession is { } session)
+                return CommitSupabaseCheckout(cart, SupabaseOrderWriter.CheckoutAsync(session, order).GetAwaiter().GetResult());
             OrderStoreForCheckout()?.SaveOrderAsync(order).GetAwaiter().GetResult();
-            return CommitCheckout(order);
+            new CheckoutService(new StockService()).CommitOrder(cart, order);
+            return CommitCheckout(cart, order);
         }
         finally { checkingOut = false; }
     }
 
     public async Task<Order> CheckoutAsync(Guid restaurantId)
     {
+        var cart = Cart;
         var order = PrepareCheckout(restaurantId);
         try
         {
+            if (supabaseSession is { } session)
+                return CommitSupabaseCheckout(cart, await SupabaseOrderWriter.CheckoutAsync(session, order));
             if (OrderStoreForCheckout() is { } store) await store.SaveOrderAsync(order);
-            return CommitCheckout(order);
+            new CheckoutService(new StockService()).CommitOrder(cart, order);
+            return CommitCheckout(cart, order);
         }
         finally { checkingOut = false; }
     }
 
     private bool checkingOut;
     private bool expirationNeedsSave;
+    private readonly Dictionary<(Guid CustomerId, Guid RestaurantId), Order> pendingCheckouts = [];
 
     private IOrderStore? OrderStoreForCheckout() => OrderStore ?? (StorePath == DefaultStorePath ? new DatabaseService() : null);
 
@@ -380,21 +433,48 @@ public sealed class DemoSession
         RequireCustomer();
         EnsureNotCheckingOut();
         var group = Cart.FindGroup(restaurantId) ?? throw new InvalidOperationException("Restoran ini tidak ada di keranjang.");
+        var checkoutKey = (Cart.CustomerId, restaurantId);
+        if (supabaseSession is not null && pendingCheckouts.TryGetValue(checkoutKey, out var pending) &&
+            pending.Items.Select(item => (item.ListingId, item.Quantity, item.UnitPrice)).OrderBy(item => item.ListingId)
+                .SequenceEqual(group.Items.Select(item => (item.ListingId, item.Quantity, item.UnitPrice)).OrderBy(item => item.ListingId)))
+        {
+            checkingOut = true;
+            return pending;
+        }
+
         if (group.Items.Any(i => !i.Listing.Menu.IsActive)) throw new InvalidOperationException("Ada menu yang sudah tidak aktif. Hapus menu tersebut dari keranjang.");
         if (FindRestaurant(restaurantId) is null)
             throw new InvalidOperationException("Restoran untuk keranjang ini tidak ditemukan. Kosongkan keranjang lalu pilih makanan lagi.");
         var order = new CheckoutService(new StockService()).PrepareOrder(Cart, restaurantId);
         if (UsesSharedStock && OrderStore is null && group.Items.Any(item => !sharedListingIds.Contains(item.ListingId)))
             throw new InvalidOperationException("Ada penawaran lokal di keranjang. Hapus item tersebut lalu pilih kembali dari Jelajah.");
+        if (supabaseSession is not null) pendingCheckouts[checkoutKey] = order;
         checkingOut = true;
         return order;
     }
 
-    private Order CommitCheckout(Order order)
+    private Order CommitSupabaseCheckout(Cart cart, (Order Order, Dictionary<Guid, int> Stock) checkout)
     {
-        new CheckoutService(new StockService()).CommitOrder(Cart, order);
-        FindRestaurant(order.RestaurantId)!.Orders.Add(order);
-        LastOrder = order;
+        var order = checkout.Order;
+        foreach (var item in order.Items)
+        {
+            if (checkout.Stock.TryGetValue(item.ListingId, out var quantity))
+                item.Listing.UpdateStock(quantity);
+            cart.RemoveItem(item.ListingId);
+        }
+
+        pendingCheckouts.Remove((order.CustomerId, order.RestaurantId));
+        if (ReferenceEquals(Cart, cart)) customerApiOrderIds.Add(order.Id);
+        return CommitCheckout(cart, order);
+    }
+
+    private Order CommitCheckout(Cart cart, Order order)
+    {
+        var orders = FindRestaurant(order.RestaurantId)!.Orders;
+        var existing = orders.FindIndex(candidate => candidate.Id == order.Id);
+        if (existing < 0) orders.Add(order);
+        else orders[existing] = order;
+        if (ReferenceEquals(Cart, cart)) LastOrder = order;
         Persist();
         return order;
     }
@@ -450,6 +530,54 @@ public sealed class DemoSession
     }
 
     internal string PhotoDirectory => Path.Combine(Path.GetDirectoryName(Path.GetFullPath(StorePath ?? DefaultStorePath))!, "menu-photos");
+    private readonly HashSet<Guid> deletedMenuIds = [];
+    private readonly HashSet<Guid> sharedCatalogMenuIds = [];
+    internal IEnumerable<Menu> RestaurantMenus => Restaurant.Menus.Where(menu => !deletedMenuIds.Contains(menu.Id));
+
+    internal void RefreshRestaurantMenus()
+    {
+        if (supabaseSession is not { } session) return;
+        var restaurant = RequireOwnedRestaurant(Restaurant.Id);
+        ApplyRestaurantMenus(restaurant, SupabaseCatalog.LoadMenusAsync(session, restaurant.Id).GetAwaiter().GetResult());
+    }
+
+    private void ApplyRestaurantMenus(Restaurant restaurant, IEnumerable<SupabaseCatalog.MenuRow> rows)
+    {
+        foreach (var row in rows)
+        {
+            sharedCatalogMenuIds.Add(row.Id);
+            var menu = restaurant.Menus.Find(candidate => candidate.Id == row.Id);
+            if (row.DeletedAt is not null)
+            {
+                deletedMenuIds.Add(row.Id);
+                menu?.Deactivate();
+                continue;
+            }
+            if (row.NormalPrice is not > 0 || row.WeightPerPortion is not > 0) continue;
+            if (menu is null)
+            {
+                menu = new Menu { Id = row.Id, RestaurantId = restaurant.Id, Restaurant = restaurant };
+                restaurant.Menus.Add(menu);
+            }
+            menu.UpdateMenu(row.Name, row.Description ?? "", MenuCategories.Normalize(row.Category ?? ""),
+                row.NormalPrice.Value, row.WeightPerPortion.Value);
+            if (row.IsActive) menu.Activate(); else menu.Deactivate();
+        }
+    }
+
+    internal void SaveRestaurantProfile(RestaurantProfile profile)
+    {
+        EnsureWritable();
+        var restaurant = RequireOwnedRestaurant(Restaurant.Id);
+        var errors = AccountService.ValidateRestaurantProfile(profile);
+        if (errors.Count > 0) throw new InvalidOperationException(errors.First().Value);
+        if (supabaseSession is { } session)
+            SupabaseCatalog.SaveRestaurantAsync(session, restaurant.Id, profile).GetAwaiter().GetResult();
+        restaurant.UpdateProfile(profile.Name.Trim(), profile.Description.Trim(), profile.Address.Trim(),
+            profile.Phone.Trim(), profile.OpeningTime!.Value, profile.ClosingTime!.Value);
+        Persist();
+    }
+
     internal string? PhotoPath(string? reference)
     {
         if (string.IsNullOrWhiteSpace(reference) || !reference.StartsWith("menu-photos/", StringComparison.Ordinal)) return null;
@@ -468,6 +596,7 @@ public sealed class DemoSession
         var menu = existing ?? new Menu { RestaurantId = restaurant.Id, Restaurant = restaurant };
         var old = (menu.Name, menu.Description, menu.Category, menu.NormalPrice, menu.WeightPerPortion, menu.ImageUrl);
         string? copiedPath = null;
+        var savedToSupabase = false;
         try
         {
             if (photoChange is not null)
@@ -484,11 +613,18 @@ public sealed class DemoSession
                 }
             }
             menu.UpdateMenu(name.Trim(), description.Trim(), category, normalPrice, weight);
+            if (supabaseSession is { } session)
+            {
+                SupabaseCatalog.SaveMenuAsync(session, menu, menu.IsActive).GetAwaiter().GetResult();
+                sharedCatalogMenuIds.Add(menu.Id);
+                savedToSupabase = true;
+            }
             if (existing is null) restaurant.Menus.Add(menu);
             Persist(); return menu;
         }
         catch
         {
+            if (savedToSupabase) throw;
             if (existing is null) restaurant.Menus.Remove(menu);
             menu.UpdateMenu(old.Name, old.Description, old.Category, old.NormalPrice, old.WeightPerPortion);
             menu.ImageUrl = old.ImageUrl;
@@ -511,6 +647,8 @@ public sealed class DemoSession
             owner.Menus.SelectMany(m => m.ProductionRecords).Any(r => r.MenuId == stored.Id || r.Menu?.Id == stored.Id) ||
             stored.ProductionRecords.Count > 0)
             throw new InvalidOperationException("Menu tidak dapat dihapus karena masih digunakan oleh penawaran surplus, keranjang, pesanan, atau catatan produksi. Gunakan Nonaktifkan agar riwayat tetap tersimpan.");
+        if (supabaseSession is { } session)
+            SupabaseCatalog.DeleteMenuAsync(session, stored).GetAwaiter().GetResult();
         owner.Menus.RemoveAt(index);
         try { Persist(); }
         catch { owner.Menus.Insert(index, stored); throw; }
@@ -520,6 +658,14 @@ public sealed class DemoSession
     {
         EnsureWritable();
         RequireOwnedRestaurant(menu.RestaurantId);
+        if (supabaseSession is { } session)
+        {
+            var update = sharedCatalogMenuIds.Contains(menu.Id)
+                ? SupabaseCatalog.SetMenuActiveAsync(session, menu, !menu.IsActive)
+                : SupabaseCatalog.SaveMenuAsync(session, menu, !menu.IsActive);
+            update.GetAwaiter().GetResult();
+            sharedCatalogMenuIds.Add(menu.Id);
+        }
         if (menu.IsActive) menu.Deactivate(); else menu.Activate();
         Persist();
     }
@@ -535,12 +681,15 @@ public sealed class DemoSession
         if (price <= 0 || price > menu.NormalPrice) throw new InvalidOperationException("Harga penawaran harus lebih dari nol dan tidak melebihi harga normal.");
         if (quantity < 1) throw new InvalidOperationException("Stok tersedia harus minimal satu porsi.");
         if (end <= start || end <= DateTime.Now || start.Date != end.Date) throw new InvalidOperationException("Jadwal pengambilan harus dalam satu hari, waktu selesai sesudah mulai dan belum lewat.");
-        var date = DateOnly.FromDateTime(start);
-        var record = menu.ProductionRecords.SingleOrDefault(r => r.RecordDate == date)
-            ?? throw new InvalidOperationException("Catat produksi menu untuk tanggal pengambilan terlebih dahulu.");
-        var allocated = Allocated(menu, date, existing);
-        if (quantity + allocated > record.CalculateSurplus() - record.RescuedQuantity)
-            throw new InvalidOperationException("Stok melebihi surplus yang belum dialokasikan. Periksa catatan produksi dan penawaran lain.");
+        if (supabaseSession is null)
+        {
+            var date = DateOnly.FromDateTime(start);
+            var record = menu.ProductionRecords.SingleOrDefault(r => r.RecordDate == date)
+                ?? throw new InvalidOperationException("Catat produksi menu untuk tanggal pengambilan terlebih dahulu.");
+            var allocated = Allocated(menu, date, existing);
+            if (quantity + allocated > record.CalculateSurplus() - record.RescuedQuantity)
+                throw new InvalidOperationException("Stok melebihi surplus yang belum dialokasikan. Periksa catatan produksi dan penawaran lain.");
+        }
         if (existing is not null && existing.Status is ListingStatus.Cancelled or ListingStatus.Expired)
             throw new InvalidOperationException("Penawaran yang berakhir tidak dapat diubah. Buat penawaran baru.");
         if (existing is not null && AllOrders.Any(o => o.Status is not (OrderStatus.Completed or OrderStatus.Cancelled) && o.Items.Any(i => i.ListingId == existing.Id)) &&
@@ -554,7 +703,8 @@ public sealed class DemoSession
                 Id = listing.Id, Menu = menu, MenuId = menu.Id, RescuePrice = price,
                 Quantity = quantity, PickupStart = start.ToUniversalTime(), PickupEnd = end.ToUniversalTime()
             };
-            new DatabaseService().SaveListing(restaurant, proposed, sharedListingIds.Contains(listing.Id) ? listing.Quantity : null);
+            new DatabaseService().SaveListing(restaurant, proposed, sharedListingIds.Contains(listing.Id) ? listing.Quantity : null,
+                preserveCatalog: supabaseSession is not null);
             sharedListingIds.Add(listing.Id);
         }
         listing.RescuePrice = price; listing.PickupStart = start.ToUniversalTime(); listing.PickupEnd = end.ToUniversalTime(); listing.UpdateStock(quantity);
@@ -591,7 +741,7 @@ public sealed class DemoSession
         else if (regularSold < 0) errors["sold"] = "Penjualan reguler tidak boleh negatif.";
         else if (produced is not null && produced >= 0 && regularSold > produced)
             errors["sold"] = "Penjualan reguler tidak boleh melebihi produksi.";
-        if (menu is not null && date is not null && produced >= 0 && regularSold >= 0)
+        if (supabaseSession is null && menu is not null && date is not null && produced >= 0 && regularSold >= 0)
         {
             var rescued = menu.ProductionRecords.SingleOrDefault(r => r.RecordDate == date)?.RescuedQuantity ?? 0;
             var allocated = Allocated(menu, date.Value);
@@ -608,11 +758,56 @@ public sealed class DemoSession
         RequireOwnedRestaurant(menu.RestaurantId);
         var errors = ValidateProduction(menu, date, produced, regularSold);
         if (errors.Count > 0) throw new InvalidOperationException(errors.First().Value);
+        if (supabaseSession is { } session)
+        {
+            if (!sharedCatalogMenuIds.Contains(menu.Id))
+            {
+                SupabaseCatalog.SaveMenuAsync(session, menu, menu.IsActive).GetAwaiter().GetResult();
+                sharedCatalogMenuIds.Add(menu.Id);
+            }
+            var row = SupabaseCatalog.SaveProductionAsync(session, menu.Id, date, produced, regularSold)
+                .GetAwaiter().GetResult();
+            ApplyProductionRow(menu, row);
+            Persist();
+            return;
+        }
+
         var record = menu.ProductionRecords.SingleOrDefault(r => r.RecordDate == date)
             ?? new ProductionRecord { MenuId = menu.Id, Menu = menu, RecordDate = date };
         record.ProducedQuantity = produced; record.RegularSoldQuantity = regularSold;
         if (!menu.ProductionRecords.Contains(record)) menu.ProductionRecords.Add(record);
         Persist();
+    }
+
+    private readonly HashSet<(Guid MenuId, DateOnly Date)> sharedProductionDates = [];
+
+    internal bool IsDashboardProduction(ProductionRecord record) =>
+        supabaseSession is null || sharedProductionDates.Contains((record.MenuId, record.RecordDate));
+
+    internal void RefreshRestaurantProduction()
+    {
+        if (supabaseSession is not { } session) return;
+        RefreshRestaurantMenus();
+        var restaurant = RequireOwnedRestaurant(Restaurant.Id);
+        var rows = SupabaseCatalog.LoadProductionAsync(session, restaurant.Id).GetAwaiter().GetResult();
+        var menus = restaurant.Menus.ToDictionary(menu => menu.Id);
+        sharedProductionDates.RemoveWhere(record => menus.ContainsKey(record.MenuId));
+        foreach (var row in rows)
+            if (menus.TryGetValue(row.MenuId, out var menu)) ApplyProductionRow(menu, row);
+    }
+
+    private void ApplyProductionRow(Menu menu, SupabaseCatalog.ProductionRow row)
+    {
+        var record = menu.ProductionRecords.Find(candidate => candidate.RecordDate == row.RecordDate);
+        if (record is null)
+        {
+            record = new ProductionRecord { MenuId = menu.Id, Menu = menu, RecordDate = row.RecordDate };
+            menu.ProductionRecords.Add(record);
+        }
+        record.ProducedQuantity = row.ProducedQuantity;
+        record.RegularSoldQuantity = row.RegularSoldQuantity;
+        record.UpdateRescuedQuantity(row.RescuedQuantity);
+        sharedProductionDates.Add((menu.Id, row.RecordDate));
     }
     public void ConfirmOrder(Order order, int preparationMinutes)
     {
@@ -650,7 +845,7 @@ public sealed class DemoSession
 
     internal void ExpireOverdueOrders(DateTime now)
     {
-        if (checkingOut || StorageError is not null) return;
+        if (UsesSupabaseAuth || checkingOut || StorageError is not null) return;
         if (expirationNeedsSave)
         {
             Persist();
@@ -723,25 +918,24 @@ public sealed class DemoSession
         if (supabaseSession is null) EnsurePickupWindowOpen(order);
         if (order.Status != OrderStatus.ReadyForPickup) throw new InvalidOperationException("Pesanan belum siap diambil atau sudah selesai.");
         var verification = new PickupVerification { Order = order, OrderId = order.Id, EnteredCode = code.Trim().ToUpperInvariant() };
-        if (supabaseSession is null && !verification.VerifyCode())
+        if (supabaseSession is { } session)
+        {
+            var completedAt = SupabaseOrderWriter.UpdateStatusAsync(session, order.Id, OrderStatus.Completed,
+                pickupCode: verification.EnteredCode).GetAwaiter().GetResult();
+            order.Complete(completedAt);
+            Persist();
+            return;
+        }
+        if (!verification.VerifyCode())
             throw new InvalidOperationException("Kode pengambilan tidak cocok. Periksa kode dari pelanggan.");
         var changes = order.Items.GroupBy(i => (i.Listing.Menu, DateOnly.FromDateTime(i.Listing.PickupStart.ToLocalTime())))
             .Select(g => (Record: g.Key.Menu.ProductionRecords.SingleOrDefault(r => r.RecordDate == g.Key.Item2)
                 ?? throw new InvalidOperationException("Catatan produksi untuk pesanan ini tidak ditemukan."), Quantity: g.Sum(i => i.Quantity))).ToList();
         if (changes.Any(c => c.Record.RescuedQuantity + c.Quantity > c.Record.CalculateSurplus()))
             throw new InvalidOperationException("Porsi terselamatkan melebihi catatan surplus. Periksa catatan produksi.");
-        if (supabaseSession is { } session)
-        {
-            var completedAt = SupabaseOrderWriter.UpdateStatusAsync(session, order.Id, OrderStatus.Completed,
-                pickupCode: verification.EnteredCode).GetAwaiter().GetResult();
-            order.Complete(completedAt);
-        }
-        else
-        {
-            if (UsesSharedStock && order.Items.Any(item => sharedListingIds.Contains(item.ListingId)))
-                new DatabaseService().UpdateOrderStatus(order, OrderStatus.Completed, verification.VerifiedAt);
-            verification.CompletePickup();
-        }
+        if (UsesSharedStock && order.Items.Any(item => sharedListingIds.Contains(item.ListingId)))
+            new DatabaseService().UpdateOrderStatus(order, OrderStatus.Completed, verification.VerifiedAt);
+        verification.CompletePickup();
         foreach (var change in changes) change.Record.UpdateRescuedQuantity(change.Record.RescuedQuantity + change.Quantity);
         Persist();
     }

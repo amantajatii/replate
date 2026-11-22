@@ -32,7 +32,8 @@ public sealed class DashboardView : UserControl
         AutomationProperties.SetName(period, "Periode laporan");
         PeriodPicker = period;
         period.SelectionChanged += (_, _) => Render(host, session, period.SelectedIndex == 0 ? 7 : 28);
-        var records = session.Restaurant.Menus.SelectMany(m => m.ProductionRecords).Where(r => r.RecordDate >= firstDate && r.RecordDate <= lastDate).ToList();
+        var records = session.Restaurant.Menus.SelectMany(m => m.ProductionRecords)
+            .Where(r => session.IsDashboardProduction(r) && r.RecordDate >= firstDate && r.RecordDate <= lastDate).ToList();
         var surplus = new SurplusDashboard();
         var finance = new FinancialDashboard();
         var recommendations = new ProductionRecommendationService();
@@ -48,7 +49,7 @@ public sealed class DashboardView : UserControl
             surplus.CalculateTotalSurplus(records) == 0 ? "Belum ada surplus pada periode ini"
                 : $"{surplus.CalculateRescueRate(records).ToString("0.0", Indonesian)}% dari surplus"));
         summary.Children.Add(MetricCard("Pendapatan Dipulihkan",
-            DemoSession.Rupiah(finance.CalculateRecoveredRevenue(session.Restaurant.Orders.Where(o =>
+            DemoSession.Rupiah(finance.CalculateRecoveredRevenue(session.RestaurantOrders.Where(o =>
                 DateOnly.FromDateTime(o.OrderedAt.ToLocalTime()) >= firstDate && DateOnly.FromDateTime(o.OrderedAt.ToLocalTime()) <= lastDate))),
             "Dari pesanan selesai"));
         var columns = 0;
@@ -112,7 +113,7 @@ public sealed class DashboardView : UserControl
         var details = session.Restaurant.Menus.Count == 0
             ? new[] { ReportPanel(empty) }
             : new[] { ReportPanel(analysis), ReportPanel(recommendationSection), ReportPanel(impact) };
-        var body = Ui.Stack(Ui.Spacing.Section, [Banner, summary, .. details,
+        var body = Ui.Stack(Ui.Spacing.Section, [Banner, Ui.Row(8, Ui.Button("Ubah profil", host.ShowRestaurantProfile)), summary, .. details,
             Ui.Text("Pendapatan dan porsi terselamatkan bertambah setelah pengambilan diverifikasi. Reservasi belum dihitung sebagai penjualan selesai.", 12, Ui.Muted)]);
         body.Margin = new Thickness(Ui.Spacing.Page);
         Background = Ui.WorkspaceFill;
