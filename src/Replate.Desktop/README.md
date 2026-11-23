@@ -3,7 +3,7 @@
 Aplikasi Avalonia UI 12.1.4 / .NET 10 dengan area pelanggan dan pemilik restoran
 terpisah. Seluruh layar, keranjang, detail pesanan, dan formulir memakai halaman
 penuh; detail makanan tampil sebagai pop up di atas halaman. Pelanggan menggunakan bar atas berisi logo putih
-(ke Jelajah), kolom cari, ikon keranjang dengan jumlah item, dan lingkaran profil
+(ke Jelajah), kolom cari, pilihan lokasi, ikon keranjang dengan jumlah item, dan lingkaran profil
 yang membuka menu **Pesanan saya** dan **Keluar**; restoran memiliki sidebar operasional.
 
 ## Menjalankan
@@ -61,14 +61,16 @@ Akun demo tidak digandakan dan tidak menimpa akun yang sudah ada.
 | --- | --- | --- |
 | Awal | Masuk | Kartu email dan kata sandi di samping foto; arah halaman mengikuti peran akun |
 | Awal | Daftar | Kartu akun pelanggan atau pemilik restoran beserta profil restoran, di samping foto |
-| Pelanggan | Jelajah | Banner sapaan, kartu koleksi (Termurah, Segera berakhir, Makanan utama, Roti & kue, Buah & sayur) yang membuka halamannya sendiri, semua kartu makanan dengan harga, stok, jadwal pengambilan |
-| Pelanggan | Koleksi | Tautan Kembali ke Jelajah, judul koleksi dengan kalimat pengantar, kartu makanan terurut (harga atau batas pengambilan) atau tersaring per kategori |
+| Pelanggan | Jelajah | Banner sapaan, koleksi Terdekat, Termurah, Segera berakhir, Makanan utama, Roti & kue, serta Buah & sayur. Kartu makanan menampilkan harga, stok, jadwal, serta jarak dan estimasi perjalanan jika tersedia |
+| Pelanggan | Terdekat | Penawaran diurutkan menurut jarak dari lokasi pelanggan. Penawaran tanpa jarak berada di akhir, dan batas pengambilan memecah urutan yang sama |
+| Pelanggan | Koleksi lain | Kartu makanan terurut (harga atau batas pengambilan) atau tersaring per kategori |
 | Pelanggan | Hasil pencarian | Dibuka dengan Enter atau ikon kaca pembesar di bar atas; judul "Hasil untuk {kata}", semua kata harus cocok dengan nama menu, deskripsi, restoran, atau kategori |
-| Pelanggan | Pop up detail makanan | Dibuka dari tombol Tambah atau klik kartu makanan; foto, deskripsi, harga, stok, jadwal, pengatur jumlah porsi, tambah ke keranjang tanpa pindah halaman |
+| Pelanggan | Pop up detail makanan | Foto, deskripsi, harga, stok, jadwal, pengatur porsi, alamat restoran, dan peta interaktif jika koordinat tersedia |
 | Pelanggan | Keranjang | Tautan Kembali ke Jelajah, kartu item dikelompokkan per restoran (nama, subtotal, tombol Pesan) dengan pengatur jumlah dan ikon hapus, pop up Konfirmasi pesanan (item, jendela pengambilan, total, Batal dan Pesan sekarang), keadaan kosong dengan tombol Jelajahi menu |
 | Pelanggan | Pesanan saya | Filter pesanan aktif, selesai, dibatalkan |
 | Pelanggan | Detail pesanan | Status, rincian, kode pengambilan, pembatalan |
 | Restoran | Dashboard | Periode 7/28 hari, surplus, penjualan selesai, rekomendasi |
+| Restoran | Profil | Ubah nama, alamat, telepon, jam buka dan tutup, serta deskripsi. Peta menampilkan lokasi restoran |
 | Restoran | Menu | Daftar menu, harga normal, aktif/nonaktif |
 | Restoran | Tambah/ubah menu | Nama, deskripsi, kategori, harga, berat |
 | Restoran | Penawaran surplus | Daftar penawaran, stok, jadwal, tutup penawaran |
@@ -80,6 +82,8 @@ Akun demo tidak digandakan dan tidak menimpa akun yang sudah ada.
 ## Alur demonstrasi
 
 1. Di layar **Masuk**, masuk sebagai `pelanggan@replate.demo` / `replate123`.
+   Klik **Atur lokasi** atau nama lokasi yang terdeteksi, masukkan alamat publik seperti
+   `Jl. Malioboro, Yogyakarta`, lalu buka **Terdekat**. Buka detail makanan dan gulir ke peta.
 2. Klik **Tambah** pada kartu makanan, atur jumlah porsi di pop up, lalu
    **Tambah ke keranjang**. Buka keranjang, klik **Pesan** pada kelompok restoran, lalu **Pesan sekarang** di pop up konfirmasi. Catat kode
    pengambilan di detail pesanan.
@@ -89,6 +93,8 @@ Akun demo tidak digandakan dan tidak menimpa akun yang sudah ada.
 5. Masukkan kode pelanggan → **Verifikasi dan selesaikan**.
 6. Pesanan menjadi selesai, porsi terselamatkan bertambah pada produksi menu,
    dan dashboard memperbarui pendapatan yang dipulihkan.
+7. Sebagai pemilik restoran, pilih **Profil**, ubah alamat restoran, lalu klik
+   **Simpan profil**. Peta diperbarui saat koordinat alamat ditemukan.
 
 Restoran baru: **Keluar** → **Daftar akun baru** → pilih **Pemilik restoran**, isi
 akun dan **Profil restoran** (untuk buka 24 jam, isi 00:00 sampai 23:59) → **Daftar**.
@@ -97,6 +103,40 @@ Dashboard restoran baru masih kosong dan menawarkan **Tambah menu**.
 Untuk pasokan baru: **Menu** → **Tambah menu**, lalu **Produksi** → catat produksi
 serta penjualan reguler. Setelah itu buat **Penawaran surplus** dengan stok yang
 belum dialokasikan. Prototipe memakai kategori makanan utama, roti & kue, vegetarian.
+
+## Integrasi API
+
+| Layanan | Fungsi | Saat layanan gagal |
+| --- | --- | --- |
+| [Photon](https://github.com/komoot/photon) | Menyarankan alamat di Indonesia setelah tiga karakter, dengan jeda 350 ms dan maksimal lima saran. Hasil diprioritaskan menurut lokasi tersimpan jika ada | Ketik alamat lengkap dan klik **Gunakan alamat** |
+| [Nominatim](https://operations.osmfoundation.org/policies/nominatim/) | Mencari koordinat setelah alamat lengkap dikirim. Pencarian balik memberi nama jalan atau kota pada koordinat perangkat | Profil restoran tetap tersimpan dengan peringatan. Jika pencarian balik gagal, koordinat perangkat tersimpan dengan label **Lokasi saya** |
+| [ipapi.co](https://ipapi.co/api/) | Memperkirakan kota dari IP saat pelanggan belum menetapkan lokasi atau lokasi browser tidak tersedia | Pilih lokasi manual dari bar atas |
+| [OSRM](https://project-osrm.org/docs/v5.24.0/api/#table-service) | Menghitung jarak dan perkiraan waktu berkendara ke restoran | Estimasi jalan yang masih tersimpan dipertahankan. Jika belum ada, kartu menunjukkan jarak garis lurus tanpa waktu tempuh |
+| [Tile OpenStreetMap](https://operations.osmfoundation.org/policies/tiles/) via [Mapsui](https://www.nuget.org/packages/Mapsui.Avalonia12/5.2.0) | Memuat peta interaktif untuk detail makanan dan profil restoran | Penanda lokasi masih dapat tampil jika gambar peta belum tersedia |
+
+**Gunakan lokasi saya** membuka konfirmasi di Replate sebelum membuka tab
+browser. Setelah memilih **Lanjutkan**, izinkan browser mengakses lokasi dan
+kembali ke Replate. Browser modern mengizinkan geolokasi pada alamat loopback
+`http://127.0.0.1`, dan macOS mungkin meminta agar Layanan Lokasi diaktifkan untuk
+browser. **Batalkan** menghentikan permintaan di Replate. Jika browser menolak,
+lokasi gagal, atau sesi mencapai 90 detik, Replate mencoba perkiraan IP dan
+menandainya di bar atas.
+
+Replate menyimpan koordinat pelanggan di perangkat. Browser mengirim hasil ke
+listener lokal sekali pakai. Replate memakai koordinat pada permintaan Nominatim
+untuk nama lokasi dan OSRM untuk estimasi perjalanan. Saat mengetik alamat,
+Photon menerima teks dan lokasi tersimpan jika tersedia untuk memprioritaskan
+hasil yang lebih dekat.
+
+Pencarian alamat dan pencarian balik Nominatim berbagi jeda minimal 1,1 detik
+antarpermintaan dalam satu proses dan menyimpan hasil di memori. Batas layanan publik berlaku
+untuk keseluruhan aplikasi. Gunakan alamat publik yang dapat dibagikan untuk
+pencarian dan hindari data pribadi atau rahasia.
+Peta menampilkan atribusi **© OpenStreetMap contributors**, mengirim
+`User-Agent` Replate, dan menyimpan tile di cache lokal selama tujuh hari.
+`--verify-state` dan `--verify-ui` memakai penyedia lokasi, saran alamat,
+geocoder, dan rute palsu. Tes listener memakai HTTP loopback tanpa membuka
+browser. Verifikasi UI menampilkan penanda tanpa mengunduh tile.
 
 ## Aturan dan data lokal
 

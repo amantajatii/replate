@@ -1,5 +1,6 @@
 using Replate.Domain.Entities;
 using Replate.Domain.Services;
+using Replate.Domain.ValueObjects;
 
 namespace Replate.Desktop.Data;
 
@@ -25,12 +26,20 @@ internal static class SupabaseCatalog
         SupabaseRpc.PostAsync<object>(session, "replate_set_menu_active",
             new { p_restaurant_id = menu.RestaurantId, p_menu_id = menu.Id, p_is_active = isActive }, readResponse: false);
 
-    internal static Task SaveRestaurantAsync(SupabaseAuth.Session session, Guid restaurantId, RestaurantProfile profile) =>
+    internal static Task SaveRestaurantAsync(SupabaseAuth.Session session, Guid restaurantId, RestaurantProfile profile,
+        GeoPoint? location = null) =>
         SupabaseRpc.PostAsync<object>(session, "replate_save_restaurant_profile", new
         {
             p_restaurant_id = restaurantId, p_name = profile.Name.Trim(), p_address = profile.Address.Trim(),
-            p_phone = profile.Phone.Trim(), p_description = profile.Description.Trim(),
-            p_opening_time = profile.OpeningTime, p_closing_time = profile.ClosingTime
+            p_phone = profile.Phone.Trim(), p_description = (profile.Description ?? "").Trim(),
+            p_opening_time = profile.OpeningTime, p_closing_time = profile.ClosingTime,
+            p_latitude = location?.Latitude, p_longitude = location?.Longitude
+        }, readResponse: false);
+
+    internal static Task SaveRestaurantLocationAsync(SupabaseAuth.Session session, Guid restaurantId, GeoPoint location) =>
+        SupabaseRpc.PostAsync<object>(session, "replate_save_restaurant_location", new
+        {
+            p_restaurant_id = restaurantId, p_latitude = location.Latitude, p_longitude = location.Longitude
         }, readResponse: false);
 
     internal sealed record MenuRow(Guid Id, string Name, string? Description, string? Category,

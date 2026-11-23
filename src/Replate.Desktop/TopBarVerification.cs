@@ -48,7 +48,7 @@ internal static class TopBarVerification
         Ensure(bar.SearchBox.PlaceholderText == "Mulai cari menu atau restoran" && bar.SearchBox.IsEffectivelyVisible, "Search field shows its placeholder");
         Ensure(AutomationProperties.GetName(bar.CartButton) == "Keranjang" && ToolTip.GetTip(bar.CartButton) as string == "Keranjang", "Cart icon is named Keranjang");
         Ensure(AutomationProperties.GetName(bar.ProfileButton) == "Akun" && ToolTip.GetTip(bar.ProfileButton) as string == "Akun", "Profile circle is named Akun");
-        Ensure(new Control[] { bar.LogoButton, bar.SearchBox, bar.CartButton, bar.ProfileButton }.All(c => c.Focusable && c.IsEnabled && KeyboardNavigation.GetIsTabStop(c)),
+        Ensure(new Control[] { bar.LogoButton, bar.SearchBox, bar.LocationChip, bar.CartButton, bar.ProfileButton }.All(c => c.Focusable && c.IsEnabled && KeyboardNavigation.GetIsTabStop(c)),
             "Every top bar control is reachable with Tab");
         Ensure(!window.GetVisualDescendants().OfType<Button>().Any(b => b.Content is string text && (text is "Jelajah" or "Pesanan saya" or "Keluar" || text.StartsWith("Keranjang"))),
             "Old Jelajah, Pesanan saya, Keranjang and Keluar tabs are removed");
@@ -69,7 +69,7 @@ internal static class TopBarVerification
         await Pseudo(bar.ProfileButton, ":pointerover", false);
 
         // Focus
-        foreach (var button in new[] { bar.LogoButton, bar.CartButton, bar.ProfileButton })
+        foreach (var button in new[] { bar.LogoButton, bar.LocationChip, bar.CartButton, bar.ProfileButton })
         {
             var ring = FocusRing(button);
             Ensure(button.FocusAdorner == Ui.NoFocusAdorner && ColorOf(ring.BorderBrush) == Colors.Transparent, $"{AutomationProperties.GetName(button)}: no default focus adorner and no ring at rest");
@@ -155,7 +155,7 @@ internal static class TopBarVerification
         window.Width = width; window.Height = height; await Settle();
         foreach (var size in new[] { 1040d, 1920d })
         {
-            var sample = new CustomerTopBar(() => { }, () => { }, () => { }, () => { }, _ => { });
+            var sample = new CustomerTopBar(() => { }, () => { }, () => { }, () => { }, _ => { }, window.Session, () => Task.CompletedTask);
             sample.SetCartCount(120);
             var frame = new Window { Width = 1040, Height = 720, Content = new Canvas { Children = { new Border { Child = sample, Width = size } } } };
             try { frame.Show(); await Settle(); CheckLayout(sample, $"{size:0} wide"); }
@@ -178,7 +178,8 @@ internal static class TopBarVerification
 
     private static void CheckLayout(CustomerTopBar bar, string label)
     {
-        var parts = new (string Name, Control Control)[] { ("logo", bar.LogoButton), ("search", bar.SearchBox), ("cart", bar.CartButton), ("profile", bar.ProfileButton) };
+        var parts = new (string Name, Control Control)[] { ("logo", bar.LogoButton), ("search", bar.SearchBox),
+            ("location", bar.LocationChip), ("cart", bar.CartButton), ("profile", bar.ProfileButton) };
         var area = new Rect(bar.Bounds.Size);
         foreach (var (name, control) in parts)
             Ensure(control.IsEffectivelyVisible && Contains(Rect(control, bar), area), $"{label}: {name} sits inside the top bar");
@@ -188,7 +189,7 @@ internal static class TopBarVerification
         var search = Rect(bar.SearchBox, bar);
         Ensure(search.Width >= CustomerTopBar.SearchMinWidth - .5 && search.Width <= CustomerTopBar.SearchMaxWidth + .5, $"{label}: search is {search.Width:0} wide");
         var left = search.X - Rect(bar.LogoButton, bar).Right;
-        var right = Rect(bar.CartButton, bar).X - search.Right;
+        var right = Rect(bar.LocationChip, bar).X - search.Right;
         Ensure(left >= 31.5 && right >= 31.5 && Math.Abs(left - right) < 1, $"{label}: search is centered between logo and icons ({left:0}, {right:0})");
         Ensure(Contains(Rect(bar.CartBadge, bar), Rect(bar.CartButton, bar)), $"{label}: badge stays inside the cart icon");
         Ensure(Math.Abs(bar.Bounds.Height - CustomerTopBar.BarHeight) < .5, $"{label}: top bar stays {CustomerTopBar.BarHeight:0} high ({bar.Bounds.Height:0.#})");

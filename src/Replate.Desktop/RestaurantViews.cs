@@ -9,7 +9,6 @@ using Avalonia.Styling;
 using Avalonia.VisualTree;
 using Replate.Domain.Entities;
 using Replate.Domain.Enums;
-using Replate.Domain.Services;
 using Menu = Replate.Domain.Entities.Menu;
 
 namespace Replate.Desktop;
@@ -50,6 +49,7 @@ internal sealed class RestaurantProfileView : UserControl
     internal const string Subtitle = "Atur informasi restoran yang tampil kepada pelanggan.";
     internal const double FormWidth = 720;
     internal const double DescriptionHeight = 88;
+    internal const double MapHeight = 232;
     internal TextBox NameInput { get; }
     internal TextBox AddressInput { get; }
     internal TextBox PhoneInput { get; }
@@ -59,12 +59,28 @@ internal sealed class RestaurantProfileView : UserControl
     internal Button SaveButton { get; }
     internal Button BackLink { get; }
     internal Border FormCard { get; }
+    internal Border MapCard { get; }
+    internal Control? LocationMap { get; }
     internal FieldGrid NameRow { get; }
     internal FieldGrid TimeRow { get; }
     internal StackPanel Actions { get; }
     internal Dictionary<string, FieldFrame> Frames { get; } = new();
+    internal Dictionary<string, TextBlock> FieldErrors { get; } = new();
+    private readonly TextBlock formError = Ui.FieldError();
+    private readonly MainWindow host;
+    private readonly DemoSession session;
+
+    // Validation keys from AccountService mapped to the frames that show them.
+    private static readonly (string Error, string Frame)[] ErrorFrames =
+    [
+        ("restaurantName", "name"), ("address", "address"), ("phone", "phone"), ("description", "description"),
+        ("openingTime", "openingHour"), ("closingTime", "closingHour")
+    ];
+
     internal RestaurantProfileView(MainWindow host, DemoSession session)
     {
+        this.host = host;
+        this.session = session;
         Background = Ui.WorkspaceFill;
         Styles.Add(Ui.FocusStyles());
         CollectionView.AddTextLinkStyles(Styles);
@@ -81,35 +97,87 @@ internal sealed class RestaurantProfileView : UserControl
         DescriptionInput = Ui.Input("Masukkan deskripsi restoran", restaurant.Description ?? "", true);
         OpeningInput = new ProfileTimeField("Jam buka") { Value = restaurant.OpeningTime };
         ClosingInput = new ProfileTimeField("Jam tutup") { Value = restaurant.ClosingTime };
-        Control Field(string key, string label, TextBox input)
+        TextBlock Error(string key)
+        {
+            var error = Ui.FieldError();
+            error.IsVisible = false;
+            FieldErrors[key] = error;
+            return error;
+        }
+        Control Field(string key, string errorKey, string label, TextBox input)
         {
             var frame = Ui.TextField(input);
             Frames[key] = frame;
             AutomationProperties.SetName(input, label);
-            return Ui.Stack(Ui.FieldGap, Ui.Text(label, 14, bold: true), frame);
+            return Ui.Stack(Ui.FieldGap, Ui.Text(label, 14, bold: true), frame, Error(errorKey));
         }
-        Control Time(string key, string label, ProfileTimeField input)
+        Control Time(string key, string errorKey, string label, ProfileTimeField input)
         {
             Frames[key + "Hour"] = input.HourFrame; Frames[key + "Minute"] = input.MinuteFrame;
-            return Ui.Stack(Ui.FieldGap, Ui.Text(label, 14, bold: true), input);
+            return Ui.Stack(Ui.FieldGap, Ui.Text(label, 14, bold: true), input, Error(errorKey));
         }
-        var description = Field("description", "Deskripsi", DescriptionInput);
+        var description = Field("description", "description", "Deskripsi", DescriptionInput);
         var descriptionFrame = Frames["description"];
         descriptionFrame.Face.Height = DescriptionHeight;
         DescriptionInput.VerticalContentAlignment = VerticalAlignment.Top;
-        DescriptionInput.Padding = new Thickness(Ui.FieldInset, 12);
-        SaveButton = Ui.Button("Simpan profil", () => host.Run(() => session.SaveRestaurantProfile(
-            new RestaurantProfile(NameInput.Text ?? "", AddressInput.Text ?? "", PhoneInput.Text ?? "",
-                OpeningInput.Value, ClosingInput.Value, DescriptionInput.Text ?? "")), host.ShowDashboard, "Profil restoran tersimpan."), true);
+        DescriptionInput.Padding = new Thickness(Ui.FieldInset);
+        SaveButton = Ui.Button("Simpan profil", () => { }, true);
+        SaveButton.Click += async (_, _) => await SaveAsync();
         BackLink = CollectionView.CreateTextLink("Kembali", host.ShowDashboard);
         BackLink.VerticalAlignment = VerticalAlignment.Center;
-        NameRow = new FieldGrid(Field("name", "Nama restoran", NameInput), Field("phone", "Telepon", PhoneInput));
-        TimeRow = new FieldGrid(Time("opening", "Jam buka", OpeningInput), Time("closing", "Jam tutup", ClosingInput));
-        var fields = Ui.Stack(Ui.Spacing.Related, NameRow, Field("address", "Alamat", AddressInput), description, TimeRow);
+        NameRow = new FieldGrid(Field("name", "restaurantName", "Nama restoran", NameInput), Field("phone", "phone", "Telepon", PhoneInput));
+        TimeRow = new FieldGrid(Time("opening", "openingTime", "Jam buka", OpeningInput), Time("closing", "closingTime", "Jam tutup", ClosingInput));
+        var fields = Ui.Stack(Ui.Spacing.Related, NameRow, Field("address", "address", "Alamat", AddressInput), description, TimeRow);
+        formError.IsVisible = false;
         Actions = Ui.Row(Ui.Spacing.Related, BackLink, SaveButton);
         Actions.HorizontalAlignment = HorizontalAlignment.Right;
-        FormCard = Ui.FormCard(Ui.Stack(Ui.Spacing.Section, fields, Actions));
-        Content = Ui.Page(Ui.Heading("Profil restoran", Subtitle), Ui.Form(FormCard, FormWidth));
+        FormCard = Ui.FormCard(Ui.Stack(Ui.Spacing.Section, fields, formError, Actions));
+        if (restaurant.Location is { } location) LocationMap = MapView.Create(location, [new(location, false)], MapHeight);
+        MapCard = Ui.FormCard(Ui.Stack(12, Ui.Text("Lokasi di peta", 16, bold: true),
+            LocationMap ?? Ui.Text(MapView.Unavailable, 14, Ui.Muted)));
+        Content = Ui.CenteredPage(FormWidth, Ui.Heading("Profil restoran", Subtitle),
+            Ui.Form(Ui.Stack(Ui.Spacing.Related, FormCard, MapCard), FormWidth));
+    }
+
+    private async Task SaveAsync()
+    {
+        if (!SaveButton.IsEnabled) return;
+        SaveButton.IsEnabled = false;
+        formError.IsVisible = false;
+        ShowErrors(null);
+        try
+        {
+            var profile = new Replate.Domain.Services.RestaurantProfile(NameInput.Text ?? "", AddressInput.Text ?? "", PhoneInput.Text ?? "",
+                OpeningInput.Value, ClosingInput.Value, DescriptionInput.Text ?? "");
+            await session.SaveRestaurantProfileAsync(profile);
+            if (host.CurrentPage != this) return;
+            host.ShowRestaurantProfile();
+            host.ShowSuccess(session.LastGeocodeWarning ?? "Profil restoran tersimpan.");
+        }
+        catch (ProfileValidationException error) { ShowErrors(error.Errors); }
+        catch (Exception error) when (error is InvalidOperationException or IOException or UnauthorizedAccessException)
+        {
+            formError.Text = error is InvalidOperationException ? error.Message : "Profil restoran tidak dapat disimpan.";
+            formError.IsVisible = true;
+        }
+        finally { SaveButton.IsEnabled = true; }
+    }
+
+    private void ShowErrors(IReadOnlyDictionary<string, string>? errors)
+    {
+        Control? firstInvalid = null;
+        foreach (var (key, frameKey) in ErrorFrames)
+        {
+            var message = errors?.GetValueOrDefault(key);
+            var error = FieldErrors[key];
+            var frame = Frames[frameKey];
+            error.Text = message;
+            error.IsVisible = message is not null;
+            frame.Invalid = error.IsVisible;
+            AutomationProperties.SetHelpText(frame.Input, message ?? "");
+            if (error.IsVisible) firstInvalid ??= frame.Input;
+        }
+        firstInvalid?.Focus();
     }
 }
 
@@ -239,6 +307,7 @@ internal static class MenuDeletionDialog
 
 public sealed class MenuEditorView : UserControl
 {
+    private const double MenuFormWidth = 860;
     internal const double DescriptionHeight = 112;
     internal const double PhotoColumnWidth = 284;
     internal const double PhotoButtonHeight = 44;
@@ -337,7 +406,7 @@ public sealed class MenuEditorView : UserControl
         Frames["description"] = Ui.TextField(DescriptionInput);
         Frames["description"].Face.Height = DescriptionHeight;
         DescriptionInput.VerticalContentAlignment = VerticalAlignment.Top;
-        DescriptionInput.Padding = new Thickness(Ui.FieldInset, 12);
+        DescriptionInput.Padding = new Thickness(Ui.FieldInset);
         var inputs = new Dictionary<string, Control>
         {
             ["name"] = NameInput, ["category"] = category, ["price"] = PriceInput,
@@ -426,8 +495,8 @@ public sealed class MenuEditorView : UserControl
                 if (attempted && (e.Property == TextBox.TextProperty || e.Property == NumericUpDown.TextProperty || e.Property == NumericUpDown.ValueProperty))
                     Display(pair.Key, Errors());
             };
-        Content = Ui.Page(Ui.Heading(menu is null ? "Tambah menu" : "Ubah menu",
-            menu?.Name ?? "Siapkan menu untuk pencatatan produksi dan penawaran surplus."), Ui.Form(form));
+        Content = Ui.CenteredPage(MenuFormWidth, Ui.Heading(menu is null ? "Tambah menu" : "Ubah menu",
+            menu?.Name ?? "Siapkan menu untuk pencatatan produksi dan penawaran surplus."), Ui.Form(form, MenuFormWidth));
     }
     internal async Task SelectPhoto(Stream stream, string name)
     {
@@ -599,7 +668,8 @@ public sealed class ListingEditorView : UserControl
         Actions = Ui.Row(Ui.Spacing.Related, CancelLink, SaveButton);
         Actions.HorizontalAlignment = HorizontalAlignment.Right;
         FormCard = Ui.FormCard(Ui.Stack(Ui.Spacing.Section, fields, Actions));
-        Content = Ui.Page(Ui.Heading(listing is null ? "Buat penawaran" : "Ubah penawaran", "Harga khusus dan jadwal pengambilan makanan surplus."),
+        Content = Ui.CenteredPage(FormWidth,
+            Ui.Heading(listing is null ? "Buat penawaran" : "Ubah penawaran", "Harga khusus dan jadwal pengambilan makanan surplus."),
             Ui.Form(FormCard, FormWidth));
     }
 }

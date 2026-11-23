@@ -33,6 +33,8 @@ internal sealed class FoodDialog : ModalDialog
     internal TextBlock PriceText { get; }
     internal TextBlock NormalPriceText { get; }
     internal TextBlock SavingText { get; }
+    internal Control? LocationMap { get; }
+    internal TextBlock TravelLine { get; } = Ui.Text("", 14, Ui.Muted);
     internal QuantityStepper Stepper { get; }
     internal TextBlock QuantityText => Stepper.QuantityText;
     internal TextBlock LimitNote { get; }
@@ -80,9 +82,22 @@ internal sealed class FoodDialog : ModalDialog
             Ui.Stack(4, PickupText, StockText),
             Ui.Stack(4, Ui.Row(6, PriceText, unit), Ui.Row(12, NormalPriceText, SavingText)),
             stepper);
-        var content = new Grid { ColumnDefinitions = ColumnDefinitions.Parse($"{PhotoSize},*"), ColumnSpacing = Ui.Spacing.Section, Margin = new Thickness(Ui.Spacing.Section) };
-        content.Children.Add(Photo);
-        Grid.SetColumn(facts, 1); content.Children.Add(facts);
+        var details = new Grid { ColumnDefinitions = ColumnDefinitions.Parse($"{PhotoSize},*"), ColumnSpacing = Ui.Spacing.Section };
+        details.Children.Add(Photo);
+        Grid.SetColumn(facts, 1); details.Children.Add(facts);
+        var restaurant = menu.Restaurant;
+        if (restaurant?.Location is { } point)
+        {
+            var pins = new List<MapPin> { new(point, false) };
+            if (session.CurrentCustomer?.Location is { } customer) pins.Add(new(customer, true));
+            LocationMap = MapView.Create(point, pins, 200);
+        }
+        var location = Ui.Stack(8, Ui.Text("Lokasi restoran", 18, bold: true),
+            Ui.Text(restaurant?.Address ?? "", 14), TravelLine, LocationMap ?? Ui.Text(MapView.Unavailable, 14, Ui.Muted));
+        var locationCard = new Border { Background = Ui.WorkspaceFill, CornerRadius = new CornerRadius(12),
+            Padding = new Thickness(Ui.Spacing.Related), Child = location };
+        var content = Ui.Stack(Ui.Spacing.Section, details, locationCard);
+        content.Margin = new Thickness(Ui.Spacing.Section);
         Scroll = Ui.Scroll(content);
 
         // Bar
@@ -119,6 +134,8 @@ internal sealed class FoodDialog : ModalDialog
         if (Quantity > limit) Quantity = Math.Max(1, limit);
         Stepper.Show(Quantity, available && limit > 0 && Quantity > 1, available && Quantity < limit);
         StockText.Text = $"{Listing.Quantity} porsi tersisa";
+        TravelLine.Text = TravelText.Format(session.TravelTo(Listing.Menu.Restaurant));
+        TravelLine.IsVisible = TravelLine.Text.Length > 0;
         TotalText.Text = DemoSession.Rupiah(Listing.RescuePrice * Quantity);
         QuantityStepper.SetEnabled(AddButton, available && limit > 0);
         LimitNote.Text = !available ? UnavailableText : limit == 0 ? FullText : Quantity >= limit ? $"Maksimal {limit} porsi" : "";

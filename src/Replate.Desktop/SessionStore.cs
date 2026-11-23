@@ -1,6 +1,8 @@
 using System.Text.Json;
 using Replate.Domain.Entities;
 using Replate.Domain.Enums;
+using Replate.Domain.ValueObjects;
+using Replate.Desktop.Data;
 
 namespace Replate.Desktop;
 
@@ -16,11 +18,12 @@ internal static class SessionStore
     internal sealed record VersionProbe(int Version);
     internal sealed record Snapshot(int Version, List<RestaurantState> Restaurants, List<MenuState> Menus,
         List<ListingState> Listings, List<RecordState> Records, List<OrderState> Orders,
-        List<UserState> Users, List<CartState> Carts);
+        List<UserState> Users, List<CartState> Carts, Dictionary<Guid, CustomerLocationState>? ExternalCustomerLocations = null);
     internal sealed record SnapshotV1(int Version, RestaurantState Restaurant, List<MenuState> Menus,
         List<ListingState> Listings, List<RecordState> Records, List<OrderState> Orders, CartState Cart);
     internal sealed record RestaurantState(Guid Id, string Name, string Address, Guid OwnerId = default, string Description = "",
-        string Phone = "", TimeOnly OpeningTime = default, TimeOnly ClosingTime = default, bool IsImported = false);
+        string Phone = "", TimeOnly OpeningTime = default, TimeOnly ClosingTime = default, bool IsImported = false,
+        double? Latitude = null, double? Longitude = null);
     internal sealed record MenuState(Guid Id, string Name, string Description, string Category,
         decimal NormalPrice, decimal WeightPerPortion, bool IsActive, string ImageUrl = "", Guid RestaurantId = default);
     internal sealed record ListingState(Guid Id, Guid MenuId, decimal RescuePrice, int Quantity,
@@ -31,7 +34,9 @@ internal static class SessionStore
     internal sealed record OrderState(Guid Id, Guid CustomerId, Guid RestaurantId, string PickupCode,
         decimal TotalPrice, OrderStatus Status, TimeSpan PreparationDuration,
         DateTime EstimatedReadyTime, DateTime OrderedAt, DateTime? CompletedAt, List<ItemState> Items);
-    internal sealed record UserState(Guid Id, string Name, string Email, string PasswordHash, UserRole Role);
+    internal sealed record UserState(Guid Id, string Name, string Email, string PasswordHash, UserRole Role,
+        double? Latitude = null, double? Longitude = null, string? LocationLabel = null);
+    internal sealed record CustomerLocationState(double Latitude, double Longitude, string Label);
     internal sealed record CartState(Guid Id, Guid CustomerId, Guid RestaurantId, List<CartItemState> Items);
     internal sealed record CartItemState(Guid ListingId, int Quantity, decimal UnitPrice);
 
@@ -43,7 +48,8 @@ internal static class SessionStore
         var state = new Snapshot(CurrentVersion,
             session.Restaurants.Select(r => new RestaurantState(r.Id, r.Name, r.Address,
                 session.ImportedRestaurantIds.Contains(r.Id) ? Guid.Empty : r.OwnerId, r.Description,
-                r.Phone, r.OpeningTime, r.ClosingTime, session.ImportedRestaurantIds.Contains(r.Id))).ToList(),
+                r.Phone, r.OpeningTime, r.ClosingTime, session.ImportedRestaurantIds.Contains(r.Id),
+                r.Location?.Latitude, r.Location?.Longitude)).ToList(),
             menus.Select(m => new MenuState(m.Id, m.Name, m.Description, m.Category,
                 m.NormalPrice, m.WeightPerPortion, m.IsActive, m.ImageUrl, m.RestaurantId)).ToList(),
             session.Listings.Select(l => new ListingState(l.Id, l.MenuId, l.RescuePrice, l.Quantity,
@@ -53,9 +59,11 @@ internal static class SessionStore
             session.Restaurants.SelectMany(r => r.Orders.Select(o => new OrderState(o.Id, o.CustomerId, r.Id, o.PickupCode,
                 o.TotalPrice, o.Status, o.PreparationDuration, o.EstimatedReadyTime, o.OrderedAt, o.CompletedAt,
                 o.Items.Select(i => new ItemState(i.ListingId, i.MenuName, i.Quantity, i.UnitPrice)).ToList()))).ToList(),
-            session.Users.Select(u => new UserState(u.Id, u.Name, u.Email, u.PasswordHash, u.Role)).ToList(),
+            session.Users.Select(ToUserState).ToList(),
             session.Carts.Select(c => new CartState(c.Id, c.CustomerId, c.GroupByRestaurant().FirstOrDefault()?.RestaurantId ?? Guid.Empty,
-                c.Items.Select(i => new CartItemState(i.ListingId, i.Quantity, i.UnitPrice)).ToList())).ToList());
+                c.Items.Select(i => new CartItemState(i.ListingId, i.Quantity, i.UnitPrice)).ToList())).ToList(),
+            session.ExternalCustomerLocations.Count == 0 ? null : session.ExternalCustomerLocations.ToDictionary(
+                pair => pair.Key, pair => new CustomerLocationState(pair.Value.Point.Latitude, pair.Value.Point.Longitude, pair.Value.Label)));
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
         var temporary = path + ".tmp";
         File.WriteAllText(temporary, JsonSerializer.Serialize(state, Json));
@@ -109,6 +117,8 @@ internal static class SessionStore
         var owners = users.OfType<RestaurantOwner>().ToDictionary(u => u.Id);
         foreach (var (restaurant, snapshot) in restaurantList.Zip(state.Restaurants))
         {
+            if (snapshot.Latitude is { } latitude && snapshot.Longitude is { } longitude)
+                restaurant.SetLocation(new GeoPoint(latitude, longitude));
             if (snapshot.OwnerId == Guid.Empty) continue;
             if (!owners.TryGetValue(snapshot.OwnerId, out var owner))
                 throw new InvalidDataException("Pemilik restoran tidak ditemukan dalam berkas data.");
@@ -128,8 +138,15 @@ internal static class SessionStore
             users.Any(u => string.IsNullOrWhiteSpace(u.Email) || string.IsNullOrWhiteSpace(u.PasswordHash)) ||
             users.Select(u => Replate.Domain.Services.AccountService.NormalizeEmail(u.Email)).Distinct().Count() != users.Count)
             throw new InvalidDataException("Berkas data mengandung nilai yang tidak valid.");
+        var externalCustomerLocations = (state.ExternalCustomerLocations ?? []).ToDictionary(pair => pair.Key, pair =>
+        {
+            var location = pair.Value;
+            if (string.IsNullOrWhiteSpace(location.Label)) throw new InvalidDataException("Label lokasi wajib diisi.");
+            return new DetectedLocation(new GeoPoint(location.Latitude, location.Longitude), location.Label);
+        });
         session.Restore(restaurantList, carts, users, listings.Values.ToList());
         session.ImportedRestaurantIds.UnionWith(state.Restaurants.Where(r => r.IsImported).Select(r => r.Id));
+        foreach (var (id, location) in externalCustomerLocations) session.ExternalCustomerLocations.Add(id, location);
     }
 
     // Version 1 migration
@@ -151,12 +168,25 @@ internal static class SessionStore
             [cart with { RestaurantId = cart.Items.Count == 0 ? Guid.Empty : restaurant.Id }]);
     }
 
-    private static User ToUser(UserState state) => state.Role switch
+    private static UserState ToUserState(User user)
     {
-        UserRole.Customer => new Customer { Id = state.Id, Name = state.Name, Email = state.Email, PasswordHash = state.PasswordHash },
-        UserRole.RestaurantOwner => new RestaurantOwner { Id = state.Id, Name = state.Name, Email = state.Email, PasswordHash = state.PasswordHash },
-        _ => throw new InvalidDataException("Peran pengguna tidak dikenal.")
-    };
+        var customer = user as Customer;
+        return new UserState(user.Id, user.Name, user.Email, user.PasswordHash, user.Role,
+            customer?.Location?.Latitude, customer?.Location?.Longitude, customer?.LocationLabel);
+    }
+
+    private static User ToUser(UserState state)
+    {
+        if (state.Role == UserRole.RestaurantOwner)
+            return new RestaurantOwner { Id = state.Id, Name = state.Name, Email = state.Email, PasswordHash = state.PasswordHash };
+        if (state.Role != UserRole.Customer)
+            throw new InvalidDataException("Peran pengguna tidak dikenal.");
+
+        var customer = new Customer { Id = state.Id, Name = state.Name, Email = state.Email, PasswordHash = state.PasswordHash };
+        if (state.Latitude is { } latitude && state.Longitude is { } longitude && state.LocationLabel is { } label)
+            customer.SetLocation(new GeoPoint(latitude, longitude), label);
+        return customer;
+    }
 
     private static T Convert<T>(object value) => JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(value, Json), Json)!;
 }

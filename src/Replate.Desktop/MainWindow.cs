@@ -32,15 +32,20 @@ public sealed class MainWindow : Window
     private readonly DockPanel customerShell = new();
     private readonly Panel dialogLayer = new();
     private ModalDialog? modal;
+    private Customer? locationLoading;
+    private int locationRun;
+    private bool closed;
     internal FoodDialog? Dialog => modal as FoodDialog;
     internal CheckoutDialog? Confirmation => modal as CheckoutDialog;
     internal SignOutDialog? SignOutConfirmation => modal as SignOutDialog;
     internal Button? SidebarSignOut { get; private set; }
+    internal LocationBrowserDialog? LocationConfirmation => modal as LocationBrowserDialog;
     internal string SearchText => TopBar.SearchBox.Text?.Trim() ?? "";
 
     public MainWindow(DemoSession? session = null, string? startupError = null)
     {
         Session = session ?? new DemoSession(DemoSession.DefaultStorePath);
+        if (MapView.OfflineTiles) VerificationGeoFakes.Configure(Session);
         this.startupError = startupError;
         Title = "Replate"; Width = 1360; Height = 940; MinWidth = 1040; MinHeight = 720;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
@@ -53,7 +58,8 @@ public sealed class MainWindow : Window
             BorderThickness = new Thickness(4, 0, 0, 0), CornerRadius = new CornerRadius(6),
             Padding = new Thickness(16, 12), Margin = new Thickness(32, 16, 32, 0)
         };
-        TopBar = new CustomerTopBar(ShowMarketplace, ShowCart, ShowCustomerOrders, ConfirmProfileSignOut, SubmitSearch);
+        TopBar = new CustomerTopBar(ShowMarketplace, ShowCart, ShowCustomerOrders, ConfirmProfileSignOut, SubmitSearch,
+            Session, RefreshCustomerTravelAsync, ConfirmBrowserLocation, ShowSuccess);
         DockPanel.SetDock(TopBar, Dock.Top);
         customerShell.Children.Add(TopBar); customerShell.Children.Add(customerArea);
         customerShell.Styles.Add(Ui.FocusStyles());
@@ -70,7 +76,7 @@ public sealed class MainWindow : Window
             modal.Close();
         }, RoutingStrategies.Tunnel);
         successTimer.Tick += (_, _) => { successTimer.Stop(); successBanner.IsVisible = false; };
-        Closed += (_, _) => successTimer.Stop();
+        Closed += (_, _) => { closed = true; TopBar.CloseLocationPicker(); DismissDialog(); successTimer.Stop(); };
         ShowHome();
     }
 
@@ -81,13 +87,21 @@ public sealed class MainWindow : Window
     internal void ShowHome()
     {
         if (Session.CurrentUser is RestaurantOwner) ShowDashboard();
-        else if (Session.CurrentUser is Customer) ShowMarketplace();
+        else if (Session.CurrentCustomer is { } customer)
+        {
+            ShowMarketplace();
+            _ = LoadCustomerLocationAsync(customer);
+        }
         else ShowSignIn();
     }
 
     internal void SignOut()
     {
         TopBar.ProfileMenu.IsOpen = false;
+        TopBar.CloseLocationPicker();
+        TopBar.LocationInput.Text = "";
+        locationLoading = null;
+        locationRun++;
         Session.SignOut();
         successTimer.Stop(); successBanner.IsVisible = false;
         ShowSignIn();
@@ -119,11 +133,54 @@ public sealed class MainWindow : Window
     {
         var allowed = owned && (restaurant ? Session.CurrentUser is RestaurantOwner owner && Session.Restaurant.OwnerId == owner.Id
             : Session.CurrentUser is Customer);
-        if (!allowed) { if (Session.IsSignedIn) Session.SignOut(); ShowSignIn(); }
+        if (!allowed)
+        {
+            if (Session.IsSignedIn) SignOut();
+            else ShowSignIn();
+        }
         return allowed;
     }
 
     private bool OwnsRestaurant(Guid restaurantId) => Session.Restaurant.Id == restaurantId;
+
+    private async Task LoadCustomerLocationAsync(Customer customer)
+    {
+        if (locationLoading == customer) return;
+        locationLoading = customer;
+        var run = ++locationRun;
+        try
+        {
+            await Task.Yield();
+            if (!IsCurrentCustomer(customer) || run != locationRun) return;
+            try { await Session.EnsureCustomerLocationAsync(); }
+            catch (Exception error) when (error is InvalidOperationException or IOException or UnauthorizedAccessException) { }
+
+            if (!IsCurrentCustomer(customer) || run != locationRun) return;
+            TopBar.ShowLocation(customer);
+            try { await Session.EnsureRestaurantLocationsAsync(); }
+            catch (Exception error) when (error is InvalidOperationException or IOException or UnauthorizedAccessException) { }
+
+            if (IsCurrentCustomer(customer) && run == locationRun) await RefreshCustomerTravelAsync();
+        }
+        finally
+        {
+            if (run == locationRun) locationLoading = null;
+        }
+    }
+
+    private bool IsCurrentCustomer(Customer customer) => !closed && Session.CurrentCustomer == customer;
+
+    private async Task RefreshCustomerTravelAsync()
+    {
+        if (Session.CurrentCustomer is not { } customer || !IsCurrentCustomer(customer)) return;
+        var run = locationRun;
+        TopBar.ShowLocation(customer);
+        await Session.RefreshTravelAsync();
+        if (!IsCurrentCustomer(customer) || run != locationRun) return;
+        if (CurrentPage is MarketplaceView marketplace) marketplace.Refresh();
+        if (CurrentPage is CollectionView collection) collection.Refresh();
+        Dialog?.Update();
+    }
 
     // Customer area
     internal void ShowMarketplace()
@@ -188,10 +245,6 @@ public sealed class MainWindow : Window
         Render(true, new MenusView(this, Session), "Menu");
         Run(Session.RefreshRestaurantMenus, () => Render(true, new MenusView(this, Session), "Menu"));
     }
-    internal void ShowRestaurantProfile()
-    {
-        if (Allowed(true)) Render(true, new RestaurantProfileView(this, Session), "Dashboard");
-    }
     internal void ShowMenuEditor(Menu? menu = null)
     {
         if (Allowed(true, menu is null || OwnsRestaurant(menu.RestaurantId)))
@@ -213,6 +266,10 @@ public sealed class MainWindow : Window
         if (!Allowed(true)) return;
         Render(true, new ProductionView(this, Session), "Produksi");
         Run(Session.RefreshRestaurantProduction, () => Render(true, new ProductionView(this, Session), "Produksi"));
+    }
+    internal void ShowRestaurantProfile()
+    {
+        if (Allowed(true)) Render(true, new RestaurantProfileView(this, Session), "Profil");
     }
     internal void ShowRestaurantOrders()
     {
@@ -253,10 +310,21 @@ public sealed class MainWindow : Window
         dialogLayer.Children.Add(dialog);
     }
 
+    private Task<bool> ConfirmBrowserLocation()
+    {
+        var confirmation = new LocationBrowserDialog();
+        var answer = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        ShowModal(confirmation, null);
+        confirmation.Closed += () => answer.TrySetResult(confirmation.Accepted);
+        return answer.Task;
+    }
+
     private void DismissDialog()
     {
+        var dismissed = modal;
         modal = null;
         dialogLayer.Children.Clear();
+        dismissed?.Close();
     }
 
     internal void UpdateCartCount() => TopBar.SetCartCount(Session.Cart.Items.Sum(i => i.Quantity));
@@ -358,7 +426,8 @@ public sealed class MainWindow : Window
                 Nav("Menu", "M4 4H10Q12 4 12 6Q12 4 14 4H20V19H14Q12 19 12 21Q12 19 10 19H4Z M12 6V20", ShowMenus),
                 Nav("Penawaran surplus", "M3 12V4H11L21 14L14 21Z M7.5 7.5H8", ShowListings),
                 Nav("Produksi", "M4 11H20L18 20H6Z M3 11H21 M8 7C6 5 10 4 8 2 M14 7C12 5 16 4 14 2", ShowProduction),
-                Nav("Pesanan", Ui.ReceiptOutline, ShowRestaurantOrders));
+                Nav("Pesanan", Ui.ReceiptOutline, ShowRestaurantOrders),
+                Nav("Profil", MarketplaceView.PinOutline, ShowRestaurantProfile));
             var restaurantName = Ui.Text(Session.Restaurant.Name, 14, Ui.OnPrimary, bold: true);
             restaurantName.MaxLines = 2;
             restaurantName.TextTrimming = TextTrimming.CharacterEllipsis;

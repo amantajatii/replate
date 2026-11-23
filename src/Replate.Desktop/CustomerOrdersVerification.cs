@@ -46,7 +46,7 @@ internal static class CustomerOrdersVerification
                     page.EmptyButton?.Content as string == OrdersView.EmptyAction && page.EmptyButton.Classes.Contains(Ui.PrimaryClass) &&
                     page.EmptyIcon is { Stroke: ISolidColorBrush { Color: var stroke } } && stroke == Primary,
                     "No history shows the icon, Belum ada pesanan, its sentence and the primary Jelajahi menu button without filters");
-                Inside(window, page.EmptyState, "Empty state");
+                Inside(window, page.EmptyState!, "Empty state");
                 await UiVerification.EmptyIcon(window, page.EmptyIcon, page.EmptyState!, () => page.Bounds.Width <= window.Bounds.Width + .5 &&
                     window.GetVisualDescendants().OfType<ScrollViewer>().Where(s => s.IsEffectivelyVisible).All(s => s.Extent.Width <= s.Viewport.Width + .5), $"{w:0}x{h:0} Pesanan saya kosong");
                 Shot($"customer-orders-empty-{w:0}x{h:0}");

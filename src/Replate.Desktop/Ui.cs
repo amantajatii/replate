@@ -435,6 +435,14 @@ internal static class Ui
         var body = Stack(24, children); body.Margin = new Thickness(32);
         return Scroll(body);
     }
+    public static Control CenteredPage(double maximumWidth, params Control[] children)
+    {
+        var body = Stack(24, children);
+        body.Margin = new Thickness(32);
+        body.MaxWidth = maximumWidth + 64;
+        body.HorizontalAlignment = HorizontalAlignment.Center;
+        return Scroll(body);
+    }
     public static Control Heading(string title, string subtitle, Control? action = null)
     {
         var heading = Text(title, MarketplaceView.TitleSize);

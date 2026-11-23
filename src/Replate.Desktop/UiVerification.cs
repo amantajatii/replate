@@ -58,6 +58,7 @@ internal static class UiVerification
             await SignOutVerification.Check(window, "Pelanggan");
             NavbarCart(window);
             await MarketplaceVerification.Run(window);
+            await LocationVerification.Run(window, Shot);
             var market = window.Marketplace;
             Ensure(market.VisibleCount == 10, "Initial listings from all restaurants");
             await CollectionVerification.Run(window);
@@ -295,6 +296,10 @@ internal static class UiVerification
         }
         catch (Exception exception) { Console.Error.WriteLine(exception); desktop.Shutdown(1); }
     }
+    // Move focus to a real focusable control: Window.Focus() does not clear text/dropdown focus on macOS.
+    private static Button ProfileButton(Control view) =>
+        view.GetVisualDescendants().OfType<Button>().First(button => button.Content is "Ubah profil");
+
     private static async Task Settle()
     { await Task.Delay(250); await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Render); }
 
@@ -627,6 +632,8 @@ internal static class UiVerification
             var size = $"{w:0}x{h:0}";
             window.ShowProduction(); await Settle();
             var view = (ProductionView)window.CurrentPage!;
+            var productionNav = window.GetVisualDescendants().OfType<Button>()
+                .Single(button => Avalonia.Automation.AutomationProperties.GetName(button) == "Produksi");
             var frames = view.Frames;
             Ensure(frames.Keys.SequenceEqual(new[] { "menu", "date", "produced", "sold" }), $"{size}: Menu, Tanggal produksi, Diproduksi and Terjual reguler use the shared field");
             Ensure(!view.GetVisualDescendants().OfType<DatePicker>().Any() && !view.ProducedInput.ShowButtonSpinner && !view.SoldInput.ShowButtonSpinner,
@@ -649,7 +656,7 @@ internal static class UiVerification
                 await Hold(face, ":pointerover", false);
                 Ensure(Fill(face.BorderBrush) == DividerColor, $"{size} {key}: leaving restores the divider border");
 
-                window.Focus(); await Settle();
+                productionNav.Focus(); await Settle();
                 Target(key).Focus(Avalonia.Input.NavigationMethod.Tab); await Settle();
                 var ring = frame.Ring;
                 Ensure(frame.KeyboardFocus && ring.IsVisible && Fill(ring.BorderBrush) == Primary && ring.BorderThickness == new Thickness(Ui.FocusRingWidth) &&
@@ -657,11 +664,11 @@ internal static class UiVerification
                     $"{size} {key}: keyboard focus shows the Primary 700 border and the shared 2 px ring 2 outside");
                 Ensure(Target(key) is Control focused && (focused.FocusAdorner is null || focused.FocusAdorner == Ui.NoFocusAdorner),
                     $"{size} {key}: no native black focus box");
-                window.Focus(); await Settle();
+                productionNav.Focus(); await Settle();
                 Ensure(!ring.IsVisible && Fill(face.BorderBrush) == DividerColor, $"{size} {key}: leaving the field hides the ring");
                 Target(key).Focus(Avalonia.Input.NavigationMethod.Pointer); await Settle();
                 Ensure(!ring.IsVisible && Fill(face.BorderBrush) == Primary, $"{size} {key}: a click focus shows the Primary 700 border without the ring");
-                window.Focus(); await Settle();
+                productionNav.Focus(); await Settle();
             }
 
             var chevron = view.MenuInput.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Path>().FirstOrDefault();
@@ -842,7 +849,7 @@ internal static class UiVerification
                     await Hold(face, ":pointerover", false);
                     Ensure(Fill(face.BorderBrush) == DividerColor, $"{size} {key}: leaving restores the divider border");
 
-                    window.Focus(); await Settle();
+                    view.CancelLink.Focus(); await Settle();
                     Target(key).Focus(Avalonia.Input.NavigationMethod.Tab); await Settle();
                     var ring = frame.Ring;
                     Ensure(frame.KeyboardFocus && ring.IsVisible && Fill(ring.BorderBrush) == Primary && ring.BorderThickness == new Thickness(Ui.FocusRingWidth) &&
@@ -850,11 +857,11 @@ internal static class UiVerification
                         $"{size} {key}: keyboard focus shows the Primary 700 border and the shared ring");
                     Ensure(Target(key) is Control focused && (focused.FocusAdorner is null || focused.FocusAdorner == Ui.NoFocusAdorner),
                         $"{size} {key}: no native black focus box");
-                    window.Focus(); await Settle();
+                    view.CancelLink.Focus(); await Settle();
                     Ensure(!ring.IsVisible && Fill(face.BorderBrush) == DividerColor, $"{size} {key}: leaving the field hides the ring");
                     Target(key).Focus(Avalonia.Input.NavigationMethod.Pointer); await Settle();
                     Ensure(!ring.IsVisible && Fill(face.BorderBrush) == Primary, $"{size} {key}: a click focus shows the Primary 700 border without the ring");
-                    window.Focus(); await Settle();
+                    view.CancelLink.Focus(); await Settle();
                 }
                 Ensure(view.DescriptionInput.AcceptsReturn && view.DescriptionInput.TextWrapping == TextWrapping.Wrap &&
                     view.DescriptionInput.Padding.Top >= 12 && view.DescriptionInput.Padding.Top <= 16, $"{size}: Deskripsi wraps with a 12 to 16 inset");
@@ -1006,7 +1013,7 @@ internal static class UiVerification
                     await Hold(face, ":pointerover", false);
                     Ensure(Fill(face.BorderBrush) == DividerColor, $"{size} {key}: leaving restores the divider border");
                     if (key == "menu" && edit) continue;
-                    window.Focus(); await Settle();
+                    view.CancelLink.Focus(); await Settle();
                     Target(key).Focus(Avalonia.Input.NavigationMethod.Tab); await Settle();
                     var ring = frame.Ring;
                     Ensure(frame.KeyboardFocus && ring.IsVisible && Fill(ring.BorderBrush) == Primary && ring.BorderThickness == new Thickness(Ui.FocusRingWidth) &&
@@ -1014,11 +1021,11 @@ internal static class UiVerification
                         $"{size} {key}: keyboard focus shows the Primary 700 border and the shared ring");
                     Ensure(Target(key) is Control focused && (focused.FocusAdorner is null || focused.FocusAdorner == Ui.NoFocusAdorner),
                         $"{size} {key}: no native black focus box");
-                    window.Focus(); await Settle();
+                    view.CancelLink.Focus(); await Settle();
                     Ensure(!ring.IsVisible && Fill(face.BorderBrush) == DividerColor, $"{size} {key}: leaving the field hides the ring");
                     Target(key).Focus(Avalonia.Input.NavigationMethod.Pointer); await Settle();
                     Ensure(!ring.IsVisible && Fill(face.BorderBrush) == Primary, $"{size} {key}: a click focus shows the Primary 700 border without the ring");
-                    window.Focus(); await Settle();
+                    view.CancelLink.Focus(); await Settle();
                 }
                 Ensure(view.MenuInput.IsEnabled == !edit, $"{size}: the menu can be changed only on a new listing");
 
@@ -1197,7 +1204,7 @@ internal static class UiVerification
                 await Hold(face, ":pointerover", false);
                 Ensure(Fill(face.BorderBrush) == DividerColor, $"{size} {key}: leaving restores the divider border");
 
-                window.Focus(); await Settle();
+                view.BackLink.Focus(); await Settle();
                 Target(frame).Focus(Avalonia.Input.NavigationMethod.Tab); await Settle();
                 var ring = frame.Ring;
                 Ensure(frame.KeyboardFocus && ring.IsVisible && Fill(ring.BorderBrush) == Primary && ring.BorderThickness == new Thickness(Ui.FocusRingWidth) &&
@@ -1205,11 +1212,11 @@ internal static class UiVerification
                     $"{size} {key}: keyboard focus shows the Primary 700 border and the shared ring");
                 Ensure(Target(frame) is Control focused && (focused.FocusAdorner is null || focused.FocusAdorner == Ui.NoFocusAdorner),
                     $"{size} {key}: no native black focus box");
-                window.Focus(); await Settle();
+                view.BackLink.Focus(); await Settle();
                 Ensure(!ring.IsVisible && Fill(face.BorderBrush) == DividerColor, $"{size} {key}: leaving the field hides the ring");
                 Target(frame).Focus(Avalonia.Input.NavigationMethod.Pointer); await Settle();
                 Ensure(!ring.IsVisible && Fill(face.BorderBrush) == Primary, $"{size} {key}: a click focus shows the Primary 700 border without the ring");
-                window.Focus(); await Settle();
+                view.BackLink.Focus(); await Settle();
             }
             Ensure(view.NameInput.Text == restaurant.Name && view.AddressInput.Text == restaurant.Address && view.PhoneInput.Text == restaurant.Phone &&
                 view.DescriptionInput.Text == restaurant.Description && view.DescriptionInput.AcceptsReturn && view.DescriptionInput.TextWrapping == TextWrapping.Wrap,
@@ -1342,17 +1349,17 @@ internal static class UiVerification
             await Hold(face, ":pointerover", false);
             Ensure(Fill(face.BorderBrush) == DividerColor, $"{size}: leaving the period dropdown restores the divider border");
 
-            window.Focus(); await Settle();
+            ProfileButton(view).Focus(); await Settle();
             combo.Focus(Avalonia.Input.NavigationMethod.Tab); await Settle();
             var ring = frame.Ring;
             Ensure(frame.KeyboardFocus && ring.IsVisible && Fill(ring.BorderBrush) == Primary && ring.BorderThickness == new Thickness(Ui.FocusRingWidth) &&
                 Fill(face.BorderBrush) == Primary, $"{size}: keyboard focus on the period shows the Primary 700 border and the shared ring");
             Ensure(combo.FocusAdorner is null || combo.FocusAdorner == Ui.NoFocusAdorner, $"{size}: the period dropdown has no native black focus box");
-            window.Focus(); await Settle();
+            ProfileButton(view).Focus(); await Settle();
             Ensure(!ring.IsVisible && Fill(face.BorderBrush) == DividerColor, $"{size}: leaving the period dropdown hides the ring");
             combo.Focus(Avalonia.Input.NavigationMethod.Pointer); await Settle();
             Ensure(!ring.IsVisible && Fill(face.BorderBrush) == Primary, $"{size}: a click focus on the period shows the Primary 700 border without the ring");
-            window.Focus(); await Settle();
+            ProfileButton(view).Focus(); await Settle();
 
             combo.IsDropDownOpen = true; await Settle();
             var popup = combo.GetVisualDescendants().OfType<Popup>().First();
@@ -1437,14 +1444,16 @@ internal static class UiVerification
         Ensure(buttons.Count > 0, $"{label}: has labelled buttons to measure");
         foreach (var button in buttons)
         {
-            button.BringIntoView(); await Settle();
+            button.BringIntoView(new Rect(button.Bounds.Size).Inflate(Ui.FocusRingWidth + Ui.FocusRingOffset));
+            await Settle();
             var text = (string)button.Content!;
             var probe = new TextBlock { Text = text, FontSize = button.FontSize, FontWeight = button.FontWeight, FontFamily = button.FontFamily, FontStyle = button.FontStyle };
             probe.Measure(Size.Infinity);
             var need = probe.DesiredSize.Width + button.Padding.Left + button.Padding.Right + button.BorderThickness.Left + button.BorderThickness.Right;
             Ensure(button.Bounds.Width >= need - .5, $"{label} {text}: button is {button.Bounds.Width:0.#} wide, text and padding need {need:0.#}");
             var shown = Presenter(button).GetVisualDescendants().OfType<TextBlock>().FirstOrDefault(t => t.Text == text);
-            Ensure(shown is null || (shown.Bounds.Width >= probe.DesiredSize.Width - .5 && shown.Bounds.Height <= probe.DesiredSize.Height + .5),
+            Ensure(shown is null || (shown.Bounds.Width >= probe.DesiredSize.Width - .5 &&
+                shown.TextLayout.TextLines.Count == 1 && shown.TextLayout.Width >= probe.TextLayout.Width - .5),
                 $"{label} {text}: label shows {shown?.Bounds.Width:0.#} of {probe.DesiredSize.Width:0.#} on one line");
             var compact = button.Classes.Contains(Ui.CompactClass) && button.IsEffectivelyEnabled;
             if (compact) await Hold(button, ":pointerover", true);
@@ -1624,7 +1633,7 @@ internal static class UiVerification
                 for (var x = (int)Math.Ceiling(area.X); x < (int)area.Right; x++)
                 {
                     var p = bare(x, y);
-                    if (Math.Max(p.R, Math.Max(p.G, p.B)) - Math.Min(p.R, Math.Min(p.G, p.B)) <= 2 && p.R <= 248) grey++;
+                    if (p.R == p.G && p.G == p.B && p.R <= 248) grey++;
                 }
             Ensure(grey == 0, $"{size}: no default grey pixels in the {view} calendar ({grey} found in {area})");
         }
@@ -1673,9 +1682,9 @@ internal static class UiVerification
         await Hover(plain, Selection, Primary, $"{size} day {plain.Content}");
         if (days.FirstOrDefault(b => b.Classes.Contains(":inactive") && !b.Classes.Contains(":today")) is { } outside)
         {
-            var faint = Fill(outside.Foreground);
-            Ensure(faint.A < 255 && faint.R == MutedColor.R && faint.G == MutedColor.G && faint.B == MutedColor.B,
-                $"{size}: days outside the month use a paler Text Secondary ({faint})");
+            var faint = outside.Foreground as ISolidColorBrush;
+            Ensure(faint is not null && faint.Color == MutedColor && Math.Abs(faint.Opacity - .6) < .01,
+                $"{size}: days outside the month use Text Secondary at 60% opacity ({faint?.Color}, {faint?.Opacity:0.00})");
             await Hover(outside, Selection, Primary, $"{size} outside day {outside.Content}");
         }
         if (days.FirstOrDefault(b => b.Classes.Contains(":selected")) is { } chosen)

@@ -2,6 +2,7 @@ using System.Globalization;
 using Replate.Domain.Entities;
 using Replate.Domain.Services;
 using Replate.Domain.Enums;
+using Replate.Domain.ValueObjects;
 using Replate.Desktop.Data;
 
 namespace Replate.Desktop;
@@ -16,6 +17,19 @@ public sealed class DemoSession
     public List<SurplusListing> Listings { get; private set; } = [];
     public Order? LastOrder { get; private set; }
     internal IOrderStore? OrderStore { get; set; }
+    internal IGeocoder Geocoder { get; set; } = new NominatimGeocoder();
+    internal ILocationProvider LocationProvider { get; set; } = new IpApiLocationProvider();
+    internal ILocationProvider DeviceLocationProvider { get; set; } = new BrowserLocationProvider();
+    internal IAddressSuggester AddressSuggester { get; set; } = new PhotonAddressSuggester();
+    private int accountRevision;
+    internal IRoutingService Routing { get; set; } = new OsrmRoutingService();
+    internal Customer? CurrentCustomer => CurrentUser as Customer;
+    internal string? TravelError { get; private set; }
+    internal string? LastGeocodeWarning { get; private set; }
+    internal Dictionary<Guid, DetectedLocation> ExternalCustomerLocations { get; } = [];
+    private Dictionary<Guid, TravelEstimate> roadEstimates = [];
+    private GeoPoint? roadOrigin;
+    private int travelRequest;
     public User? CurrentUser { get; private set; }
     private SupabaseAuth.Session? supabaseSession;
     private readonly HashSet<Guid> customerApiOrderIds = [];
@@ -50,17 +64,20 @@ public sealed class DemoSession
 
         var bumi = AddRestaurant("Dapur Bumi", "Jl. Kaliurang, Yogyakarta", "Rice bowl, salad, dan roti harian.",
             "0274 555 0101", new TimeOnly(9, 0), new TimeOnly(21, 0));
+        bumi.SetLocation(new GeoPoint(-7.7525, 110.3830));
         AddMenu(bumi, "Chicken rice bowl", "Nasi hangat, ayam panggang, dan sayuran segar.", "Makanan utama", 32000, 16000, 6, 50, 36);
         AddMenu(bumi, "Butter croissant", "Croissant berlapis dengan mentega, dipanggang hari ini.", "Roti & kue", 24000, 12000, 4, 30, 23);
         AddMenu(bumi, "Garden salad", "Sayuran renyah dengan dressing wijen yang ringan.", MenuCategories.Produce, 28000, 14000, 5, 26, 20);
         AddMenu(bumi, "Beef teriyaki bowl", "Daging teriyaki, nasi, dan sayuran pelengkap.", "Makanan utama", 40000, 20000, 3, 40, 35);
         var sambal = AddRestaurant("Warung Sambal Ijo", "Jl. Gejayan No. 21, Yogyakarta", "Masakan rumahan dengan sambal ijo.",
             "0274 555 0202", new TimeOnly(10, 0), new TimeOnly(22, 0));
+        sambal.SetLocation(new GeoPoint(-7.7720, 110.3895));
         AddMenu(sambal, "Nasi ayam geprek", "Ayam goreng tepung, sambal ijo, dan nasi putih.", "Makanan utama", 25000, 12000, 7, 60, 48);
         AddMenu(sambal, "Gado-gado", "Sayuran rebus, tahu, tempe, dan bumbu kacang.", MenuCategories.Produce, 22000, 11000, 4, 30, 24);
         AddMenu(sambal, "Soto ayam", "Kuah kuning, suwiran ayam, soun, dan perkedel.", "Makanan utama", 20000, 9000, 5, 45, 38);
         var pagi = AddRestaurant("Roti Pagi Kotabaru", "Jl. Suroto No. 8, Kotabaru, Yogyakarta", "Roti dan kue yang dipanggang setiap pagi.",
             "0274 555 0303", new TimeOnly(6, 0), new TimeOnly(18, 0));
+        pagi.SetLocation(new GeoPoint(-7.7845, 110.3720));
         AddMenu(pagi, "Roti sobek cokelat", "Roti lembut isi cokelat, dipanggang pagi ini.", "Roti & kue", 18000, 8000, 6, 40, 31);
         AddMenu(pagi, "Bolu pandan", "Bolu pandan potong dengan aroma daun pandan asli.", "Roti & kue", 30000, 14000, 3, 20, 16);
         AddMenu(pagi, "Lumpia sayur", "Lumpia goreng isi rebung, wortel, dan kol.", MenuCategories.Produce, 15000, 7000, 8, 50, 40);
@@ -187,7 +204,13 @@ public sealed class DemoSession
             if (cart is null) { cart = new Cart { CustomerId = customer.Id }; Carts.Add(cart); }
             Cart = customer.Cart = cart;
         }
-        if (CurrentUser != user) CurrentUser?.Logout();
+        if (CurrentUser != user)
+        {
+            accountRevision++;
+            CurrentUser?.Logout();
+            ClearTravel();
+            LastGeocodeWarning = null;
+        }
         supabaseSession = session;
         customerApiOrderIds.Clear();
         restaurantApiOrderIds.Clear();
@@ -202,7 +225,12 @@ public sealed class DemoSession
         var displayName = identity.Metadata?.DisplayName?.Trim();
         if (string.IsNullOrWhiteSpace(displayName) || displayName.Length > 80) displayName = identity.Email;
         if (owned.Count == 0)
-            return new Customer { Id = identity.Id, Name = displayName, Email = identity.Email };
+        {
+            var customer = new Customer { Id = identity.Id, Name = displayName, Email = identity.Email };
+            if (ExternalCustomerLocations.TryGetValue(identity.Id, out var location))
+                customer.SetLocation(location.Point, location.Label);
+            return customer;
+        }
 
         var owner = new RestaurantOwner { Id = identity.Id, Name = displayName, Email = identity.Email };
         foreach (var remote in owned)
@@ -215,7 +243,7 @@ public sealed class DemoSession
             }
 
             restaurant.Name = remote.Name;
-            restaurant.Address = remote.Address;
+            ApplySharedRestaurantLocation(restaurant, remote, useSharedAddress: true);
             if (!string.IsNullOrEmpty(remote.Phone))
                 restaurant.UpdateProfile(remote.Name, remote.Description, remote.Address, remote.Phone,
                     remote.OpeningTime, remote.ClosingTime);
@@ -232,10 +260,13 @@ public sealed class DemoSession
 
     public void SignOut()
     {
+        accountRevision++;
         CurrentUser?.Logout();
         supabaseSession = null;
         customerApiOrderIds.Clear();
         restaurantApiOrderIds.Clear();
+        ClearTravel();
+        LastGeocodeWarning = null;
         CurrentUser = null; Cart = new Cart(); LastOrder = null;
     }
 
@@ -251,6 +282,263 @@ public sealed class DemoSession
         var restaurant = FindRestaurant(restaurantId);
         return restaurant is not null && restaurant.OwnerId == owner.Id && owner.Restaurants.Contains(restaurant)
             ? restaurant : throw new InvalidOperationException("Restoran ini bukan milik akun Anda.");
+    }
+
+    internal Task<bool> EnsureCustomerLocationAsync() => DetectCustomerLocationAsync(force: false);
+
+    internal Task<bool> DetectCustomerLocationAsync() => DetectCustomerLocationAsync(force: true);
+
+    private async Task<bool> DetectCustomerLocationAsync(bool force)
+    {
+        if (CurrentCustomer is not { } customer) return false;
+        if (!force && customer.Location is not null) return true;
+        EnsureWritable();
+        var revision = accountRevision;
+        var detected = await LocationProvider.DetectAsync();
+        if (revision != accountRevision) return false;
+        if (!force && customer.Location is not null) return true;
+        if (detected is null) return false;
+        SaveCustomerLocation(customer, detected.Point, $"{detected.Label} (perkiraan)");
+        return true;
+    }
+
+    internal async Task<LocationDetectResult> UseDeviceLocationAsync(CancellationToken cancellationToken = default)
+    {
+        if (CurrentCustomer is not { } customer) return LocationDetectResult.Failed;
+        EnsureWritable();
+        var revision = accountRevision;
+        var detected = await TryDetectAsync(DeviceLocationProvider, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (revision != accountRevision) return LocationDetectResult.Failed;
+        if (detected is not null)
+        {
+            SaveCustomerLocation(customer, detected.Point, detected.Label);
+            return LocationDetectResult.Device;
+        }
+
+        detected = await TryDetectAsync(LocationProvider, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (revision != accountRevision || detected is null) return LocationDetectResult.Failed;
+        SaveCustomerLocation(customer, detected.Point, $"{detected.Label} (perkiraan dari IP)");
+        return LocationDetectResult.ApproximateIp;
+    }
+
+    private static async Task<DetectedLocation?> TryDetectAsync(ILocationProvider provider, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        try { return await provider.DetectAsync(cancellationToken); }
+        catch (InvalidOperationException) { return null; }
+    }
+
+    internal async Task SetCustomerLocationAsync(string address)
+    {
+        if (string.IsNullOrWhiteSpace(address)) throw new InvalidOperationException("Alamat wajib diisi.");
+        var customer = RequireCustomer();
+        EnsureWritable();
+        var revision = accountRevision;
+        address = address.Trim();
+        var location = await Geocoder.GeocodeAsync(address);
+        if (revision != accountRevision) return;
+        if (location is null)
+            throw new InvalidOperationException("Alamat tidak ditemukan. Coba tulis lebih lengkap, misalnya nama jalan dan kota.");
+        SaveCustomerLocation(customer, location.Value, ShortLocationLabel(address));
+    }
+
+    internal Task SetCustomerLocationAsync(AddressSuggestion suggestion)
+    {
+        var customer = RequireCustomer();
+        EnsureWritable();
+        SaveCustomerLocation(customer, suggestion.Point, ShortLocationLabel(suggestion.Title));
+        return Task.CompletedTask;
+    }
+
+    private static string ShortLocationLabel(string address)
+    {
+        address = address.Trim();
+        var comma = address.IndexOf(',');
+        return address.Length > 32 && comma > 0 ? address[..comma].TrimEnd() : address;
+    }
+
+    private void SaveCustomerLocation(Customer customer, GeoPoint point, string label)
+    {
+        var previous = customer.Location;
+        var previousLabel = customer.LocationLabel;
+        var isExternal = supabaseSession is not null;
+        customer.SetLocation(point, label);
+        if (isExternal) ExternalCustomerLocations[customer.Id] = new DetectedLocation(point, customer.LocationLabel!);
+        try { Persist(); }
+        catch
+        {
+            if (previous is { } location && previousLabel is not null)
+            {
+                customer.SetLocation(location, previousLabel);
+                if (isExternal) ExternalCustomerLocations[customer.Id] = new DetectedLocation(location, previousLabel);
+            }
+            else
+            {
+                customer.ClearLocation();
+                if (isExternal) ExternalCustomerLocations.Remove(customer.Id);
+            }
+            throw;
+        }
+        ClearTravel();
+    }
+
+    internal async Task<int> EnsureRestaurantLocationsAsync()
+    {
+        EnsureWritable();
+        var session = supabaseSession;
+        var found = new List<(Restaurant Restaurant, string Address, GeoPoint Point)>();
+        foreach (var restaurant in Restaurants.Where(r => r.Location is null && !string.IsNullOrWhiteSpace(r.Address)).ToList())
+        {
+            var address = restaurant.Address;
+            if (await TryGeocodeAsync(address) is { } point) found.Add((restaurant, address, point));
+        }
+        var changed = new List<(Restaurant Restaurant, DateTime UpdatedAt)>();
+        foreach (var (restaurant, address, point) in found)
+        {
+            if (restaurant.Location is not null || !string.Equals(restaurant.Address, address, StringComparison.Ordinal)) continue;
+            changed.Add((restaurant, restaurant.UpdatedAt));
+            restaurant.SetLocation(point);
+        }
+        if (changed.Count == 0) return 0;
+        try { Persist(); }
+        catch
+        {
+            foreach (var (restaurant, updatedAt) in changed)
+            {
+                restaurant.SetLocation(null);
+                restaurant.UpdatedAt = updatedAt;
+            }
+            throw;
+        }
+        ClearTravel();
+        if (session is not null && supabaseSession == session && CurrentUser is RestaurantOwner owner)
+        {
+            foreach (var (restaurant, _) in changed)
+            {
+                if (supabaseSession != session) break;
+                if (restaurant.OwnerId != owner.Id || !owner.Restaurants.Contains(restaurant) ||
+                    restaurant.Location is not { } point) continue;
+                try { await SupabaseCatalog.SaveRestaurantLocationAsync(session, restaurant.Id, point); }
+                catch (InvalidOperationException) { }
+            }
+        }
+        return changed.Count;
+    }
+
+    internal async Task RefreshTravelAsync()
+    {
+        if (CurrentCustomer?.Location is not { } origin)
+        {
+            ClearTravel();
+            return;
+        }
+
+        var request = ++travelRequest;
+        var destinations = Restaurants.Where(r => r.Location.HasValue)
+            .Select(r => new RoutingDestination(r.Id, r.Location!.Value)).ToList();
+        try
+        {
+            var estimates = await Routing.EstimateAsync(origin, destinations);
+            if (request != travelRequest || CurrentCustomer?.Location != origin) return;
+            roadEstimates = new Dictionary<Guid, TravelEstimate>(estimates);
+            roadOrigin = origin;
+            TravelError = null;
+        }
+        catch (InvalidOperationException e)
+        {
+            if (request == travelRequest && CurrentCustomer?.Location == origin) TravelError = e.Message;
+        }
+    }
+
+    internal TravelEstimate? TravelTo(Restaurant? restaurant)
+    {
+        if (restaurant?.Location is not { } destination || CurrentCustomer?.Location is not { } origin) return null;
+        return roadOrigin == origin && roadEstimates.TryGetValue(restaurant.Id, out var estimate)
+            ? estimate : GeoDistance.StraightLine(origin, destination);
+    }
+
+    private void ClearTravel()
+    {
+        ++travelRequest;
+        roadEstimates.Clear();
+        roadOrigin = null;
+        TravelError = null;
+    }
+
+    private bool savingRestaurantProfile;
+
+    internal async Task SaveRestaurantProfileAsync(RestaurantProfile profile)
+    {
+        var restaurant = RequireOwnedRestaurant(Restaurant.Id);
+        EnsureWritable();
+        var errors = AccountService.ValidateRestaurantProfile(profile);
+        if (errors.Count > 0) throw new ProfileValidationException(errors);
+        if (savingRestaurantProfile) throw new InvalidOperationException("Profil restoran sedang disimpan.");
+
+        savingRestaurantProfile = true;
+        try { await SaveRestaurantProfileCoreAsync(restaurant, profile); }
+        finally { savingRestaurantProfile = false; }
+    }
+
+    private async Task SaveRestaurantProfileCoreAsync(Restaurant restaurant, RestaurantProfile profile)
+    {
+        var session = supabaseSession;
+        var revision = accountRevision;
+        var originalUpdatedAt = restaurant.UpdatedAt;
+        var originalLocation = restaurant.Location;
+        var originalProfile = new RestaurantProfile(restaurant.Name, restaurant.Address, restaurant.Phone,
+            restaurant.OpeningTime, restaurant.ClosingTime, restaurant.Description);
+        var address = profile.Address.Trim();
+        var needsGeocode = originalLocation is null || !string.Equals(originalProfile.Address.Trim(), address, StringComparison.OrdinalIgnoreCase);
+        var location = needsGeocode ? await TryGeocodeAsync(address) : originalLocation;
+        if (revision != accountRevision || restaurant.UpdatedAt != originalUpdatedAt)
+            throw new InvalidOperationException("Profil restoran berubah. Muat ulang profil lalu coba lagi.");
+
+        // Save locally first so a local failure never leaves Supabase ahead of this device.
+        restaurant.UpdateProfile(profile.Name.Trim(), (profile.Description ?? "").Trim(), address,
+            profile.Phone.Trim(), profile.OpeningTime!.Value, profile.ClosingTime!.Value);
+        if (needsGeocode) restaurant.SetLocation(location);
+        var savedUpdatedAt = restaurant.UpdatedAt;
+        void Restore()
+        {
+            restaurant.UpdateProfile(originalProfile.Name, originalProfile.Description, originalProfile.Address,
+                originalProfile.Phone, originalProfile.OpeningTime!.Value, originalProfile.ClosingTime!.Value);
+            restaurant.SetLocation(originalLocation);
+            restaurant.UpdatedAt = originalUpdatedAt;
+        }
+        try { Persist(); }
+        catch
+        {
+            Restore();
+            throw;
+        }
+
+        if (session is not null)
+        {
+            try { await SupabaseCatalog.SaveRestaurantAsync(session, restaurant.Id, profile, location); }
+            catch
+            {
+                // Undo the local save so the device matches Supabase again, unless the profile changed meanwhile.
+                if (revision == accountRevision && restaurant.UpdatedAt == savedUpdatedAt)
+                {
+                    Restore();
+                    try { Persist(); }
+                    catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidOperationException) { }
+                }
+                throw;
+            }
+        }
+
+        LastGeocodeWarning = location is null ? "Alamat tersimpan, tetapi lokasinya belum ditemukan di peta." : null;
+        if (location != originalLocation) ClearTravel();
+    }
+
+    private async Task<GeoPoint?> TryGeocodeAsync(string address)
+    {
+        try { return await Geocoder.GeocodeAsync(address); }
+        catch (InvalidOperationException) { return null; }
     }
 
     public IEnumerable<SurplusListing> Search(string query, string category) =>
@@ -348,10 +636,9 @@ public sealed class DemoSession
             sharedListingIds.Add(shared.Id);
             var restaurant = remoteRestaurant is null ? null : FindRestaurant(remoteRestaurant.Id);
             if (restaurant is not null && remoteRestaurant is not null && ImportedRestaurantIds.Contains(restaurant.Id))
-            {
                 restaurant.Name = remoteRestaurant.Name;
-                restaurant.Address = remoteRestaurant.Address;
-            }
+            if (restaurant is not null && remoteRestaurant is not null)
+                ApplySharedRestaurantLocation(restaurant, remoteRestaurant, ImportedRestaurantIds.Contains(restaurant.Id));
 
             var listing = Listings.Find(candidate => candidate.Id == shared.Id);
             if (listing is null)
@@ -384,6 +671,18 @@ public sealed class DemoSession
             listing.UpdateStock(shared.Quantity);
             if (shared.Status == ListingStatus.Cancelled) listing.Cancel();
             else if (listing.Status == ListingStatus.Cancelled) listing.Reopen();
+        }
+    }
+
+    private void ApplySharedRestaurantLocation(Restaurant restaurant, Restaurant remote, bool useSharedAddress)
+    {
+        var addressChanged = useSharedAddress &&
+            !string.Equals(restaurant.Address.Trim(), remote.Address.Trim(), StringComparison.OrdinalIgnoreCase);
+        if (useSharedAddress) restaurant.Address = remote.Address;
+        if ((remote.Location.HasValue || addressChanged) && restaurant.Location != remote.Location)
+        {
+            restaurant.SetLocation(remote.Location);
+            ClearTravel();
         }
     }
 
@@ -564,19 +863,6 @@ public sealed class DemoSession
                 row.NormalPrice.Value, row.WeightPerPortion.Value);
             if (row.IsActive) menu.Activate(); else menu.Deactivate();
         }
-    }
-
-    internal void SaveRestaurantProfile(RestaurantProfile profile)
-    {
-        EnsureWritable();
-        var restaurant = RequireOwnedRestaurant(Restaurant.Id);
-        var errors = AccountService.ValidateRestaurantProfile(profile);
-        if (errors.Count > 0) throw new InvalidOperationException(errors.First().Value);
-        if (supabaseSession is { } session)
-            SupabaseCatalog.SaveRestaurantAsync(session, restaurant.Id, profile).GetAwaiter().GetResult();
-        restaurant.UpdateProfile(profile.Name.Trim(), profile.Description.Trim(), profile.Address.Trim(),
-            profile.Phone.Trim(), profile.OpeningTime!.Value, profile.ClosingTime!.Value);
-        Persist();
     }
 
     internal string? PhotoPath(string? reference)
@@ -969,3 +1255,11 @@ public sealed class DemoSession
         OrderStatus.ReadyForPickup => "Siap Diambil", OrderStatus.Completed => "Selesai", _ => "Dibatalkan"
     };
 }
+
+internal sealed class ProfileValidationException(IReadOnlyDictionary<string, string> errors)
+    : InvalidOperationException(errors.Values.FirstOrDefault() ?? "Profil restoran tidak valid.")
+{
+    internal IReadOnlyDictionary<string, string> Errors { get; } = errors;
+}
+
+internal enum LocationDetectResult { Device, ApproximateIp, Failed }

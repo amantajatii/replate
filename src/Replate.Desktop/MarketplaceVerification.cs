@@ -43,7 +43,9 @@ internal static class MarketplaceVerification
             "Decorative section titles are removed and no text uses an em dash");
 
         // Filter cards
-        Ensure(view.CollectionCards.Keys.SequenceEqual(MarketplaceView.CollectionNames) && !view.CollectionCards.ContainsKey("Semua"), "Five collection cards without Semua");
+        Ensure(view.CollectionCards.Count == 6 && view.CollectionCards.Keys.First() == MarketplaceView.Nearest &&
+            view.CollectionCards.Keys.SequenceEqual(MarketplaceView.CollectionNames) && !view.CollectionCards.ContainsKey("Semua"),
+            "Six collection cards start with Terdekat and omit Semua");
         foreach (var (label, card) in view.CollectionCards)
         {
             var icon = card.GetVisualDescendants().OfType<Path>().Single();
@@ -122,7 +124,7 @@ internal static class MarketplaceVerification
         }
         foreach (var size in new[] { new Size(1040, 720), new Size(1360, 940), new Size(1920, 1080) })
         {
-            var bar = new CustomerTopBar(() => { }, () => { }, () => { }, () => { }, _ => { });
+            var bar = new CustomerTopBar(() => { }, () => { }, () => { }, () => { }, _ => { }, session, () => Task.CompletedTask);
             var sample = new MarketplaceView(window, session);
             DockPanel.SetDock(bar, Dock.Top);
             var shell = new DockPanel { Width = size.Width, Height = size.Height, Children = { bar, sample } };
@@ -195,9 +197,11 @@ internal static class MarketplaceVerification
         var listings = view.ListingsPanel.Children.OfType<Border>().Select(c => Rect(c, view)).ToList();
         Ensure(listings.Count > 0 && listings.All(c => Math.Abs(bannerBox.X - c.X) <= 1 && Math.Abs(bannerBox.Right - c.Right) <= 1),
             $"{label}: banner edges match the listing cards");
-        var cards = view.CollectionCards.Values.Select(c => Rect(c, view)).ToList();
-        Ensure(cards.All(c => Math.Abs(c.Y - cards[0].Y) < .5 && Math.Abs(c.Width - cards[0].Width) < 1), $"{label}: five equal collection cards in one row");
-        var cardWidth = (row.Width - 4 * Ui.Spacing.Related) / 5;
+        var cards = view.CollectionCards.Values.Select(c => LayoutRect(c, view)).ToList();
+        Ensure(cards.All(c => Math.Abs(c.Y - cards[0].Y) < .5 && Math.Abs(c.Width - cards[0].Width) <= 1),
+            $"{label}: six equal collection cards in one row within one layout pixel");
+        var count = MarketplaceView.CollectionNames.Length;
+        var cardWidth = (row.Width - (count - 1) * Ui.Spacing.Related) / count;
         Ensure(view.CollectionRow.ColumnSpacing == Ui.Spacing.Related && cards.All(c => Math.Abs(c.Height - 96) < .5 && Math.Abs(c.Width - cardWidth) < 1) &&
             cards.Zip(cards.Skip(1)).All(p => Math.Abs(p.Second.X - p.First.Right - Ui.Spacing.Related) < 1),
             $"{label}: collection cards keep height 96, width {cardWidth:0.#} and the 16 gap ({cards[0].Width:0.#}x{cards[0].Height:0.#})");
@@ -289,6 +293,15 @@ internal static class MarketplaceVerification
 
     private static Rect Rect(Visual visual, Visual root) =>
         new(visual.TranslatePoint(default, root) ?? throw new InvalidOperationException("Element is outside Jelajah"), visual.Bounds.Size);
+
+    // Layout position without render transforms, so a real mouse hovering a card (hover scale) cannot skew geometry checks.
+    private static Rect LayoutRect(Visual visual, Visual root)
+    {
+        var origin = new Point();
+        for (Visual? current = visual; current is not null && current != root; current = current.GetVisualParent())
+            origin += current.Bounds.Position;
+        return new Rect(origin, visual.Bounds.Size);
+    }
 
     private static Color ColorOf(IBrush? brush) => brush is ISolidColorBrush solid ? solid.Color : Colors.Transparent;
 
