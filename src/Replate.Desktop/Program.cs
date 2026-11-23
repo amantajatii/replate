@@ -11,6 +11,8 @@ internal static class Program
     [STAThread]
     public static void Main(string[] args)
     {
+        LocalEnvironment.Load();
+
         if (args.Contains("--verify-state"))
         {
             StateVerification.Run();
