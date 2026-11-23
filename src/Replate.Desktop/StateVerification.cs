@@ -178,6 +178,7 @@ internal static class StateVerification
         Ensure(remoteSession.FindRestaurant(remoteRestaurant.Id) is { Location: null } updated && updated.Address == remoteRestaurant.Address,
             "Shared listing with a new address drops the old restaurant coordinates");
         CheckReopenListing(Path.Combine(directory, "reopen-state.json"));
+        CheckLocalEnvironment(Path.Combine(directory, "env"));
         Console.WriteLine("All Replate desktop state checks passed.");
     }
 
@@ -209,6 +210,41 @@ internal static class StateVerification
         Ensure(DemoSession.ReopenBlocker(listing, DateTime.UtcNow) == "Stok habis", "Empty stock blocks reopening");
         ExpectFailure(() => session.ReopenListing(listing));
         Ensure(listing.Status == ListingStatus.Cancelled, "Sold out listing stays closed");
+    }
+
+    // Local environment
+    private static void CheckLocalEnvironment(string directory)
+    {
+        var parsed = Data.LocalEnvironment.Parse([
+            "# komentar", "", "   ", "  # komentar menjorok", "PLAIN=nilai", " SPACED = nilai spasi ",
+            "DOUBLE=\"kutip ganda\"", "SINGLE='kutip tunggal'", "EMPTY=", "tanpa pemisah"]);
+        Ensure(parsed.Select(p => p.Key).SequenceEqual(["PLAIN", "SPACED", "DOUBLE", "SINGLE", "EMPTY"]),
+            "Env parser skips comments, blank lines and lines without a separator");
+        Ensure(parsed.Select(p => p.Value).SequenceEqual(["nilai", "nilai spasi", "kutip ganda", "kutip tunggal", ""]),
+            "Env parser trims spaces and surrounding quotes");
+
+        var prefix = "REPLATE_ENV_CHECK_" + Guid.NewGuid().ToString("N") + "_";
+        string existing = prefix + "EXISTING", fresh = prefix + "FRESH", blank = prefix + "BLANK";
+        Directory.CreateDirectory(directory);
+        try
+        {
+            Environment.SetEnvironmentVariable(existing, "dari skrip", EnvironmentVariableTarget.Process);
+            File.WriteAllLines(Path.Combine(directory, ".env"),
+                ["# lokal", $"{existing}=dari file", $"{fresh}=\"baru\"", $"{blank}="]);
+            Data.LocalEnvironment.Load(directory);
+            Ensure(Environment.GetEnvironmentVariable(existing) == "dari skrip", "Env file does not override existing variables");
+            Ensure(Environment.GetEnvironmentVariable(fresh) == "baru", "Env file fills missing variables");
+            Data.LocalEnvironment.Load(Path.Combine(directory, "tidak-ada"));
+            Ensure(Data.LocalEnvironment.SupabaseConnectionString("https://abc123.supabase.co", "ca.crt") is { } connection &&
+                connection.Contains("Username=postgres.abc123") && connection.Contains("pooler.supabase.com") &&
+                Data.LocalEnvironment.SupabaseConnectionString("https://example.com", "ca.crt") is null,
+                "Supabase URL maps to the session pooler connection string");
+        }
+        finally
+        {
+            foreach (var key in new[] { existing, fresh, blank })
+                Environment.SetEnvironmentVariable(key, null, EnvironmentVariableTarget.Process);
+        }
     }
 
     // Legacy category

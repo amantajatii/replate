@@ -43,6 +43,19 @@ makanan membuka pop up detail dengan pengatur jumlah porsi.
 dotnet run --project src/Replate.Desktop
 ```
 
+### Menjalankan Replate.Desktop.exe
+
+1. Letakkan file `.env` dan `prod-ca-2021.crt` di folder yang sama dengan `Replate.Desktop.exe`.
+2. Isi `.env` dengan format `KEY=VALUE` per baris, misalnya `REPLATE_SUPABASE_URL`,
+   `REPLATE_SUPABASE_PUBLISHABLE_KEY`, dan `REPLATE_DB_PASSWORD`. Baris kosong dan baris
+   berawalan `#` diabaikan.
+3. Klik dua kali `Replate.Desktop.exe`.
+
+Saat dibuka, aplikasi membaca `.env` lalu membentuk koneksi Supabase (session pooler, port 5432,
+SSL VerifyFull) dari `REPLATE_SUPABASE_URL` dengan sertifikat `prod-ca-2021.crt`. Variabel yang
+sudah diatur oleh `Run-ReplateSupabase.ps1` atau `Setup-Replate.ps1` tidak ditimpa. Jangan
+commit file `.env` karena berisi kata sandi dan key.
+
 Halaman Jelajah dibuka dengan banner sapaan, lalu lima kartu koleksi (Termurah, Segera
 berakhir, Makanan utama, Roti & kue, Buah & sayur) yang masing-masing membuka halamannya
 sendiri, dan daftar semua makanan berbentuk kartu. Enter atau ikon kaca pembesar di
