@@ -61,22 +61,18 @@ internal static class AuthVerification
         var atMinCard = card.Bounds.Width <= AuthSurface.MinCardWidth + .5;
         var gap = Gap(cardBox, plate);
         var targetGap = bounds.Width * AuthSurface.GapShare;
-        var atMinGap = gap <= AuthSurface.ClearGap + .5;
+        var layout = AuthSurface.Layout(bounds.Size);
         var roomy = bounds.Width * AuthSurface.BoundaryShare - diameter / 2 - Math.Max(AuthSurface.MinMargin, bounds.Width * AuthSurface.CardShare) - AuthSurface.MinCardWidth >= targetGap;
-        Check(cardBox.X >= AuthSurface.MinMargin - .5 && cardBox.X <= bounds.Width * AuthSurface.CardShare + .5 &&
-            (Math.Abs(cardBox.X - bounds.Width * AuthSurface.CardShare) < 1 || atMinCard && atMinGap),
-            $"{where}: card starts at about 12% and at least {AuthSurface.MinMargin} ({cardBox.X:0.#}, target {bounds.Width * AuthSurface.CardShare:0.#})");
-        Check(panel.X <= bounds.Width * AuthSurface.BoundaryShare + .5 || atMinCard && atMinGap && cardBox.X <= AuthSurface.MinMargin + .5,
-            $"{where}: panel edge moves right of 72% only when the gap, card and margin are at their minimum ({panel.X:0.#})");
+        Check(cardBox.X >= AuthSurface.CardMargin - .5 && plate.X - cardBox.Right >= AuthSurface.CardMargin - .5 &&
+            (Math.Abs(cardBox.Center.X - plate.X / 2) <= 2 || Math.Abs(cardBox.X - AuthSurface.CardMargin) < 1),
+            $"{where}: card is centered on the canvas left of the plate, at least {AuthSurface.CardMargin} from both edges (card center {cardBox.Center.X:0.#}, canvas center {plate.X / 2:0.#})");
+        Check(Math.Abs(panel.X - layout.Boundary) < 1 && (panel.X <= bounds.Width * AuthSurface.BoundaryShare + .5 || atMinCard && layout.Left <= AuthSurface.MinMargin + .5),
+            $"{where}: panel edge moves right of 72% only when the card and margin are at their minimum ({panel.X:0.#})");
         Check(gap >= AuthSurface.PlateGap - .5, $"{where}: card and plate do not intersect and stay at least 24 apart (gap {gap:0.#})");
         Check(roomy ? gap >= targetGap - .5 : atMinCard && gap >= AuthSurface.PlateGap - .5,
             $"{where}: card and plate keep a gap of 8% of the width when the window allows, otherwise the card is at its minimum first (gap {gap:0.#}, target {targetGap:0.#})");
-        if (surface.Below is { } below)
-        {
-            var line = RectIn(below, surface);
-            Check(Math.Abs(line.X - cardBox.X) < 1 && Math.Abs(line.Width - cardBox.Width) < 1 && line.Y >= cardBox.Bottom,
-                $"{where}: demo account line follows the card width and left edge ({line.X:0.#}+{line.Width:0.#}, card {cardBox.X:0.#}+{cardBox.Width:0.#})");
-        }
+        Check(surface.Card.GetVisualParent() is StackPanel stack && stack.Children[^1] == surface.Card,
+            $"{where}: nothing sits below the card");
         var buttons = card.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("auth-primary")).ToList();
         Check(buttons.Count == 1 && Math.Abs(buttons[0].Bounds.Width - (card.Bounds.Width - 64)) < 1, $"{where}: primary button spans the card");
         var mark = RectIn(surface.Logo, surface); var scrollBox = RectIn(surface.FormScroll, surface);
@@ -87,8 +83,10 @@ internal static class AuthVerification
         TopBarVerification.CheckRatio(surface.Logo, $"{where}: auth logo");
         Check(mark.X >= 0 && mark.Y >= 0 && mark.Bottom <= scrollBox.Y + .5 && Gap(mark, plate) > 0 &&
             !surface.FormScroll.GetVisualDescendants().Contains(surface.Logo), $"{where}: logo stays fully visible above the scroll area");
-        Check(Math.Abs(mark.X - cardBox.X) < 1, $"{where}: logo aligns with the card left edge ({mark.X:0.#}, card {cardBox.X:0.#})");
+        Check(Math.Abs(mark.X - layout.Left) < 1 && Math.Abs(mark.Y - AuthSurface.Inset) < 1,
+            $"{where}: logo sits at the top left of the canvas, independent of the card ({mark.X:0.#}, {mark.Y:0.#})");
         var header = RectIn(surface.Header, surface); var clip = RectIn(surface.FormClip, surface);
+        await CheckCentered(surface, where);
         Check(ColorOf(surface.Header.Background) == ColorOf(Ui.Canvas) && header.Contains(mark) && header.Bottom <= clip.Y + .5 &&
             surface.FormClip.ClipToBounds && surface.Header.GetVisualParent() is Panel host && host.Children.IndexOf(surface.Header) > host.Children.IndexOf(surface.FormClip),
             $"{where}: logo sits on a clean canvas band above a clipped scroll area (band bottom {header.Bottom:0.#}, scroll top {clip.Y:0.#})");
@@ -110,6 +108,27 @@ internal static class AuthVerification
             $"{where}: no horizontal scrolling (extent {scroll.Extent.Width:0.#}, viewport {scroll.Viewport.Width:0.#})");
         Check(!window.GetVisualDescendants().OfType<TextBlock>().Any(t => t.IsVisible && t.Text?.Contains((char)0x2014) == true), $"{where}: no em dash in UI text");
         await CheckScrollBars(surface, where);
+    }
+
+    internal static async Task CheckCentered(AuthSurface surface, string where, bool strict = false)
+    {
+        var scroll = surface.FormScroll;
+        scroll.Offset = default; await Task.Delay(100);
+        var bounds = surface.Bounds; var plate = RectIn(surface.Hero, surface); var card = RectIn(surface.Card, surface);
+        var mark = RectIn(surface.Logo, surface); var header = RectIn(surface.Header, surface);
+        var top = surface.Warning is { } warning ? RectIn(warning, surface) : card;
+        var above = card.Y - top.Y;
+        var fits = bounds.Height / 2 - card.Height / 2 - above >= header.Bottom + AuthSurface.LogoGap - .5;
+        Check(Math.Abs(card.Center.X - plate.X / 2) <= 2,
+            $"{where}: card is horizontally centered on the canvas (card {card.Center.X:0.#}, canvas {plate.X / 2:0.#})");
+        Check(fits ? Math.Abs(card.Center.Y - bounds.Height / 2) <= 2 : Math.Abs(top.Y - header.Bottom - AuthSurface.LogoGap) <= 1 && card.Center.Y > bounds.Height / 2,
+            fits ? $"{where}: card is vertically centered in the window (card {card.Center.Y:0.#}, window {bounds.Height / 2:0.#})"
+                : $"{where}: card that does not fit sits {AuthSurface.LogoGap} below the logo band ({top.Y - header.Bottom:0.#})");
+        Check(!strict || fits, $"{where}: card fits and is centered");
+        Check(!card.Intersects(mark) && !top.Intersects(mark) && top.Y - mark.Bottom >= AuthSurface.LogoGap - .5,
+            $"{where}: card does not overlap the logo and stays at least {AuthSurface.LogoGap} below it ({top.Y - mark.Bottom:0.#})");
+        Check(!fits || scroll.Extent.Height <= scroll.Viewport.Height + .5,
+            $"{where}: centered card does not scroll (extent {scroll.Extent.Height:0.#}, viewport {scroll.Viewport.Height:0.#})");
     }
 
     private static List<ScrollBar> FormBars(AuthSurface surface) =>
@@ -227,6 +246,10 @@ internal static class AuthVerification
                     var expectedCard = size.Width == 1040 ? AuthSurface.MinCardWidth : AuthSurface.CardWidth;
                     Check(Math.Abs(surface.Card.Bounds.Width - expectedCard) < 1, $"{name} at {size.Width:0}x{size.Height:0}: card is {expectedCard} wide ({surface.Card.Bounds.Width:0.#})");
                     var scroll = surface.FormScroll;
+                    var at = $"{name} at {size.Width:0}x{size.Height:0}";
+                    await CheckCentered(surface, at, strict: size.Width == 1920 && name != "register-owner");
+                    Check(scroll.Extent.Width <= scroll.Viewport.Width + .5 && surface.Bounds.Width <= size.Width + .5,
+                        $"{at}: no horizontal scroll (extent {scroll.Extent.Width:0.#}, viewport {scroll.Viewport.Width:0.#})");
                     Check(name != "register-owner" || scroll.Extent.Height > scroll.Viewport.Height || size.Height > 720,
                         $"{name} at {size.Width:0}x{size.Height:0}: long owner form scrolls vertically");
                     void Capture(string suffix)
@@ -424,7 +447,7 @@ internal static class AuthVerification
             async Task SignOut()
             {
                 if (session.CurrentUser is Customer) await TopBarVerification.SignOut(window);
-                else { Click(Find("Keluar")); await Settle(); }
+                else await SignOutVerification.Confirm(window, enter: true);
                 Ensure(window.CurrentPage is SignInView && !session.IsSignedIn, "Keluar signs out and returns to sign-in");
                 Ensure(!window.GetVisualDescendants().OfType<Button>().Any(b => b.Content as string is "Dashboard") &&
                     !window.GetVisualDescendants().OfType<CustomerTopBar>().Any(),
@@ -438,15 +461,13 @@ internal static class AuthVerification
             Ensure(Avalonia.Automation.AutomationProperties.GetName(signIn.EmailInput) == "Email" &&
                 Avalonia.Automation.AutomationProperties.GetName(signIn.PasswordInput) == "Kata sandi", "Sign-in automation names match labels");
             Ensure(Texts().Any(t => t.Text == "Masuk") && signIn.Surface.Logo.Source == Ui.LogoGreen && !Texts().Any(t => t.Text == "replate.") &&
-                Texts().Any(t => t.Text == "Akun demo: pelanggan@replate.demo atau dapur-bumi@replate.demo, kata sandi replate123."),
-                "Sign-in shows logo, heading and demo account hint");
+                !Texts().Any(t => t.Text?.Contains("Akun demo") == true || t.Text?.Contains("replate123") == true),
+                "Sign-in shows logo and heading without a demo account hint");
             Ensure(!window.GetVisualDescendants().OfType<Button>().Any(b => b.Content as string is "Jelajahi makanan" or "Buka area restoran" or "Ganti area"),
                 "Old automatic demo entry buttons are removed");
             Ensure(((Avalonia.Media.ISolidColorBrush)signIn.SignInButton.Background!).Color == Avalonia.Media.Color.Parse("#1F6B4F"), "Masuk is the green primary action");
             await CheckSurface(window, signIn.Surface, "Masuk");
             Ensure(signIn.Surface.Warning is null, "No database warning without a startup error");
-            Ensure(Texts().Single(t => t.Text?.StartsWith("Akun demo:") == true).TranslatePoint(default, signIn.Surface)!.Value.Y >
-                signIn.Surface.Card.TranslatePoint(default, signIn.Surface)!.Value.Y + signIn.Surface.Card.Bounds.Height, "Demo account line sits below the card");
             CheckTitle(signIn.TitleText, "Masuk", "Masuk");
             await CheckReveal(signIn.PasswordInput, "Masuk");
             await CheckHover(signIn.SignInButton, Color.Parse("#DDEDE5"), "Masuk");

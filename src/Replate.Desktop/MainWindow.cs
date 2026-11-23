@@ -37,6 +37,8 @@ public sealed class MainWindow : Window
     private bool closed;
     internal FoodDialog? Dialog => modal as FoodDialog;
     internal CheckoutDialog? Confirmation => modal as CheckoutDialog;
+    internal SignOutDialog? SignOutConfirmation => modal as SignOutDialog;
+    internal Button? SidebarSignOut { get; private set; }
     internal LocationBrowserDialog? LocationConfirmation => modal as LocationBrowserDialog;
     internal string SearchText => TopBar.SearchBox.Text?.Trim() ?? "";
 
@@ -56,7 +58,7 @@ public sealed class MainWindow : Window
             BorderThickness = new Thickness(4, 0, 0, 0), CornerRadius = new CornerRadius(6),
             Padding = new Thickness(16, 12), Margin = new Thickness(32, 16, 32, 0)
         };
-        TopBar = new CustomerTopBar(ShowMarketplace, ShowCart, ShowCustomerOrders, SignOut, SubmitSearch,
+        TopBar = new CustomerTopBar(ShowMarketplace, ShowCart, ShowCustomerOrders, ConfirmProfileSignOut, SubmitSearch,
             Session, RefreshCustomerTravelAsync, ConfirmBrowserLocation, ShowSuccess);
         DockPanel.SetDock(TopBar, Dock.Top);
         customerShell.Children.Add(TopBar); customerShell.Children.Add(customerArea);
@@ -104,6 +106,19 @@ public sealed class MainWindow : Window
         successTimer.Stop(); successBanner.IsVisible = false;
         ShowSignIn();
         TopBar.SearchBox.Text = "";
+    }
+
+    internal void ConfirmSignOut(bool keyboard, Action? focusBack)
+    {
+        if (!Session.IsSignedIn) return;
+        TopBar.ProfileMenu.IsOpen = false;
+        ShowModal(new SignOutDialog(SignOut, keyboard), focusBack);
+    }
+
+    private void ConfirmProfileSignOut()
+    {
+        var method = TopBar.MenuOpenedByKeyboard ? NavigationMethod.Tab : NavigationMethod.Pointer;
+        ConfirmSignOut(method == NavigationMethod.Tab, () => TopBar.ProfileButton.Focus(method));
     }
 
     private void ShowPublic(Control page)
@@ -376,6 +391,7 @@ public sealed class MainWindow : Window
         {
             TopBar.Show(Session.CurrentUser, Session.Cart.Items.Sum(i => i.Quantity), active == "Keranjang");
             TopBar.SearchBox.Text = search;
+            SidebarSignOut = null;
             customerArea.Content = area;
             pageHost.Content = customerShell;
         }
@@ -424,7 +440,13 @@ public sealed class MainWindow : Window
             };
             var identity = Ui.Columns("Auto,*", shop, restaurantName);
             identity.ColumnSpacing = 10;
-            var logout = Nav("Keluar", "M11 4H4V20H11 M9 12H21 M17 8L21 12L17 16", SignOut);
+            Button logout = null!;
+            logout = Nav("Keluar", "M11 4H4V20H11 M9 12H21 M17 8L21 12L17 16", () =>
+            {
+                var method = logout.Classes.Contains(":focus-visible") ? NavigationMethod.Tab : NavigationMethod.Pointer;
+                ConfirmSignOut(method == NavigationMethod.Tab, () => logout.Focus(method));
+            });
+            SidebarSignOut = logout;
             logout.MinHeight = 38;
             logout.Padding = new Thickness(8, 6);
             var footer = new Border

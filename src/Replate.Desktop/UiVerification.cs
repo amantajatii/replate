@@ -55,6 +55,7 @@ internal static class UiVerification
             Ensure(window.Session.CurrentUser?.Email == DemoAccounts.CustomerEmail && window.CurrentPage is MarketplaceView, "Customer sign-in opens marketplace");
             await Shot("marketplace");
             await TopBarVerification.Run(window);
+            await SignOutVerification.Check(window, "Pelanggan");
             NavbarCart(window);
             await MarketplaceVerification.Run(window);
             await LocationVerification.Run(window, Shot);
@@ -128,6 +129,7 @@ internal static class UiVerification
             await SignInWithForm(DemoAccounts.OwnerEmail("Dapur Bumi"));
             Ensure(window.Session.CurrentUser is Replate.Domain.Entities.RestaurantOwner && window.Session.Restaurant.Name == "Dapur Bumi" &&
                 window.CurrentPage is DashboardView, "Owner sign-in opens Dapur Bumi dashboard");
+            await SignOutVerification.Check(window, "Pemilik restoran");
             await Settle();
             Ensure(window.RailLogo is { Source: var railSource, IsEffectivelyVisible: true } rail && railSource == Ui.LogoWhite &&
                 Math.Abs(rail.Bounds.Height - MainWindow.RailLogoHeight) < .5 && !window.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == "replate."),

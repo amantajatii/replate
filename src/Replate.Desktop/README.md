@@ -25,7 +25,7 @@ jendela. Kartu formulir mulai di sekitar 12% lebar jendela (minimal 48) dan berj
 sekitar 8% lebar jendela dari piring; pada jendela kecil jarak itu mengecil sampai
 minimal 24. Logo hijau
 tetap di atas, sejajar dengan tepi kiri kartu, sedangkan satu kartu formulir di
-bawahnya dapat digulir vertikal; baris akun demo mengikuti lebar dan tepi kiri kartu. Area gulir memakai scrollbar tipis tanpa
+bawahnya dapat digulir vertikal, tanpa teks tambahan di bawah kartu. Area gulir memakai scrollbar tipis tanpa
 track dan tanpa tombol panah yang hanya tampil saat menggulir atau saat kursor berada
 di atasnya; gulir tetap bekerja dengan roda mouse, touchpad, dan keyboard, dan kolom
 yang dicapai dengan Tab otomatis tergulir ke tampilan. Setiap kolom kata sandi memiliki tombol mata yang
@@ -214,7 +214,7 @@ tengah piring (setengah di atas latar terang, toleransi 0,02 diameter) dan di se
 72% lebar (panel sekitar 28%), tepi kiri kartu di sekitar 12% lebar dan minimal 48,
 piring tidak berpotongan dengan kartu (jarak minimal 24, dan minimal 8% lebar pada
 1360 × 940, 1283 × 780, dan 1920 × 1080), kartu tidak terpotong,
-logo dan baris akun demo sejajar tepi kiri kartu, logo tidak terpotong saat
+logo sejajar tepi kiri kartu, tidak ada teks akun demo di bawah kartu, logo tidak terpotong saat
 digulir, tidak ada gulir horizontal, tidak ada scrollbar bertrack atau berpanah yang
 tampil, dan setiap kolom yang difokuskan dengan Tab tergulir ke tampilan. Pemeriksaan
 juga mencakup judul tebal tanpa subjudul, tombol mata yang terlihat saat kolom kosong

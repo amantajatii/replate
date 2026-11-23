@@ -43,7 +43,7 @@ DESIGN.md.
 
 ## Capabilities and Constraints
 
-Account flow: sign in (Masuk), register (Daftar), and sign out (Keluar).
+Account flow: sign in (Masuk), register (Daftar), and sign out (Keluar, after a confirmation pop up).
 Customer workspace: marketplace, food detail, cart, orders, order detail.
 Restaurant workspace: dashboard, menu/editor, listing/editor, production, orders,
 confirmation/readiness and pickup verification. Existing domain rules remain the
